@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Datum 应用图标源文件「赛博终端 D」:
+       深色 squircle(Apple 824 网格,四角透明) + 霓虹渐变 D + 电路纹路 + 扫描线 + 终端光标。
+       改动本文件后执行 npm run icon 重新生成整套图标(依赖 rsvg-convert),
+       并同步顶栏使用的副本 src/assets/app-icon.svg -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#24003a"/>
+      <stop offset="1" stop-color="#001b26"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e879f9"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <filter id="glowSm" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <pattern id="scan" width="8" height="12" patternUnits="userSpaceOnUse">
+      <rect width="8" height="3" fill="rgba(255,255,255,0.045)"/>
+    </pattern>
+    <clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <g clip-path="url(#sq)">
+    <circle cx="512" cy="512" r="430" fill="url(#halo)"/>
+
+    <!-- 字母 D:光晕层 + 实体层 + 内描线回声 -->
+    <g filter="url(#glow)" opacity="0.9">
+      <path d="M340 300 h150 a212 212 0 0 1 0 424 h-150 Z" fill="none" stroke="url(#neon)" stroke-width="40"/>
+    </g>
+    <path d="M340 300 h150 a212 212 0 0 1 0 424 h-150 Z" fill="none" stroke="url(#neon)" stroke-width="40" stroke-linejoin="round"/>
+    <path d="M402 372 h82 a140 140 0 0 1 0 280 h-82 Z" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="8"/>
+
+    <!-- 电路纹路 + 节点(青色电光) -->
+    <g filter="url(#glowSm)" stroke="#22d3ee" stroke-width="11" fill="none" stroke-linecap="round" opacity="0.8">
+      <path d="M706 512 h110"/><path d="M664 356 l64 -50 h64"/><path d="M664 668 l64 50 h64"/>
+      <path d="M340 430 h-74"/><path d="M340 594 h-74"/>
+    </g>
+    <g stroke="#22d3ee" stroke-width="11" fill="none" stroke-linecap="round">
+      <path d="M706 512 h110"/><path d="M664 356 l64 -50 h64"/><path d="M664 668 l64 50 h64"/>
+      <path d="M340 430 h-74"/><path d="M340 594 h-74"/>
+    </g>
+    <g fill="#22d3ee">
+      <circle cx="832" cy="512" r="15"/><circle cx="808" cy="306" r="15"/><circle cx="808" cy="718" r="15"/>
+      <circle cx="250" cy="430" r="15"/><circle cx="250" cy="594" r="15"/>
+    </g>
+
+    <!-- 终端光标 >_ -->
+    <path d="M206 776 l40 28 -40 28" stroke="#22d3ee" stroke-width="15" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="264" y="824" width="48" height="12" rx="3" fill="#22d3ee"/>
+
+    <!-- 扫描线 -->
+    <rect x="100" y="100" width="824" height="824" fill="url(#scan)"/>
+  </g>
+</svg>

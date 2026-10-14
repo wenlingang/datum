@@ -1,0 +1,6 @@
+_version: 2
+core:
+  unknown_error:
+    en: Unknown error
+    zh-CN: 未知错误
+    zh-TW: 未知錯誤

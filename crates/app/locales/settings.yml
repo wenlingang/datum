@@ -1,0 +1,631 @@
+_version: 2
+
+# 应用菜单(main.rs set_menus)
+menu:
+  settings:
+    en: Settings…
+    zh-CN: 设置…
+    zh-TW: 設定…
+  hide:
+    en: Hide Datum
+    zh-CN: 隐藏 Datum
+    zh-TW: 隱藏 Datum
+  quit:
+    en: Quit Datum
+    zh-CN: 退出 Datum
+    zh-TW: 結束 Datum
+  file:
+    en: File
+    zh-CN: 文件
+    zh-TW: 檔案
+  new_query:
+    en: New SQL Query
+    zh-CN: 新建 SQL 查询
+    zh-TW: 新增 SQL 查詢
+  close_tab:
+    en: Close Tab
+    zh-CN: 关闭标签页
+    zh-TW: 關閉分頁
+  view:
+    en: View
+    zh-CN: 视图
+    zh-TW: 檢視
+  toggle_sidebar:
+    en: Toggle Sidebar
+    zh-CN: 显示/隐藏侧栏
+    zh-TW: 顯示/隱藏側邊欄
+  toggle_detail:
+    en: Toggle Details Panel
+    zh-CN: 显示/隐藏详情栏
+    zh-TW: 顯示/隱藏詳細資訊欄
+  toggle_ai:
+    en: Toggle AI Assistant
+    zh-CN: 显示/隐藏 AI 助手
+    zh-TW: 顯示/隱藏 AI 助理
+  erd:
+    en: Relationship Diagram
+    zh-CN: 关系图
+    zh-TW: 關聯圖
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
+    zh-TW: 重新整理
+
+# 偏好选项展示名(prefs.rs)。prefs.language / prefs.language_system 在 common.yml
+prefs:
+  theme_light:
+    en: Light
+    zh-CN: 亮色
+    zh-TW: 淺色
+  theme_dark:
+    en: Dark
+    zh-CN: 暗色
+    zh-TW: 深色
+  theme_system:
+    en: Follow System
+    zh-CN: 跟随系统
+    zh-TW: 跟隨系統
+  font_system:
+    en: System Default
+    zh-CN: 系统默认
+    zh-TW: 系統預設
+  font_pingfang:
+    en: PingFang SC
+    zh-CN: 苹方
+    zh-TW: 蘋方
+  font_yahei:
+    en: Microsoft YaHei
+    zh-CN: 微软雅黑
+    zh-TW: 微軟雅黑
+  font_mono:
+    en: "%{name} (Monospace)"
+    zh-CN: "%{name}(等宽)"
+    zh-TW: "%{name}(等寬)"
+  size_small:
+    en: Small
+    zh-CN: 小
+    zh-TW: 小
+  size_standard:
+    en: Standard
+    zh-CN: 标准
+    zh-TW: 標準
+  size_medium:
+    en: Medium
+    zh-CN: 中
+    zh-TW: 中
+  size_large:
+    en: Large
+    zh-CN: 大
+    zh-TW: 大
+  size_xlarge:
+    en: Extra Large
+    zh-CN: 特大
+    zh-TW: 特大
+  weight_regular:
+    en: Regular
+    zh-CN: 常规
+    zh-TW: 標準
+  weight_medium:
+    en: Medium
+    zh-CN: 中等
+    zh-TW: 中等
+  weight_semibold:
+    en: Semibold
+    zh-CN: 半粗
+    zh-TW: 半粗體
+  weight_bold:
+    en: Bold
+    zh-CN: 加粗
+    zh-TW: 粗體
+
+# 设置对话框(dialogs/settings.rs)
+settings:
+  title:
+    en: Settings
+    zh-CN: 设置
+    zh-TW: 設定
+  section_ai:
+    en: AI Providers
+    zh-CN: AI 服务商
+    zh-TW: AI 服務商
+  section_knowledge:
+    en: Knowledge Base
+    zh-CN: 知识库
+    zh-TW: 知識庫
+  section_appearance:
+    en: Appearance
+    zh-CN: 外观
+    zh-TW: 外觀
+  section_about:
+    en: About & Updates
+    zh-CN: 关于与更新
+    zh-TW: 關於與更新
+  # —— AI 服务商
+  provider_name_placeholder:
+    en: Provider name
+    zh-CN: 服务商名称
+    zh-TW: 服務商名稱
+  model_add_placeholder:
+    en: Type a model name, press Enter to add
+    zh-CN: 输入模型名,回车添加
+    zh-TW: 輸入模型名稱,按 Enter 新增
+  model_search_placeholder:
+    en: Search models
+    zh-CN: 搜索模型
+    zh-TW: 搜尋模型
+  custom_provider_name:
+    en: Custom
+    zh-CN: 自定义
+    zh-TW: 自訂
+  models_added:
+    en: "Added %{count} models; check them to show them in the AI panel"
+    zh-CN: "新增 %{count} 个模型,勾选后出现在 AI 面板"
+    zh-TW: "新增 %{count} 個模型,勾選後會出現在 AI 面板"
+  models_up_to_date:
+    en: Model list is up to date
+    zh-CN: 模型列表已是最新
+    zh-TW: 模型清單已是最新
+  add_provider:
+    en: Add Provider
+    zh-CN: 添加服务商
+    zh-TW: 新增服務商
+  custom_openai:
+    en: Custom (OpenAI-compatible)
+    zh-CN: 自定义(OpenAI 兼容)
+    zh-TW: 自訂(OpenAI 相容)
+  unnamed:
+    en: Untitled
+    zh-CN: 未命名
+    zh-TW: 未命名
+  provider_models_one:
+    en: "%{protocol} · 1 model"
+    zh-CN: "%{protocol} · 1 个模型"
+    zh-TW: "%{protocol} · 1 個模型"
+  provider_models_n:
+    en: "%{protocol} · %{count} models"
+    zh-CN: "%{protocol} · %{count} 个模型"
+    zh-TW: "%{protocol} · %{count} 個模型"
+  providers:
+    en: Providers
+    zh-CN: 服务商
+    zh-TW: 服務商
+  no_providers:
+    en: No AI providers yet
+    zh-CN: 还没有 AI 服务商
+    zh-TW: 尚未設定 AI 服務商
+  no_providers_hint:
+    en: Use “Add Provider” at the bottom left to choose OpenAI, Anthropic, DeepSeek and more, then enter your API Key
+    zh-CN: 从左下角「添加服务商」选择 OpenAI、Anthropic、DeepSeek 等,填入 API Key 即可
+    zh-TW: 從左下角「新增服務商」選擇 OpenAI、Anthropic、DeepSeek 等,填入 API Key 即可
+  endpoint_openai:
+    en: "Requests {base_url}/chat/completions; /v1 is appended if only the site root is given"
+    zh-CN: "请求 {地址}/chat/completions;只填站点根时自动补 /v1"
+    zh-TW: "請求 {位址}/chat/completions;只填網站根路徑時自動補上 /v1"
+  endpoint_anthropic:
+    en: "Requests {base_url}/v1/messages"
+    zh-CN: "请求 {地址}/v1/messages"
+    zh-TW: "請求 {位址}/v1/messages"
+  endpoint_gemini:
+    en: "Requests {base_url}/v1beta/models/{model}:streamGenerateContent"
+    zh-CN: "请求 {地址}/v1beta/models/{模型}:streamGenerateContent"
+    zh-TW: "請求 {位址}/v1beta/models/{模型}:streamGenerateContent"
+  model_available:
+    en: Available
+    zh-CN: 可用
+    zh-TW: 可用
+  model_test:
+    en: Test
+    zh-CN: 测试
+    zh-TW: 測試
+  model_remove:
+    en: Remove
+    zh-CN: 移除
+    zh-TW: 移除
+  provider_enabled:
+    en: Enabled
+    zh-CN: 启用
+    zh-TW: 啟用
+  delete_provider:
+    en: Delete Provider
+    zh-CN: 删除服务商
+    zh-TW: 刪除服務商
+  connection_card:
+    en: Connection
+    zh-CN: 连接配置
+    zh-TW: 連線設定
+  name:
+    en: Name
+    zh-CN: 名称
+    zh-TW: 名稱
+  protocol:
+    en: Protocol
+    zh-CN: 协议
+    zh-TW: 協定
+  api_url:
+    en: API URL
+    zh-CN: API 地址
+    zh-TW: API 位址
+  models:
+    en: Models
+    zh-CN: 模型
+    zh-TW: 模型
+  models_enabled_count:
+    en: "%{enabled} / %{total} enabled"
+    zh-CN: "已启用 %{enabled} / %{total}"
+    zh-TW: "已啟用 %{enabled} / %{total}"
+  fetching:
+    en: Fetching…
+    zh-CN: 获取中…
+    zh-TW: 取得中…
+  fetch_models:
+    en: Fetch Models
+    zh-CN: 获取模型
+    zh-TW: 取得模型
+  fetch_models_tip:
+    en: Fetch available models from the provider
+    zh-CN: 从服务商拉取可用模型
+    zh-TW: 從服務商取得可用模型
+  no_models:
+    en: No models yet
+    zh-CN: 还没有模型
+    zh-TW: 尚無模型
+  no_models_hint:
+    en: Click “Fetch Models” to pull them from the provider, or add one in the box at the top right
+    zh-CN: 点「获取模型」从服务商拉取,或在右上输入框手动添加
+    zh-TW: 點選「取得模型」從服務商取得,或在右上方輸入框手動新增
+  models_check_hint:
+    en: Check the models you want to use in the AI panel
+    zh-CN: 勾选要在 AI 面板中使用的模型
+    zh-TW: 勾選要在 AI 面板中使用的模型
+  no_matching_models:
+    en: No matching models
+    zh-CN: 没有匹配的模型
+    zh-TW: 沒有符合的模型
+  # —— 知识库
+  knowledge_pick_prompt:
+    en: Choose Knowledge Base Document
+    zh-CN: 选择知识库文档
+    zh-TW: 選擇知識庫文件
+  knowledge_reset_done:
+    en: Restored the built-in default knowledge base
+    zh-CN: 已恢复内置默认知识库
+    zh-TW: 已恢復內建預設知識庫
+  knowledge_enabled:
+    en: "Enabled “%{name}”; it will be included in subsequent chats"
+    zh-CN: "已启用《%{name}》,后续对话自动携带"
+    zh-TW: "已啟用《%{name}》,之後的對話會自動附帶"
+  knowledge_hint:
+    en: The knowledge base document is sent to the AI as background with every chat, e.g. your team's database development guidelines.
+    zh-CN: 知识库文档会作为背景知识随每次对话发送给 AI,如团队的数据库开发规范。
+    zh-TW: 知識庫文件會作為背景知識隨每次對話傳送給 AI,例如團隊的資料庫開發規範。
+  document:
+    en: Document
+    zh-CN: 文档
+    zh-TW: 文件
+  builtin_default:
+    en: (Built-in default)
+    zh-CN: (内置默认)
+    zh-TW: (內建預設)
+  restore_default:
+    en: Restore Built-in Default
+    zh-CN: 恢复内置默认
+    zh-TW: 恢復內建預設
+  change_file:
+    en: Change
+    zh-CN: 更换
+    zh-TW: 更換
+  choose_file:
+    en: Choose File
+    zh-CN: 选择文件
+    zh-TW: 選擇檔案
+  knowledge_stats:
+    en: "Read fresh for every chat · %{count} characters"
+    zh-CN: "每次对话现读现取 · %{count} 字"
+    zh-TW: "每次對話即時讀取 · %{count} 字"
+  # —— 外观
+  theme:
+    en: Theme
+    zh-CN: 主题
+    zh-TW: 主題
+  font:
+    en: Font
+    zh-CN: 字体
+    zh-TW: 字型
+  font_size:
+    en: Font Size
+    zh-CN: 字号
+    zh-TW: 字級
+  font_weight:
+    en: Weight
+    zh-CN: 粗细
+    zh-TW: 粗細
+  font_custom:
+    en: Custom
+    zh-CN: 自定义
+    zh-TW: 自訂
+  font_size_option:
+    en: "%{label} (%{px}px)"
+    zh-CN: "%{label}(%{px}px)"
+    zh-TW: "%{label}(%{px}px)"
+  preview:
+    en: Preview
+    zh-CN: 预览
+    zh-TW: 預覽
+  preview_text:
+    en: Create a users table with id, name and email
+    zh-CN: 新建一张 users 表,含 id、name、email
+    zh-TW: 建立一張 users 資料表,包含 id、name、email
+  # —— 关于与更新
+  dev_build:
+    en: Development build; auto-update is unavailable
+    zh-CN: 开发版本,自动更新不可用
+    zh-TW: 開發版本,無法自動更新
+  check_updates:
+    en: Check for Updates
+    zh-CN: 检查更新
+    zh-TW: 檢查更新
+  checking:
+    en: Checking for updates…
+    zh-CN: 正在检查更新…
+    zh-TW: 正在檢查更新…
+  up_to_date:
+    en: You're on the latest version
+    zh-CN: 已是最新版本
+    zh-TW: 已是最新版本
+  new_version:
+    en: "New version v%{version} available"
+    zh-CN: "发现新版本 v%{version}"
+    zh-TW: "發現新版本 v%{version}"
+  update_now:
+    en: Update Now
+    zh-CN: 立即更新
+    zh-TW: 立即更新
+  downloading:
+    en: Downloading update…
+    zh-CN: 正在下载更新…
+    zh-TW: 正在下載更新…
+  downloading_pct:
+    en: "Downloading update %{pct}%"
+    zh-CN: "正在下载更新 %{pct}%"
+    zh-TW: "正在下載更新 %{pct}%"
+  installing:
+    en: Installing update…
+    zh-CN: 正在安装更新…
+    zh-TW: 正在安裝更新…
+  ready_restart:
+    en: Update ready; restart to finish
+    zh-CN: 更新已就绪,重启以完成
+    zh-TW: 更新已就緒,重新啟動以完成
+  restart:
+    en: Restart
+    zh-CN: 重启
+    zh-TW: 重新啟動
+  update_failed:
+    en: "Update failed: %{error}"
+    zh-CN: "更新失败:%{error}"
+    zh-TW: "更新失敗:%{error}"
+  retry:
+    en: Retry
+    zh-CN: 重试
+    zh-TW: 重試
+  current_version:
+    en: Current version
+    zh-CN: 当前版本
+    zh-TW: 目前版本
+  release_notes:
+    en: What's New in This Version
+    zh-CN: 本版本更新内容
+    zh-TW: 本版本更新內容
+
+# 新建/编辑连接(dialogs/connection_form.rs)
+conn_form:
+  new_title:
+    en: New Connection
+    zh-CN: 新建连接
+    zh-TW: 新增連線
+  edit_title:
+    en: Edit Connection
+    zh-CN: 编辑连接
+    zh-TW: 編輯連線
+  name_placeholder:
+    en: e.g. prod-pg
+    zh-CN: 例如 prod-pg
+    zh-TW: 例如 prod-pg
+  password_keep:
+    en: Leave blank to keep unchanged
+    zh-CN: 留空表示不修改
+    zh-TW: 留空表示不變更
+  password_none:
+    en: Leave blank for no password
+    zh-CN: 留空表示无密码
+    zh-TW: 留空表示無密碼
+  file_placeholder:
+    en: /absolute/path/to/database.db
+    zh-CN: /绝对路径/到/数据库.db
+    zh-TW: /絕對路徑/到/資料庫.db
+  file_preview:
+    en: /path/to/database.db
+    zh-CN: /路径/到/数据库.db
+    zh-TW: /路徑/到/資料庫.db
+  pick_sqlite:
+    en: Choose SQLite Database File
+    zh-CN: 选择 SQLite 数据库文件
+    zh-TW: 選擇 SQLite 資料庫檔案
+  timeout:
+    en: "Connection timed out · could not connect within %{secs} s"
+    zh-CN: "连接超时 · %{secs} 秒内未能建立连接"
+    zh-TW: "連線逾時 · %{secs} 秒內無法建立連線"
+  name_required:
+    en: Please enter a name
+    zh-CN: 请填写名称
+    zh-TW: 請填寫名稱
+  file_required:
+    en: Please choose a SQLite database file
+    zh-CN: 请选择 SQLite 数据库文件
+    zh-TW: 請選擇 SQLite 資料庫檔案
+  save_failed:
+    en: "Save failed: %{error}"
+    zh-CN: "保存失败:%{error}"
+    zh-TW: "儲存失敗:%{error}"
+  test:
+    en: Test Connection
+    zh-CN: 测试连接
+    zh-TW: 測試連線
+  testing:
+    en: Testing…
+    zh-CN: 测试中…
+    zh-TW: 測試中…
+  test_success:
+    en: Connected
+    zh-CN: 连接成功
+    zh-TW: 連線成功
+  test_failed:
+    en: Connection Failed
+    zh-CN: 连接失败
+    zh-TW: 連線失敗
+  test_success_note:
+    en: "Connection OK · took %{ms} ms"
+    zh-CN: "连接正常 · 用时 %{ms} ms"
+    zh-TW: "連線正常 · 耗時 %{ms} ms"
+  type:
+    en: Type
+    zh-CN: 类型
+    zh-TW: 類型
+  name:
+    en: Name
+    zh-CN: 名称
+    zh-TW: 名稱
+  file_path:
+    en: File Path
+    zh-CN: 文件路径
+    zh-TW: 檔案路徑
+  choose_file:
+    en: Choose File
+    zh-CN: 选择文件
+    zh-TW: 選擇檔案
+  env:
+    en: Environment
+    zh-CN: 环境
+    zh-TW: 環境
+  host:
+    en: Host
+    zh-CN: 主机
+    zh-TW: 主機
+  port:
+    en: Port
+    zh-CN: 端口
+    zh-TW: 連接埠
+  user:
+    en: Username
+    zh-CN: 用户
+    zh-TW: 使用者
+  password:
+    en: Password
+    zh-CN: 密码
+    zh-TW: 密碼
+  database:
+    en: Database
+    zh-CN: 数据库
+    zh-TW: 資料庫
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  save:
+    en: Save Connection
+    zh-CN: 保存连接
+    zh-TW: 儲存連線
+
+# 导入数据库(dialogs/import.rs)
+import:
+  title:
+    en: Import Database
+    zh-CN: 导入数据库
+    zh-TW: 匯入資料庫
+  placeholder:
+    en: "Paste SQL (CREATE TABLE, INSERT, etc.; separate statements with ;), or choose a .sql file at the top right"
+    zh-CN: "粘贴 SQL(建表 / INSERT 等,多条语句用 ; 分隔),或点右上角选择 .sql 文件"
+    zh-TW: "貼上 SQL(建立資料表 / INSERT 等,多條陳述式以 ; 分隔),或點選右上角選擇 .sql 檔案"
+  choose_file:
+    en: Choose SQL File
+    zh-CN: 选择 SQL 文件
+    zh-TW: 選擇 SQL 檔案
+  done:
+    en: "Import complete: %{count} statements committed in a single transaction"
+    zh-CN: "导入完成:%{count} 条语句已在单事务中提交"
+    zh-TW: "匯入完成:%{count} 條陳述式已在單一交易中提交"
+  failed:
+    en: "Import failed: %{error}"
+    zh-CN: "导入失败:%{error}"
+    zh-TW: "匯入失敗:%{error}"
+  target:
+    en: Target Database
+    zh-CN: 目标数据库
+    zh-TW: 目標資料庫
+  choose_db:
+    en: Choose a database…
+    zh-CN: 选择数据库…
+    zh-TW: 選擇資料庫…
+  sql_content:
+    en: SQL Content
+    zh-CN: SQL 内容
+    zh-TW: SQL 內容
+  loaded:
+    en: "Loaded %{file} · "
+    zh-CN: "已载入 %{file} · "
+    zh-TW: "已載入 %{file} · "
+  statements_n:
+    en: "%{count} statements"
+    zh-CN: "共 %{count} 条语句"
+    zh-TW: "共 %{count} 條陳述式"
+  no_statements:
+    en: No executable statements yet
+    zh-CN: 尚无可执行语句
+    zh-TW: 尚無可執行的陳述式
+  close:
+    en: Close
+    zh-CN: 关闭
+    zh-TW: 關閉
+  importing:
+    en: Importing
+    zh-CN: 导入中
+    zh-TW: 匯入中
+  start:
+    en: Start Import
+    zh-CN: 开始导入
+    zh-TW: 開始匯入
+
+# 破坏性语句审查(dialogs/risk.rs)
+risk:
+  title:
+    en: Review Destructive Statements
+    zh-CN: 破坏性语句审查
+    zh-TW: 破壞性陳述式審查
+  target_db:
+    en: "Running on database %{db}. The following %{count} statements are destructive:"
+    zh-CN: "在数据库 %{db} 上执行,以下 %{count} 条语句具有破坏性:"
+    zh-TW: "在資料庫 %{db} 上執行,以下 %{count} 條陳述式具有破壞性:"
+  target_conn:
+    en: "Running on %{target}. The following %{count} statements are destructive:"
+    zh-CN: "在 %{target} 上执行,以下 %{count} 条语句具有破坏性:"
+    zh-TW: "在 %{target} 上執行,以下 %{count} 條陳述式具有破壞性:"
+  danger:
+    en: Danger
+    zh-CN: 高危
+    zh-TW: 高風險
+  warning:
+    en: Warning
+    zh-CN: 警告
+    zh-TW: 警告
+  irreversible:
+    en: This cannot be undone. Double-check the target database before running.
+    zh-CN: 此操作不可撤销,请核对目标数据库后再执行。
+    zh-TW: 此操作無法復原,請確認目標資料庫後再執行。
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  confirm:
+    en: Confirm & Run
+    zh-CN: 确认执行
+    zh-TW: 確認執行

@@ -1,0 +1,26 @@
+[workspace]
+members = ["crates/core", "crates/app"]
+default-members = ["crates/app"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+datum-core = { path = "crates/core" }
+gpui-kit = { version = "0.7.3", features = ["tree-sitter-sql"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "process", "io-util", "time"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 4
+
+# debug 构建里依赖(GPUI、驱动)也做优化:GPUI 未优化时渲染明显卡顿,而这些依赖很少改动
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,271 @@
+_version: 2
+chat:
+  title:
+    en: AI Assistant
+    zh-CN: AI 助手
+    zh-TW: AI 助理
+  placeholder_ask:
+    en: Ask anything…
+    zh-CN: 问点什么…
+    zh-TW: 問點什麼…
+  placeholder_no_conn:
+    en: Select a SQL database connection on the left first
+    zh-CN: 请先在左侧选择一个 SQL 数据库连接
+    zh-TW: 請先在左側選擇一個 SQL 資料庫連線
+  placeholder_not_ready:
+    en: AI isn't ready. Check Settings.
+    zh-CN: AI 未就绪,请检查设置
+    zh-TW: AI 尚未就緒,請檢查設定
+  placeholder_busy:
+    en: Another conversation is generating, please wait…
+    zh-CN: 另一个会话正在生成中,请稍候…
+    zh-TW: 另一個對話正在產生中,請稍候…
+  # 发给 AI 的引用包装:后接 SQL 代码块
+  quoted_sql:
+    en: "Quoted SQL:"
+    zh-CN: "引用的 SQL:"
+    zh-TW: "引用的 SQL:"
+  not_bound:
+    en: This conversation isn't bound to a connection
+    zh-CN: 会话未绑定连接
+    zh-TW: 對話尚未綁定連線
+  # 以下为执行结果回灌给 AI 的消息片段
+  stmt_n:
+    en: "Statement %{n}"
+    zh-CN: "第 %{n} 条"
+    zh-TW: "第 %{n} 條"
+  returned_rows:
+    en: "Returned %{count} rows"
+    zh-CN: "返回 %{count} 行"
+    zh-TW: "傳回 %{count} 列"
+  succeeded:
+    en: Succeeded
+    zh-CN: 成功
+    zh-TW: 成功
+  affected_rows:
+    en: ", %{count} rows affected"
+    zh-CN: ",影响 %{count} 行"
+    zh-TW: ",影響 %{count} 列"
+  labeled:
+    en: "%{label}: %{brief}"
+    zh-CN: "%{label}:%{brief}"
+    zh-TW: "%{label}:%{brief}"
+  execution:
+    en: Execution
+    zh-CN: 执行
+    zh-TW: 執行
+  failed:
+    en: "%{label} failed: %{error}"
+    zh-CN: "%{label}失败:%{error}"
+    zh-TW: "%{label}失敗:%{error}"
+  executed_tag:
+    en: "[Executed]"
+    zh-CN: "[已执行]"
+    zh-TW: "[已執行]"
+  result_label:
+    en: "Result: "
+    zh-CN: "结果:"
+    zh-TW: "結果:"
+  thinking:
+    en: Thinking
+    zh-CN: 思考中
+    zh-TW: 思考中
+  select_model:
+    en: Select Model
+    zh-CN: 选择模型
+    zh-TW: 選擇模型
+  switch_model:
+    en: Switch Model
+    zh-CN: 切换模型
+    zh-TW: 切換模型
+  manage_providers:
+    en: Manage Providers & Models…
+    zh-CN: 管理服务商与模型…
+    zh-TW: 管理服務商與模型…
+  clear:
+    en: Clear
+    zh-CN: 清空
+    zh-TW: 清除
+  clear_tooltip:
+    en: Clear Conversation
+    zh-CN: 清空对话
+    zh-TW: 清除對話
+  unavailable:
+    en: AI is unavailable
+    zh-CN: AI 暂不可用
+    zh-TW: AI 暫時無法使用
+  open_settings:
+    en: Open Settings
+    zh-CN: 打开设置
+    zh-TW: 開啟設定
+  bound_notice:
+    en: "This conversation is bound to %{label}, and SQL still runs on that connection. Clear the conversation to switch."
+    zh-CN: "对话绑定于 %{label},SQL 仍将在该连接执行;要切换请先清空对话。"
+    zh-TW: "對話已綁定至 %{label},SQL 仍會在該連線執行;若要切換請先清除對話。"
+  empty_intro:
+    en: "Generate SQL with natural language, for example:"
+    zh-CN: "用自然语言生成 SQL,例如:"
+    zh-TW: "用自然語言產生 SQL,例如:"
+  empty_example_create:
+    en: "\"Create a users table with id, name, and email\""
+    zh-CN: 「新建一张 users 表,含 id、name、email」
+    zh-TW: 「建立一張 users 資料表,包含 id、name、email」
+  empty_example_seed:
+    en: "\"Seed the users table with 10 rows of test data\""
+    zh-CN: 「给 users 表初始化 10 条测试数据」
+    zh-TW: 「為 users 資料表建立 10 筆測試資料」
+  empty_confirm:
+    en: Generated SQL runs only after you confirm it.
+    zh-CN: 生成的 SQL 需你确认后才会执行。
+    zh-TW: 產生的 SQL 需經你確認後才會執行。
+  fix:
+    en: Ask AI to Fix
+    zh-CN: 让 AI 修复
+    zh-TW: 讓 AI 修正
+  # 「让 AI 修复」发给 AI 的消息
+  fix_prompt:
+    en: The previous SQL failed. Please fix it based on the error message and provide it again.
+    zh-CN: 上一条 SQL 执行失败了,请根据错误信息修正后重新给出。
+    zh-TW: 上一段 SQL 執行失敗了,請根據錯誤訊息修正後重新提供。
+  quote:
+    en: Quote
+    zh-CN: 引用
+    zh-TW: 引用
+  remove_quote:
+    en: Remove Quote
+    zh-CN: 移除引用
+    zh-TW: 移除引用
+  quote_selection:
+    en: Quote Selection
+    zh-CN: 引用选中
+    zh-TW: 引用選取
+  quote_selection_tooltip:
+    en: Quote the SQL selected in the editor
+    zh-CN: 引用编辑器中选中的 SQL
+    zh-TW: 引用編輯器中選取的 SQL
+  send_tooltip:
+    en: Send (Enter)
+    zh-CN: 发送(Enter)
+    zh-TW: 傳送(Enter)
+  input_hint:
+    en: Enter to send · ⇧Enter for new line
+    zh-CN: Enter 发送 · ⇧Enter 换行
+    zh-TW: Enter 傳送 · ⇧Enter 換行
+sql_card:
+  n_statements:
+    en: "%{count} statements"
+    zh-CN: "%{count} 条语句"
+    zh-TW: "%{count} 個陳述式"
+  statement:
+    en: statement
+    zh-CN: 语句
+    zh-TW: 陳述式
+  confirm_body_insert:
+    en: "This replaces all content in the query editor and immediately runs the following %{what} on %{target}:"
+    zh-CN: "将替换当前查询编辑器全部内容,并在 %{target} 上立即执行以下 %{what}:"
+    zh-TW: "將取代目前查詢編輯器的全部內容,並在 %{target} 上立即執行以下 %{what}:"
+  confirm_body:
+    en: "The following %{what} will run on %{target}:"
+    zh-CN: "将在 %{target} 上执行以下 %{what}:"
+    zh-TW: "將在 %{target} 上執行以下 %{what}:"
+  run_in_editor:
+    en: Run in Editor
+    zh-CN: 编辑器运行
+    zh-TW: 在編輯器執行
+  run_sql:
+    en: Run SQL
+    zh-CN: 执行 SQL
+    zh-TW: 執行 SQL
+  destructive_warning:
+    en: Contains destructive statements (DROP / TRUNCATE / DELETE or UPDATE without WHERE). This can't be undone.
+    zh-CN: 包含破坏性语句(DROP / TRUNCATE / 无 WHERE 的 DELETE 或 UPDATE),不可撤销。
+    zh-TW: 包含破壞性陳述式(DROP / TRUNCATE / 無 WHERE 的 DELETE 或 UPDATE),無法復原。
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  confirm_run_in_editor:
+    en: Run in Editor
+    zh-CN: 确认编辑器运行
+    zh-TW: 確認在編輯器執行
+  confirm_run:
+    en: Run
+    zh-CN: 确认执行
+    zh-TW: 確認執行
+  ai_generated:
+    en: AI Generated
+    zh-CN: AI 生成
+    zh-TW: AI 產生
+  edited:
+    en: Edited
+    zh-CN: 已编辑
+    zh-TW: 已編輯
+  revert:
+    en: Revert
+    zh-CN: 还原
+    zh-TW: 還原
+  revert_tooltip:
+    en: Revert to the AI-generated original
+    zh-CN: 还原为 AI 生成的原文
+    zh-TW: 還原為 AI 產生的原文
+  format:
+    en: Format
+    zh-CN: 格式化
+    zh-TW: 格式化
+  format_tooltip:
+    en: Format (normalize indentation and keyword case)
+    zh-CN: 格式化(统一缩进与关键字大小写)
+    zh-TW: 格式化(統一縮排與關鍵字大小寫)
+  running:
+    en: Running…
+    zh-CN: 执行中…
+    zh-TW: 執行中…
+  executed:
+    en: Executed
+    zh-CN: 已执行
+    zh-TW: 已執行
+  run:
+    en: Run
+    zh-CN: 执行
+    zh-TW: 執行
+  run_tooltip:
+    en: Run (asks for confirmation)
+    zh-CN: 执行(先确认)
+    zh-TW: 執行(需先確認)
+  run_tooltip_destructive:
+    en: Contains destructive statements; review carefully before running
+    zh-CN: 包含破坏性语句,执行前请仔细确认
+    zh-TW: 包含破壞性陳述式,執行前請仔細確認
+  run_in_editor_tooltip:
+    en: Replace the query editor content and run it
+    zh-CN: 替换当前查询编辑器内容并自动运行
+    zh-TW: 取代目前查詢編輯器內容並自動執行
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Copied
+    zh-CN: 已复制
+    zh-TW: 已複製
+  destructive:
+    en: Destructive
+    zh-CN: 破坏性语句
+    zh-TW: 破壞性陳述式
+store:
+  load_connections_failed:
+    en: "Failed to load connections: %{error}"
+    zh-CN: "读取连接失败:%{error}"
+    zh-TW: "讀取連線失敗:%{error}"
+  conn_load_failed:
+    en: "Failed to load %{name}: %{error}"
+    zh-CN: "%{name} 加载失败:%{error}"
+    zh-TW: "%{name} 載入失敗:%{error}"
+  ai_empty_reply:
+    en: "⚠️ AI returned an empty reply. Please try again."
+    zh-CN: "⚠️ AI 返回了空回复,请重试"
+    zh-TW: "⚠️ AI 傳回了空白回覆,請重試"
+  update_info_failed:
+    en: Couldn't fetch update info. Please try again later.
+    zh-CN: 无法获取更新信息,请稍后重试
+    zh-TW: 無法取得更新資訊,請稍後再試

@@ -1,0 +1,332 @@
+_version: 2
+core:
+  err:
+    connection_not_found:
+      en: Connection not found
+      zh-CN: 连接不存在
+      zh-TW: 找不到此連線
+    unsupported_kind:
+      en: Unsupported connection type
+      zh-CN: 不支持的连接类型
+      zh-TW: 不支援的連線類型
+    redis_unsupported:
+      en: This operation is not supported for Redis
+      zh-CN: Redis 不支持该操作
+      zh-TW: Redis 不支援此操作
+    not_connected:
+      en: Not connected. Please connect first
+      zh-CN: 连接未建立,请先连接
+      zh-TW: 尚未建立連線,請先連線
+    connect_failed:
+      en: "Failed to connect to %{db}"
+      zh-CN: "连接 %{db} 失败"
+      zh-TW: "連線至 %{db} 失敗"
+    query_failed:
+      en: Query failed
+      zh-CN: 查询失败
+      zh-TW: 查詢失敗
+    exec_failed:
+      en: Execution failed
+      zh-CN: 执行失败
+      zh-TW: 執行失敗
+    read_result_failed:
+      en: Failed to read results
+      zh-CN: 读取结果失败
+      zh-TW: 讀取結果失敗
+    update_failed:
+      en: Update failed
+      zh-CN: 更新失败
+      zh-TW: 更新失敗
+    delete_failed:
+      en: Delete failed
+      zh-CN: 删除失败
+      zh-TW: 刪除失敗
+    begin_tx_failed:
+      en: Failed to begin transaction
+      zh-CN: 开启事务失败
+      zh-TW: 開始交易失敗
+    commit_tx_failed:
+      en: Failed to commit transaction
+      zh-CN: 提交事务失败
+      zh-TW: 認可交易失敗
+    stmt_failed_rolled_back:
+      en: "Statement %{n} failed; rolled back"
+      zh-CN: "第 %{n} 条语句执行失败,已回滚"
+      zh-TW: "第 %{n} 條陳述式執行失敗,已回復"
+    stmt_failed_all_rolled_back:
+      en: "Statement %{n} failed; all changes rolled back"
+      zh-CN: "第 %{n} 条语句执行失败,已整体回滚"
+      zh-TW: "第 %{n} 條陳述式執行失敗,已全部回復"
+    read_column_type_failed:
+      en: Failed to read column type
+      zh-CN: 读取列类型失败
+      zh-TW: 讀取欄位類型失敗
+    column_not_found:
+      en: "Column %{table}.%{column} does not exist"
+      zh-CN: "列 %{table}.%{column} 不存在"
+      zh-TW: "欄位 %{table}.%{column} 不存在"
+    redis_command_failed:
+      en: Redis command failed
+      zh-CN: Redis 命令失败
+      zh-TW: Redis 指令失敗
+    invalid_redis_url:
+      en: Invalid Redis connection string
+      zh-CN: 无效的 Redis 连接串
+      zh-TW: 無效的 Redis 連線字串
+    sqlite_path_missing:
+      en: No SQLite file path specified
+      zh-CN: 未指定 SQLite 文件路径
+      zh-TW: 未指定 SQLite 檔案路徑
+    sqlite_file_not_found:
+      en: SQLite file does not exist
+      zh-CN: SQLite 文件不存在
+      zh-TW: SQLite 檔案不存在
+    sqlite_open_failed:
+      en: Failed to open SQLite database
+      zh-CN: 打开 SQLite 数据库失败
+      zh-TW: 開啟 SQLite 資料庫失敗
+    keychain_password_not_found:
+      en: Password for this connection not found in Keychain
+      zh-CN: 钥匙串中未找到该连接的密码
+      zh-TW: 鑰匙圈中找不到此連線的密碼
+    keychain_write_failed:
+      en: Failed to write to Keychain
+      zh-CN: 写入钥匙串失败
+      zh-TW: 寫入鑰匙圈失敗
+    keychain_read_failed:
+      en: Failed to read from Keychain
+      zh-CN: 读取钥匙串失败
+      zh-TW: 讀取鑰匙圈失敗
+    keychain_delete_failed:
+      en: Failed to delete Keychain item
+      zh-CN: 删除钥匙串项失败
+      zh-TW: 刪除鑰匙圈項目失敗
+    create_config_dir_failed:
+      en: Failed to create config directory
+      zh-CN: 创建配置目录失败
+      zh-TW: 建立設定目錄失敗
+    read_config_failed:
+      en: Failed to read config
+      zh-CN: 读取配置失败
+      zh-TW: 讀取設定失敗
+    parse_config_failed:
+      en: Failed to parse config
+      zh-CN: 解析配置失败
+      zh-TW: 解析設定失敗
+    serialize_config_failed:
+      en: Failed to serialize config
+      zh-CN: 序列化配置失败
+      zh-TW: 序列化設定失敗
+    write_config_failed:
+      en: Failed to write config
+      zh-CN: 写入配置失败
+      zh-TW: 寫入設定失敗
+    serialize_history_failed:
+      en: Failed to serialize history
+      zh-CN: 序列化历史失败
+      zh-TW: 序列化歷史記錄失敗
+    write_history_failed:
+      en: Failed to write history
+      zh-CN: 写入历史失败
+      zh-TW: 寫入歷史記錄失敗
+    set_permissions_failed:
+      en: Failed to set file permissions
+      zh-CN: 设置文件权限失败
+      zh-TW: 設定檔案權限失敗
+    read_file_failed:
+      en: "Failed to read file: %{error}"
+      zh-CN: "读取文件失败: %{error}"
+      zh-TW: "讀取檔案失敗: %{error}"
+    read_file_utf8_failed:
+      en: "Failed to read file (must be UTF-8 text): %{error}"
+      zh-CN: "读取文件失败(需为 UTF-8 文本): %{error}"
+      zh-TW: "讀取檔案失敗(須為 UTF-8 文字): %{error}"
+    file_too_large:
+      en: "File too large (%{size} MB); import limit is %{limit} MB"
+      zh-CN: "文件过大(%{size} MB),导入上限 %{limit} MB"
+      zh-TW: "檔案過大(%{size} MB),匯入上限為 %{limit} MB"
+  export:
+    table_rows:
+      en: "-- %{table} (%{count} rows)"
+      zh-CN: "-- %{table} (%{count} 行)"
+      zh-TW: "-- %{table} (%{count} 列)"
+    table_failed:
+      en: "-- %{table}: export failed · %{error}"
+      zh-CN: "-- %{table}: 导出失败 · %{error}"
+      zh-TW: "-- %{table}: 匯出失敗 · %{error}"
+  filter:
+    contains:
+      en: Contains
+      zh-CN: 包含
+      zh-TW: 包含
+    eq:
+      en: Equals
+      zh-CN: 等于
+      zh-TW: 等於
+    ne:
+      en: Not Equal
+      zh-CN: 不等于
+      zh-TW: 不等於
+    starts:
+      en: Starts With
+      zh-CN: 开头是
+      zh-TW: 開頭是
+    ends:
+      en: Ends With
+      zh-CN: 结尾是
+      zh-TW: 結尾是
+    gt:
+      en: Greater Than
+      zh-CN: 大于
+      zh-TW: 大於
+    lt:
+      en: Less Than
+      zh-CN: 小于
+      zh-TW: 小於
+    gte:
+      en: At Least
+      zh-CN: 大于等于
+      zh-TW: 大於等於
+    lte:
+      en: At Most
+      zh-CN: 小于等于
+      zh-TW: 小於等於
+    empty:
+      en: Is Empty
+      zh-CN: 为空
+      zh-TW: 為空
+    not_empty:
+      en: Is Not Empty
+      zh-CN: 非空
+      zh-TW: 非空
+    and:
+      en: And
+      zh-CN: 且
+      zh-TW: 且
+    or:
+      en: Or
+      zh-CN: 或
+      zh-TW: 或
+  completion:
+    table:
+      en: Table
+      zh-CN: 表
+      zh-TW: 資料表
+    keyword:
+      en: Keyword
+      zh-CN: 关键字
+      zh-TW: 關鍵字
+    select_all:
+      en: Select all columns
+      zh-CN: 查询全部列
+      zh-TW: 查詢所有欄位
+    insert_row:
+      en: Insert a row
+      zh-CN: 插入一行
+      zh-TW: 插入一列
+    update_rows:
+      en: Update rows
+      zh-CN: 更新数据
+      zh-TW: 更新資料
+  risk:
+    delete_no_where:
+      en: DELETE without WHERE
+      zh-CN: DELETE 无 WHERE
+      zh-TW: DELETE 無 WHERE
+    update_no_where:
+      en: UPDATE without WHERE
+      zh-CN: UPDATE 无 WHERE
+      zh-TW: UPDATE 無 WHERE
+    with_dml:
+      en: Data change inside WITH
+      zh-CN: WITH 中的数据修改
+      zh-TW: WITH 中的資料修改
+    explain_analyze_write:
+      en: EXPLAIN ANALYZE on a write
+      zh-CN: EXPLAIN ANALYZE 写语句
+      zh-TW: EXPLAIN ANALYZE 寫入陳述式
+    procedural:
+      en: "%{kind} procedural call"
+      zh-CN: "%{kind} 过程调用"
+      zh-TW: "%{kind} 程序呼叫"
+  update:
+    invalid_private_key:
+      en: Invalid private key (expected 64 hex characters)
+      zh-CN: 私钥格式不对(应为 64 位十六进制)
+      zh-TW: 私密金鑰格式錯誤(應為 64 位十六進位)
+    in_progress:
+      en: An update is already in progress
+      zh-CN: 更新已在进行中
+      zh-TW: 更新正在進行中
+    dev_build_unsupported:
+      en: Self-update is not supported in development builds
+      zh-CN: 开发版本不支持自更新
+      zh-TW: 開發版本不支援自動更新
+    translocated:
+      en: Datum is running from a quarantined system location. Move it to the Applications folder, then update again
+      zh-CN: 应用正运行在系统隔离路径,请先将 Datum 移入「应用程序」文件夹再更新
+      zh-TW: 應用程式正在系統隔離路徑中執行,請先將 Datum 移至「應用程式」資料夾再更新
+    create_temp_dir_failed:
+      en: "Failed to create temporary directory: %{error}"
+      zh-CN: "创建临时目录失败: %{error}"
+      zh-TW: "建立暫存目錄失敗: %{error}"
+    download_failed:
+      en: "Download failed: %{error}"
+      zh-CN: "下载失败: %{error}"
+      zh-TW: "下載失敗: %{error}"
+    download_interrupted:
+      en: "Download interrupted: %{error}"
+      zh-CN: "下载中断: %{error}"
+      zh-TW: "下載中斷: %{error}"
+    create_file_failed:
+      en: "Failed to create file: %{error}"
+      zh-CN: "创建文件失败: %{error}"
+      zh-TW: "建立檔案失敗: %{error}"
+    write_failed:
+      en: "Write failed: %{error}"
+      zh-CN: "写入失败: %{error}"
+      zh-TW: "寫入失敗: %{error}"
+    checksum_mismatch:
+      en: Update package checksum mismatch (SHA-256); installation refused
+      zh-CN: 更新包校验失败(SHA-256 不一致),已拒绝安装
+      zh-TW: 更新檔驗證失敗(SHA-256 不一致),已拒絕安裝
+    read_package_failed:
+      en: "Failed to read update package: %{error}"
+      zh-CN: "读取更新包失败: %{error}"
+      zh-TW: "讀取更新檔失敗: %{error}"
+    signature_failed:
+      en: Update package signature verification failed; installation refused
+      zh-CN: 更新包签名校验失败,已拒绝安装
+      zh-TW: 更新檔簽章驗證失敗,已拒絕安裝
+    create_extract_dir_failed:
+      en: "Failed to create extraction directory: %{error}"
+      zh-CN: "创建解压目录失败: %{error}"
+      zh-TW: "建立解壓縮目錄失敗: %{error}"
+    app_not_found:
+      en: No .app found in update package
+      zh-CN: 更新包中未找到 .app
+      zh-TW: 更新檔中找不到 .app
+    digest_failed:
+      en: Failed to compute update package checksum
+      zh-CN: 计算更新包摘要失败
+      zh-TW: 計算更新檔摘要失敗
+    bundle_id_mismatch:
+      en: Update package bundle ID does not match this app; installation refused
+      zh-CN: 更新包的应用标识与当前应用不一致,已拒绝安装
+      zh-TW: 更新檔的應用程式識別碼與目前的應用程式不符,已拒絕安裝
+    codesign_invalid:
+      en: Update package signature is invalid or has been tampered with; installation refused
+      zh-CN: 更新包签名无效或已被篡改,已拒绝安装
+      zh-TW: 更新檔簽章無效或已遭竄改,已拒絕安裝
+    different_developer:
+      en: Update package is not signed by the same developer; installation refused
+      zh-CN: 更新包不是由同一开发者签名,已拒绝安装
+      zh-TW: 更新檔並非由同一開發者簽署,已拒絕安裝
+    invalid_path:
+      en: "Path contains invalid characters: %{path}"
+      zh-CN: "路径包含非法字符: %{path}"
+      zh-TW: "路徑包含無效字元: %{path}"
+    command_failed:
+      en: "%{cmd} failed: %{error}"
+      zh-CN: "%{cmd} 失败: %{error}"
+      zh-TW: "%{cmd} 失敗: %{error}"

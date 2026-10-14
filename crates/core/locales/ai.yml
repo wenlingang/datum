@@ -1,0 +1,131 @@
+_version: 2
+ai:
+  protocol:
+    openai_compatible:
+      en: OpenAI Compatible
+      zh-CN: OpenAI 兼容
+      zh-TW: OpenAI 相容
+  provider:
+    default_name:
+      en: Default
+      zh-CN: 默认
+      zh-TW: 預設
+  preset:
+    qwen:
+      en: Qwen
+      zh-CN: 通义千问
+      zh-TW: 通義千問
+    zhipu:
+      en: Zhipu GLM
+      zh-CN: 智谱 GLM
+      zh-TW: 智譜 GLM
+    siliconflow:
+      en: SiliconFlow
+      zh-CN: 硅基流动
+      zh-TW: 硅基流動
+  knowledge:
+    default_name:
+      en: Database Development Guidelines (Built-in)
+      zh-CN: 数据库开发规范(内置默认)
+      zh-TW: 資料庫開發規範(內建預設)
+  err:
+    no_chat_models:
+      en: The provider returned no usable chat models; you can add one manually
+      zh-CN: 服务商未返回可用的对话模型,可手动添加
+      zh-TW: 服務商未回傳可用的對話模型,可手動新增
+    request_failed:
+      en: "Request to AI service failed: %{error}"
+      zh-CN: "请求 AI 服务失败: %{error}"
+      zh-TW: "請求 AI 服務失敗:%{error}"
+    read_response:
+      en: "Failed to read response: %{error}"
+      zh-CN: "读取响应失败: %{error}"
+      zh-TW: "讀取回應失敗:%{error}"
+    not_json:
+      en: "Response is not JSON: %{body}"
+      zh-CN: "响应不是 JSON: %{body}"
+      zh-TW: "回應不是 JSON:%{body}"
+    unauthorized:
+      en: "Invalid API Key or insufficient permissions: %{detail}"
+      zh-CN: "API Key 无效或无权限: %{detail}"
+      zh-TW: "API Key 無效或沒有權限:%{detail}"
+    not_found:
+      en: "Endpoint or model not found (check the URL and model name): %{detail}"
+      zh-CN: "接口或模型不存在(检查地址与模型名): %{detail}"
+      zh-TW: "端點或模型不存在(請檢查網址與模型名稱):%{detail}"
+    rate_limited:
+      en: AI service is rate limited, please try again later
+      zh-CN: AI 服务限流,请稍后再试
+      zh-TW: AI 服務流量受限,請稍後再試
+    status:
+      en: "AI service returned %{code}: %{detail}"
+      zh-CN: "AI 服务返回 %{code}: %{detail}"
+      zh-TW: "AI 服務回傳 %{code}:%{detail}"
+    stream_interrupted:
+      en: "AI response interrupted: %{error}"
+      zh-CN: "AI 响应中断: %{error}"
+      zh-TW: "AI 回應中斷:%{error}"
+    service_error:
+      en: "AI service error: %{message}"
+      zh-CN: "AI 服务报错: %{message}"
+      zh-TW: "AI 服務錯誤:%{message}"
+    unknown:
+      en: Unknown error
+      zh-CN: 未知错误
+      zh-TW: 未知錯誤
+    bad_model_list:
+      en: Unrecognized model list format
+      zh-CN: 模型列表格式无法识别
+      zh-TW: 無法辨識模型清單格式
+    unparsable_response:
+      en: "AI returned an unparsable response: %{body}"
+      zh-CN: "AI 返回了无法解析的响应: %{body}"
+      zh-TW: "AI 回傳了無法解析的回應:%{body}"
+    no_model_selected:
+      en: "No model selected: add a provider and enable a model in Settings"
+      zh-CN: 尚未选择模型:请在设置中添加服务商并启用模型
+      zh-TW: 尚未選擇模型:請在設定中新增服務商並啟用模型
+    provider_deleted:
+      en: The current model's provider has been deleted; please select a model again
+      zh-CN: 当前模型所属的服务商已被删除,请重新选择模型
+      zh-TW: 目前模型所屬的服務商已被刪除,請重新選擇模型
+    missing_url_key:
+      en: "Please enter the API URL and Key for \"%{name}\" in Settings"
+      zh-CN: 请在设置中填写「%{name}」的 API 地址与 Key
+      zh-TW: 請在設定中填寫「%{name}」的 API 網址與 Key
+    select_model:
+      en: Please select a model
+      zh-CN: 请选择模型
+      zh-TW: 請選擇模型
+    read_file:
+      en: "Failed to read file: %{error}"
+      zh-CN: "读取文件失败: %{error}"
+      zh-TW: "讀取檔案失敗:%{error}"
+    file_too_large:
+      en: "File too large (%{size} KB); the knowledge base document limit is %{max} KB"
+      zh-CN: 文件过大(%{size} KB),知识库文档上限 %{max} KB
+      zh-TW: 檔案過大(%{size} KB),知識庫文件上限為 %{max} KB
+    read_file_utf8:
+      en: "Failed to read file (must be UTF-8 text): %{error}"
+      zh-CN: "读取文件失败(需为 UTF-8 文本): %{error}"
+      zh-TW: "讀取檔案失敗(須為 UTF-8 文字):%{error}"
+    knowledge_fallback:
+      en: "Failed to read the custom knowledge base; fell back to the built-in default: %{error}"
+      zh-CN: 自定义知识库读取失败,已回退到内置默认:%{error}
+      zh-TW: 自訂知識庫讀取失敗,已改用內建預設:%{error}
+    create_config_dir:
+      en: "Failed to create config directory: %{error}"
+      zh-CN: "创建配置目录失败: %{error}"
+      zh-TW: "建立設定目錄失敗:%{error}"
+    serialize:
+      en: "Serialization failed: %{error}"
+      zh-CN: "序列化失败: %{error}"
+      zh-TW: "序列化失敗:%{error}"
+    write_config:
+      en: "Failed to write config: %{error}"
+      zh-CN: "写入配置失败: %{error}"
+      zh-TW: "寫入設定失敗:%{error}"
+    set_permissions:
+      en: "Failed to set file permissions: %{error}"
+      zh-CN: "设置文件权限失败: %{error}"
+      zh-TW: "設定檔案權限失敗:%{error}"

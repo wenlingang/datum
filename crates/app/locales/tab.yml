@@ -1,0 +1,498 @@
+_version: 2
+filter:
+  value_placeholder:
+    en: "Filter value… press Enter to apply"
+    zh-CN: "筛选值…回车应用"
+    zh-TW: "篩選值…按 Enter 套用"
+  where:
+    en: Where
+    zh-CN: 满足
+    zh-TW: 符合
+  and:
+    en: AND
+    zh-CN: 且
+    zh-TW: 且
+  or:
+    en: OR
+    zh-CN: 或
+    zh-TW: 或
+  pick_column:
+    en: "Select Column…"
+    zh-CN: "选择列…"
+    zh-TW: "選擇欄位…"
+  no_value_needed:
+    en: No value needed
+    zh-CN: 无需筛选值
+    zh-TW: 不需篩選值
+  remove_condition:
+    en: Remove condition
+    zh-CN: 删除条件
+    zh-TW: 刪除條件
+  empty:
+    en: "No filter conditions — click “Add Condition” to start"
+    zh-CN: "暂无筛选条件 — 点击「添加条件」开始"
+    zh-TW: "尚無篩選條件 — 點選「新增條件」開始"
+  add_condition:
+    en: Add Condition
+    zh-CN: 添加条件
+    zh-TW: 新增條件
+  preview_match:
+    en: Estimated matches
+    zh-CN: 预计匹配
+    zh-TW: 預計符合
+  of_total_rows:
+    en: "/ %{total} rows"
+    zh-CN: "/ %{total} 行"
+    zh-TW: "/ %{total} 列"
+  clear:
+    en: Clear
+    zh-CN: 清除
+    zh-TW: 清除
+  apply:
+    en: Apply
+    zh-CN: 应用
+    zh-TW: 套用
+  applied:
+    en: Applied
+    zh-CN: 已应用
+    zh-TW: 已套用
+  op:
+    contains:
+      en: Contains
+      zh-CN: 包含
+      zh-TW: 包含
+    eq:
+      en: Equals
+      zh-CN: 等于
+      zh-TW: 等於
+    ne:
+      en: Not Equal
+      zh-CN: 不等于
+      zh-TW: 不等於
+    starts:
+      en: Starts With
+      zh-CN: 开头是
+      zh-TW: 開頭是
+    ends:
+      en: Ends With
+      zh-CN: 结尾是
+      zh-TW: 結尾是
+    gt:
+      en: Greater Than
+      zh-CN: 大于
+      zh-TW: 大於
+    lt:
+      en: Less Than
+      zh-CN: 小于
+      zh-TW: 小於
+    gte:
+      en: At Least (≥)
+      zh-CN: 大于等于
+      zh-TW: 大於等於
+    lte:
+      en: At Most (≤)
+      zh-CN: 小于等于
+      zh-TW: 小於等於
+    empty:
+      en: Is Empty
+      zh-CN: 为空
+      zh-TW: 為空
+    not_empty:
+      en: Is Not Empty
+      zh-CN: 非空
+      zh-TW: 非空
+toolbar:
+  limit_custom:
+    en: "Custom"
+    zh-CN: "自定义"
+    zh-TW: "自訂"
+  run:
+    en: "Run"
+    zh-CN: "运行"
+    zh-TW: "執行"
+  run_with_limit:
+    en: "Run (limit %{n})"
+    zh-CN: "运行 (limit %{n})"
+    zh-TW: "執行 (limit %{n})"
+  run_tooltip:
+    en: "Run (⌘↵)"
+    zh-CN: "运行 (⌘↵)"
+    zh-TW: "執行 (⌘↵)"
+  limit_tooltip:
+    en: "Max rows returned per query (exports are not limited)"
+    zh-CN: "调整单次查询返回的最大行数(导出不受限)"
+    zh-TW: "調整單次查詢傳回的最大列數(匯出不受限)"
+  limit_title:
+    en: "Result Limit"
+    zh-CN: "结果限制"
+    zh-TW: "結果上限"
+  n_rows:
+    en: "%{n} rows"
+    zh-CN: "%{n} 行"
+    zh-TW: "%{n} 列"
+  rows_unit:
+    en: "rows"
+    zh-CN: "行"
+    zh-TW: "列"
+  history:
+    en: "History"
+    zh-CN: "历史"
+    zh-TW: "歷史記錄"
+  history_tooltip:
+    en: "Query History (⌘Y)"
+    zh-CN: "查询历史 (⌘Y)"
+    zh-TW: "查詢歷史記錄 (⌘Y)"
+  format:
+    en: "Format"
+    zh-CN: "格式化"
+    zh-TW: "格式化"
+  format_tooltip:
+    en: "Format SQL (⌘⇧F)"
+    zh-CN: "格式化 SQL (⌘⇧F)"
+    zh-TW: "格式化 SQL (⌘⇧F)"
+  explain_tooltip:
+    en: "View Execution Plan (⌘E)"
+    zh-CN: "查看执行计划 (⌘E)"
+    zh-TW: "檢視執行計畫 (⌘E)"
+history:
+  just_now:
+    en: "Just now"
+    zh-CN: "刚刚"
+    zh-TW: "剛剛"
+  minutes_ago:
+    en: "%{n} min ago"
+    zh-CN: "%{n} 分钟前"
+    zh-TW: "%{n} 分鐘前"
+  from_other_conn:
+    en: "This entry is from “%{name}”. It was filled into the editor — review it before running"
+    zh-CN: "该历史来自「%{name}」,已填入编辑器,请确认后运行"
+    zh-TW: "此記錄來自「%{name}」,已填入編輯器,請確認後再執行"
+  title:
+    en: "Query History"
+    zh-CN: "查询历史"
+    zh-TW: "查詢歷史記錄"
+  clear:
+    en: "Clear"
+    zh-CN: "清空"
+    zh-TW: "清除"
+  clear_tooltip:
+    en: "Clear history for the current database"
+    zh-CN: "清空当前数据库的历史"
+    zh-TW: "清除目前資料庫的歷史記錄"
+  cleared:
+    en: "History for the current database cleared"
+    zh-CN: "当前数据库的历史已清空"
+    zh-TW: "目前資料庫的歷史記錄已清除"
+  empty:
+    en: "No history for this database yet. Successfully executed SQL will appear here"
+    zh-CN: "当前数据库暂无历史记录,执行成功的 SQL 会出现在这里"
+    zh-TW: "目前資料庫尚無歷史記錄,執行成功的 SQL 會顯示在這裡"
+  n_rows:
+    en: "%{n} rows"
+    zh-CN: "%{n} 行"
+    zh-TW: "%{n} 列"
+  affected:
+    en: "%{n} affected"
+    zh-CN: "影响 %{n}"
+    zh-TW: "影響 %{n}"
+cell:
+  chars:
+    en: "%{n} chars"
+    zh-CN: "%{n} 字符"
+    zh-TW: "%{n} 字元"
+  copy:
+    en: "Copy"
+    zh-CN: "复制"
+    zh-TW: "複製"
+  copied:
+    en: "Copied"
+    zh-CN: "已复制"
+    zh-TW: "已複製"
+  stage:
+    en: "Stage Change"
+    zh-CN: "暂存修改"
+    zh-TW: "暫存修改"
+  staged:
+    en: "Staged"
+    zh-CN: "已暂存"
+    zh-TW: "已暫存"
+  stage_tooltip:
+    en: "Stage now, then commit all with ⌘S"
+    zh-CN: "暂存后 ⌘S 一次提交"
+    zh-TW: "暫存後按 ⌘S 一次提交"
+  edit_title:
+    en: "Edit Cell"
+    zh-CN: "编辑单元格"
+    zh-TW: "編輯儲存格"
+  view_title:
+    en: "View Cell"
+    zh-CN: "查看单元格"
+    zh-TW: "檢視儲存格"
+tab:
+  editor_placeholder_redis:
+    en: "Enter a Redis command, ⌘↵ to run"
+    zh-CN: "输入 Redis 命令,⌘↵ 运行"
+    zh-TW: "輸入 Redis 指令,⌘↵ 執行"
+  editor_placeholder_sql:
+    en: "Enter SQL, ⌘↵ runs the statement at the cursor"
+    zh-CN: "输入 SQL,⌘↵ 运行光标所在语句"
+    zh-TW: "輸入 SQL,⌘↵ 執行游標所在的陳述式"
+  send_to_ai_chip:
+    en: "Send to AI"
+    zh-CN: "发给 AI"
+    zh-TW: "傳給 AI"
+  empty_command:
+    en: "Command is empty"
+    zh-CN: "命令为空"
+    zh-TW: "指令為空"
+  empty_sql:
+    en: "SQL is empty"
+    zh-CN: "SQL 为空"
+    zh-TW: "SQL 為空"
+  redis_result_column:
+    en: "Result"
+    zh-CN: "结果"
+    zh-TW: "結果"
+  refreshed_tables:
+    en: "Table list refreshed"
+    zh-CN: "已刷新表列表"
+    zh-TW: "已重新整理資料表清單"
+  refresh_skip_write:
+    en: "The current statement is a write and is not re-run on refresh. Use the Run button to execute it"
+    zh-CN: "当前语句是写操作,不随刷新重放,请用运行按钮执行"
+    zh-TW: "目前的陳述式是寫入操作,重新整理時不會重新執行,請使用執行按鈕"
+  rerunning:
+    en: "Re-running current SQL…"
+    zh-CN: "正在重新执行当前 SQL…"
+    zh-TW: "正在重新執行目前的 SQL…"
+  deleted_rows:
+    en: "Deleted %{n} rows"
+    zh-CN: "已删除 %{n} 行"
+    zh-TW: "已刪除 %{n} 列"
+  copied:
+    en: "Copied"
+    zh-CN: "已复制"
+    zh-TW: "已複製"
+  affected_rows:
+    en: "%{n} rows affected"
+    zh-CN: "影响 %{n} 行"
+    zh-TW: "影響 %{n} 列"
+  exec_ok:
+    en: "Executed successfully"
+    zh-CN: "执行成功"
+    zh-TW: "執行成功"
+  query_ok_no_rows:
+    en: "Query succeeded, but returned no rows (0 rows)"
+    zh-CN: "查询成功,但没有行(0 行)"
+    zh-TW: "查詢成功,但沒有資料列(0 列)"
+  no_filter_match:
+    en: "No rows match the filter (%{total} rows total)"
+    zh-CN: "没有匹配筛选条件的行(共 %{total} 行)"
+    zh-TW: "沒有符合篩選條件的資料列(共 %{total} 列)"
+  row_limit_reached:
+    en: "Row limit of %{n} reached; results may be incomplete — raise the limit next to the Run button, or add LIMIT to your SQL."
+    zh-CN: "已达行数上限 %{n} 行,结果可能不完整 —— 可在运行按钮旁调大上限,或在 SQL 中加 LIMIT。"
+    zh-TW: "已達列數上限 %{n} 列,結果可能不完整 —— 可在執行按鈕旁調高上限,或在 SQL 中加上 LIMIT。"
+  running:
+    en: "Running…"
+    zh-CN: "执行中…"
+    zh-TW: "執行中…"
+  query_error:
+    en: "Query failed"
+    zh-CN: "查询出错"
+    zh-TW: "查詢出錯"
+  query_ok_rows:
+    en: "Query succeeded · %{n} rows returned"
+    zh-CN: "查询成功 · 返回 %{n} 行"
+    zh-TW: "查詢成功 · 傳回 %{n} 列"
+  elapsed_ms:
+    en: "%{ms} ms"
+    zh-CN: "用时 %{ms} ms"
+    zh-TW: "耗時 %{ms} ms"
+  ready:
+    en: "Ready — ⌘↵ to run"
+    zh-CN: "就绪 —— ⌘↵ 运行"
+    zh-TW: "就緒 —— ⌘↵ 執行"
+  select_sql_for_ai:
+    en: "Select the SQL to send to AI in the editor first"
+    zh-CN: "请先在编辑器中选中要发给 AI 的 SQL"
+    zh-TW: "請先在編輯器中選取要傳給 AI 的 SQL"
+  menu:
+    send_to_ai:
+      en: "Send to AI Assistant"
+      zh-CN: "发送给 AI 助手"
+      zh-TW: "傳送給 AI 助理"
+    run:
+      en: "Run"
+      zh-CN: "运行"
+      zh-TW: "執行"
+    explain:
+      en: "View Execution Plan (Explain)"
+      zh-CN: "查看执行计划(Explain)"
+      zh-TW: "檢視執行計畫(Explain)"
+    format:
+      en: "Format SQL"
+      zh-CN: "格式化 SQL"
+      zh-TW: "格式化 SQL"
+    cut:
+      en: "Cut"
+      zh-CN: "剪切"
+      zh-TW: "剪下"
+    copy:
+      en: "Copy"
+      zh-CN: "复制"
+      zh-TW: "複製"
+    paste:
+      en: "Paste"
+      zh-CN: "粘贴"
+      zh-TW: "貼上"
+grid:
+  view_detail:
+    en: "View Details"
+    zh-CN: "查看详情"
+    zh-TW: "檢視詳細資料"
+  edit:
+    en: "Edit"
+    zh-CN: "编辑"
+    zh-TW: "編輯"
+  view:
+    en: "View"
+    zh-CN: "查看"
+    zh-TW: "檢視"
+  copy_insert:
+    en: "Copy INSERT Statement"
+    zh-CN: "复制 INSERT 语句"
+    zh-TW: "複製 INSERT 陳述式"
+  undo_delete:
+    en: "Undo Delete"
+    zh-CN: "撤销删除"
+    zh-TW: "復原刪除"
+  delete_row:
+    en: "Delete Row"
+    zh-CN: "删除行"
+    zh-TW: "刪除列"
+  no_rows:
+    en: "No rows"
+    zh-CN: "没有行"
+    zh-TW: "沒有資料列"
+erd:
+  search_placeholder:
+    en: "Search tables / columns / foreign keys…"
+    zh-CN: "搜索表/字段/外键…"
+    zh-TW: "搜尋資料表/欄位/外鍵…"
+  exported_er:
+    en: "ER diagram exported"
+    zh-CN: "已导出工程 ER 图"
+    zh-TW: "已匯出 ER 圖"
+  exported_struct:
+    en: "Schema diagram exported"
+    zh-CN: "已导出表结构图"
+    zh-TW: "已匯出資料表結構圖"
+  exported_diagram:
+    en: "Relationship diagram exported"
+    zh-CN: "已导出关系图"
+    zh-TW: "已匯出關聯圖"
+  export_failed:
+    en: "Export failed: %{error}"
+    zh-CN: "导出失败:%{error}"
+    zh-TW: "匯出失敗:%{error}"
+  stats:
+    en: "%{tables} tables · %{edges} relationships"
+    zh-CN: "%{tables} 表 · %{edges} 关系"
+    zh-TW: "%{tables} 資料表 · %{edges} 關聯"
+  stats_inferred:
+    en: " (%{n} inferred from naming, dashed)"
+    zh-CN: "(%{n} 条按命名推断,虚线)"
+    zh-TW: "(%{n} 條依命名推斷,虛線)"
+  back_to_all:
+    en: "Back to All Tables"
+    zh-CN: "返回整库"
+    zh-TW: "返回整個資料庫"
+  no_edges_table:
+    en: "This table has no foreign key relationships"
+    zh-CN: "该表无外键关联"
+    zh-TW: "此資料表沒有外鍵關聯"
+  no_edges_db:
+    en: "No foreign key relationships found in this database (neither constraints nor xxx_id naming)"
+    zh-CN: "该库未发现外键关系(物理约束或 xxx_id 命名均无)"
+    zh-TW: "此資料庫未發現外鍵關聯(無實體約束,也無 xxx_id 命名)"
+  inferred:
+    en: "Inferred Relationships"
+    zh-CN: "推断关系"
+    zh-TW: "推斷關聯"
+  inferred_tooltip:
+    en: "Logical foreign keys inferred from xxx_id naming (dashed). The heuristic may produce false positives; turn it off here"
+    zh-CN: "按 xxx_id 命名推断的逻辑外键(虚线);启发式匹配可能误报,可在此关闭"
+    zh-TW: "依 xxx_id 命名推斷的邏輯外鍵(虛線);啟發式比對可能誤判,可在此關閉"
+  view_struct:
+    en: "Schema Diagram"
+    zh-CN: "表结构图"
+    zh-TW: "資料表結構圖"
+  view_er:
+    en: "ER Diagram"
+    zh-CN: "工程 ER 图"
+    zh-TW: "ER 圖"
+  exporting:
+    en: "Exporting"
+    zh-CN: "导出中"
+    zh-TW: "匯出中"
+  export:
+    en: "Export"
+    zh-CN: "导出"
+    zh-TW: "匯出"
+  export_tooltip:
+    en: "Export as PNG image"
+    zh-CN: "导出为 PNG 图片"
+    zh-TW: "匯出為 PNG 圖片"
+  refresh_tooltip:
+    en: "Reload foreign keys / primary keys"
+    zh-CN: "重新读取外键/主键"
+    zh-TW: "重新讀取外鍵/主鍵"
+  no_key_columns:
+    en: "No key columns"
+    zh-CN: "无键列"
+    zh-TW: "無鍵欄位"
+  more_columns:
+    en: "+%{n} more columns"
+    zh-CN: "+%{n} 个字段"
+    zh-TW: "+%{n} 個欄位"
+  zoom_in:
+    en: "Zoom In"
+    zh-CN: "放大"
+    zh-TW: "放大"
+  zoom_out:
+    en: "Zoom Out"
+    zh-CN: "缩小"
+    zh-TW: "縮小"
+  fit_view:
+    en: "Fit to View"
+    zh-CN: "适配视野"
+    zh-TW: "符合視窗大小"
+  pick_database:
+    en: "Select Database…"
+    zh-CN: "选择数据库…"
+    zh-TW: "選擇資料庫…"
+  pick_database_hint:
+    en: "Select a database to view its relationship diagram"
+    zh-CN: "选择一个数据库查看关系图"
+    zh-TW: "選擇一個資料庫以檢視關聯圖"
+  load_failed:
+    en: "Failed to load table relationships: %{error}"
+    zh-CN: "读取表关系失败:%{error}"
+    zh-TW: "讀取資料表關聯失敗:%{error}"
+  retry:
+    en: "Retry"
+    zh-CN: "重试"
+    zh-TW: "重試"
+  title_table:
+    en: "%{table} · Schema"
+    zh-CN: "%{table} · 结构"
+    zh-TW: "%{table} · 結構"
+  title:
+    en: "Relationship Diagram"
+    zh-CN: "关系图"
+    zh-TW: "關聯圖"
+  canvas_failed:
+    en: "Failed to create canvas"
+    zh-CN: "无法创建画布"
+    zh-TW: "無法建立畫布"

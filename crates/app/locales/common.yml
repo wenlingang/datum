@@ -1,0 +1,10 @@
+_version: 2
+prefs:
+  language_system:
+    en: Follow System
+    zh-CN: 跟随系统
+    zh-TW: 跟隨系統
+  language:
+    en: Language
+    zh-CN: 语言
+    zh-TW: 語言

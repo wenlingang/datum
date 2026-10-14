@@ -1,0 +1,357 @@
+_version: 2
+workspace:
+  copy_table_name:
+    en: Copy Table Name
+    zh-CN: 复制表名
+    zh-TW: 複製資料表名稱
+  copied:
+    en: Copied
+    zh-CN: 已复制
+    zh-TW: 已複製
+  not_connected:
+    en: "Not connected — pick a connection on the left"
+    zh-CN: "未连接 —— 点左侧连接"
+    zh-TW: "未連線 —— 點選左側的連線"
+  hide_sidebar:
+    en: "Hide Sidebar (⌘B)"
+    zh-CN: "收起侧栏 (⌘B)"
+    zh-TW: "收合側邊欄 (⌘B)"
+  show_sidebar:
+    en: "Show Sidebar (⌘B)"
+    zh-CN: "展开侧栏 (⌘B)"
+    zh-TW: "展開側邊欄 (⌘B)"
+  relationship_diagram:
+    en: Relationship Diagram
+    zh-CN: 关系图
+    zh-TW: 關聯圖
+  hide_detail:
+    en: Hide Details Panel
+    zh-CN: 隐藏详情栏
+    zh-TW: 隱藏詳細資料欄
+  show_detail:
+    en: Show Details Panel
+    zh-CN: 显示详情栏
+    zh-TW: 顯示詳細資料欄
+  hide_ai:
+    en: Hide AI Assistant
+    zh-CN: 隐藏 AI 助手
+    zh-TW: 隱藏 AI 助理
+  ai_assistant:
+    en: AI Assistant
+    zh-CN: AI 助手
+    zh-TW: AI 助理
+  theme_tooltip:
+    en: "Theme: %{name}"
+    zh-CN: "主题:%{name}"
+    zh-TW: "主題:%{name}"
+  settings:
+    en: Settings
+    zh-CN: 设置
+    zh-TW: 設定
+  settings_update:
+    en: "Settings (Update Available)"
+    zh-CN: "设置(发现新版本)"
+    zh-TW: "設定(有新版本)"
+  close_tab:
+    en: Close Tab
+    zh-CN: 关闭标签页
+    zh-TW: 關閉分頁
+  close_other_tabs:
+    en: Close Other Tabs
+    zh-CN: 关闭其他标签页
+    zh-TW: 關閉其他分頁
+  rename:
+    en: Rename
+    zh-CN: 重命名
+    zh-TW: 重新命名
+  close:
+    en: Close
+    zh-CN: 关闭
+    zh-TW: 關閉
+  filtered_n:
+    en: "Filters: %{count}"
+    zh-CN: "已筛选 %{count}"
+    zh-TW: "已篩選 %{count}"
+  filter_tooltip:
+    en: "Filter (⌘F)"
+    zh-CN: "筛选 (⌘F)"
+    zh-TW: "篩選 (⌘F)"
+  export:
+    en: Export
+    zh-CN: 导出
+    zh-TW: 匯出
+  new_query_tooltip:
+    en: "New SQL Query (⌘T)"
+    zh-CN: "新建 SQL 查询 (⌘T)"
+    zh-TW: "新增 SQL 查詢 (⌘T)"
+  connected:
+    en: Connected
+    zh-CN: 已连接
+    zh-TW: 已連線
+  rows_unit:
+    en: "rows ·"
+    zh-CN: "行 ·"
+    zh-TW: "列 ·"
+  cols_unit:
+    en: cols
+    zh-CN: 列
+    zh-TW: 欄
+  elapsed_ms:
+    en: "in %{ms} ms"
+    zh-CN: "用时 %{ms} ms"
+    zh-TW: "耗時 %{ms} ms"
+  page_prefix:
+    en: Page
+    zh-CN: 第
+    zh-TW: 第
+  page_suffix:
+    en: "· %{size} per page"
+    zh-CN: "页 · 每页 %{size}"
+    zh-TW: "頁 · 每頁 %{size}"
+  prev_page:
+    en: Previous Page
+    zh-CN: 上一页
+    zh-TW: 上一頁
+  next_page:
+    en: Next Page
+    zh-CN: 下一页
+    zh-TW: 下一頁
+  ready:
+    en: Ready
+    zh-CN: 准备就绪
+    zh-TW: 準備就緒
+  empty_hint:
+    en: "Pick a table on the left to browse, or start a new query to write SQL"
+    zh-CN: "从左侧选一张表开始浏览,或新建一个查询直接写 SQL"
+    zh-TW: "從左側選一張資料表開始瀏覽,或新增查詢直接寫 SQL"
+  new_sql_query:
+    en: New SQL Query
+    zh-CN: 新建 SQL 查询
+    zh-TW: 新增 SQL 查詢
+  quote_select_first:
+    en: "Select the SQL to quote in the editor first"
+    zh-CN: "请先在编辑器中选中要引用的 SQL"
+    zh-TW: "請先在編輯器中選取要引用的 SQL"
+  select_conn_first:
+    en: "Select a connection on the left first"
+    zh-CN: "先在左侧选择一个连接"
+    zh-TW: "請先在左側選擇一個連線"
+  chat_conn_gone:
+    en: "The connection bound to this conversation no longer exists"
+    zh-CN: "对话绑定的连接已不存在"
+    zh-TW: "對話綁定的連線已不存在"
+sidebar:
+  search_tables:
+    en: Search tables
+    zh-CN: 搜索表
+    zh-TW: 搜尋資料表
+  load_dbs_failed:
+    en: "Failed to load databases: %{error}"
+    zh-CN: "加载库列表失败:%{error}"
+    zh-TW: "載入資料庫清單失敗:%{error}"
+  new_connection:
+    en: New Connection
+    zh-CN: 新建连接
+    zh-TW: 新增連線
+  conn_actions:
+    en: Connection Actions
+    zh-CN: 连接操作
+    zh-TW: 連線操作
+  loading:
+    en: "Loading…"
+    zh-CN: "加载中…"
+    zh-TW: "載入中…"
+  not_loaded:
+    en: Not loaded
+    zh-CN: 未加载
+    zh-TW: 未載入
+  retry:
+    en: Retry
+    zh-CN: 重试
+    zh-TW: 重試
+  db_switch_hint:
+    en: "Switches to a connection for this database, creating one if needed"
+    zh-CN: "切换到该库的连接,没有则自动新建"
+    zh-TW: "切換到該資料庫的連線,沒有則自動建立"
+  edit:
+    en: Edit
+    zh-CN: 编辑
+    zh-TW: 編輯
+  refresh_tables:
+    en: Refresh Tables
+    zh-CN: 刷新表列表
+    zh-TW: 重新整理資料表清單
+  import_sql:
+    en: "Import Database (SQL)"
+    zh-CN: "导入数据库(SQL)"
+    zh-TW: "匯入資料庫(SQL)"
+  export_database:
+    en: Export Database
+    zh-CN: 导出数据库
+    zh-TW: 匯出資料庫
+  delete:
+    en: Delete
+    zh-CN: 删除
+    zh-TW: 刪除
+  copy_key_name:
+    en: Copy Key Name
+    zh-CN: 复制 key 名
+    zh-TW: 複製 key 名稱
+  view_table_detail:
+    en: View Table Details
+    zh-CN: 查看表详情
+    zh-TW: 檢視資料表詳細資料
+  view_ddl:
+    en: View CREATE Statement
+    zh-CN: 查看建表语句
+    zh-TW: 檢視建表語法
+  edit_connection:
+    en: Edit Connection
+    zh-CN: 编辑连接
+    zh-TW: 編輯連線
+  drop_database:
+    en: "Drop Database (DROP)"
+    zh-CN: "删除数据库(DROP)"
+    zh-TW: "刪除資料庫(DROP)"
+  empty_no_conns:
+    en: "Click “+” on the left to add a connection"
+    zh-CN: "点左侧「+」新建连接"
+    zh-TW: "點選左側「+」新增連線"
+  empty_pick_conn:
+    en: Select a connection on the left
+    zh-CN: 从左侧选择一个连接
+    zh-TW: 從左側選擇一個連線
+detail:
+  details:
+    en: Details
+    zh-CN: 详情
+    zh-TW: 詳細資料
+  row_detail:
+    en: Row Details
+    zh-CN: 行详情
+    zh-TW: 列詳細資料
+  key_detail:
+    en: Key Details
+    zh-CN: KEY 详情
+    zh-TW: KEY 詳細資料
+  ttl_never:
+    en: Never expires
+    zh-CN: 永不过期
+    zh-TW: 永不過期
+  ttl_missing:
+    en: Does not exist
+    zh-CN: 不存在
+    zh-TW: 不存在
+  key:
+    en: Key
+    zh-CN: 键
+    zh-TW: 鍵
+  type:
+    en: Type
+    zh-CN: 类型
+    zh-TW: 類型
+  size:
+    en: Size
+    zh-CN: 大小
+    zh-TW: 大小
+  columns_n:
+    en: "Columns (%{count})"
+    zh-CN: "字段(%{count})"
+    zh-TW: "欄位(%{count})"
+  indexes_n:
+    en: "Indexes (%{count})"
+    zh-CN: "索引(%{count})"
+    zh-TW: "索引(%{count})"
+  copy_insert:
+    en: Copy INSERT Statement
+    zh-CN: 复制 INSERT 语句
+    zh-TW: 複製 INSERT 語法
+  no_indexes:
+    en: No indexes
+    zh-CN: 无索引
+    zh-TW: 無索引
+  table_title:
+    en: "Table · %{name}"
+    zh-CN: "表 · %{name}"
+    zh-TW: "資料表 · %{name}"
+ops:
+  export_as:
+    en: "Export as %{format}"
+    zh-CN: "导出为 %{format}"
+    zh-TW: "匯出為 %{format}"
+  export_table_as:
+    en: "Export Table (%{format})"
+    zh-CN: "导出整表(%{format})"
+    zh-TW: "匯出整張資料表(%{format})"
+  write_failed:
+    en: "Failed to write file: %{error}"
+    zh-CN: "写入文件失败:%{error}"
+    zh-TW: "寫入檔案失敗:%{error}"
+  exported:
+    en: "Exported %{format}"
+    zh-CN: "已导出 %{format}"
+    zh-TW: "已匯出 %{format}"
+  table_empty:
+    en: "Table is empty, nothing to export"
+    zh-CN: "表为空,无数据导出"
+    zh-TW: "資料表是空的,沒有資料可匯出"
+  export_busy:
+    en: "An export is already in progress, please wait"
+    zh-CN: "正在导出中,请稍候"
+    zh-TW: "正在匯出中,請稍候"
+  no_tables:
+    en: No tables to export
+    zh-CN: 没有可导出的表
+    zh-TW: 沒有可匯出的資料表
+  exporting_n:
+    en: "Exporting %{count} tables…"
+    zh-CN: "正在导出 %{count} 张表…"
+    zh-TW: "正在匯出 %{count} 張資料表…"
+  exported_db:
+    en: "Database exported · %{count} tables"
+    zh-CN: "已导出数据库 · %{count} 张表"
+    zh-TW: "已匯出資料庫 · %{count} 張資料表"
+  switch_db_failed:
+    en: "Failed to switch database: %{error}"
+    zh-CN: "切换库失败:%{error}"
+    zh-TW: "切換資料庫失敗:%{error}"
+  prepare_export_failed:
+    en: "Failed to prepare export: %{error}"
+    zh-CN: "准备导出失败:%{error}"
+    zh-TW: "準備匯出失敗:%{error}"
+  cannot_drop_current:
+    en: "Can't drop the database in use. Switch to another database first."
+    zh-CN: "不能删除当前正在使用的库,请先切换到其他库"
+    zh-TW: "無法刪除目前使用中的資料庫,請先切換到其他資料庫"
+  dropped_db:
+    en: "Dropped database %{name}"
+    zh-CN: "已删除数据库 %{name}"
+    zh-TW: "已刪除資料庫 %{name}"
+  delete_conn_title:
+    en: "Delete connection “%{name}”?"
+    zh-CN: "删除连接「%{name}」?"
+    zh-TW: "刪除連線「%{name}」?"
+  delete_conn_desc_keychain:
+    en: "This can't be undone. The password saved in the Keychain will also be removed."
+    zh-CN: "此操作不可撤销,并会清除钥匙串中保存的密码。"
+    zh-TW: "此操作無法復原,並會清除鑰匙圈中儲存的密碼。"
+  delete_conn_desc:
+    en: "This can't be undone."
+    zh-CN: "此操作不可撤销。"
+    zh-TW: "此操作無法復原。"
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  delete:
+    en: Delete
+    zh-CN: 删除
+    zh-TW: 刪除
+  ddl_title:
+    en: "CREATE Statement · %{name}"
+    zh-CN: "建表语句 · %{name}"
+    zh-TW: "建表語法 · %{name}"
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
