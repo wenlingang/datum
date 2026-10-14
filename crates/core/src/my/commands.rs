@@ -23,6 +23,7 @@ pub async fn my_connect(state: &AppState, id: String) -> AppResult<()> {
             &conn.user,
             &password,
             &conn.database,
+            conn.ssl_mode,
         )
         .await
 }

@@ -527,6 +527,34 @@ conn_form:
     en: Database
     zh-CN: 数据库
     zh-TW: 資料庫
+  ssl_mode:
+    en: SSL
+    zh-CN: SSL 模式
+    zh-TW: SSL 模式
+  ssl_disable:
+    en: Disable
+    zh-CN: 关闭
+    zh-TW: 關閉
+  ssl_prefer:
+    en: Prefer
+    zh-CN: 优先
+    zh-TW: 優先
+  ssl_require:
+    en: Require
+    zh-CN: 必须加密
+    zh-TW: 必須加密
+  ssl_verify_full:
+    en: Verify Certificate
+    zh-CN: 加密并校验证书
+    zh-TW: 加密並驗證憑證
+  ssl_hint:
+    en: "Prefer: encrypt when the server supports it. Require: always encrypt, no certificate check. Verify: also check the certificate and host name"
+    zh-CN: "优先:服务器支持就加密;必须加密:不加密就不连,不校验证书;校验证书:同时校验证书与主机名"
+    zh-TW: "優先:伺服器支援就加密;必須加密:不加密就不連線,不驗證憑證;驗證憑證:同時驗證憑證與主機名稱"
+  ssl_redis_hint:
+    en: "Redis cannot negotiate encryption on the same port: Prefer means no encryption. Require / Verify connect over TLS (rediss://)"
+    zh-CN: "Redis 无法在同一端口协商加密:「优先」等同不加密;「必须加密」「校验证书」走 TLS(rediss://)"
+    zh-TW: "Redis 無法在同一連接埠協商加密:「優先」等同不加密;「必須加密」「驗證憑證」走 TLS(rediss://)"
   cancel:
     en: Cancel
     zh-CN: 取消

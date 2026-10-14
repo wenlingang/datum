@@ -1,7 +1,8 @@
+use crate::core::connection::SslMode;
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::pg::client::QueryResult;
 use mysql_async::prelude::Queryable;
-use mysql_async::{Opts, OptsBuilder, Pool, Row, TxOpts, Value};
+use mysql_async::{Opts, OptsBuilder, Pool, Row, SslOpts, TxOpts, Value};
 use rust_i18n::t;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
@@ -75,29 +76,77 @@ fn row_to_strings(row: &Row) -> Vec<Option<String>> {
 }
 
 /// 用给定参数尝试建立一次连接以验证可达性与认证(不缓存)。
+fn opts(host: &str, port: u16, user: &str, pass: &str, db: &str, ssl: Option<SslOpts>) -> Opts {
+    let mut b = OptsBuilder::default()
+        .ip_or_hostname(host.to_string())
+        .tcp_port(port)
+        .user(Some(user.to_string()))
+        .db_name(Some(db.to_string()))
+        .ssl_opts(ssl);
+    if !pass.is_empty() {
+        b = b.pass(Some(pass.to_string()));
+    }
+    Opts::from(b)
+}
+
+/// 按 SSL 模式依次尝试的加密选项:None 表示明文。
+/// 「优先」先试加密(不校验证书),服务器不支持再退回明文;「必须」「校验证书」失败即报错,不降级。
+fn ssl_attempts(mode: SslMode) -> Vec<Option<SslOpts>> {
+    let encrypt_only = || {
+        SslOpts::default()
+            .with_danger_accept_invalid_certs(true)
+            .with_danger_skip_domain_validation(true)
+    };
+    match mode {
+        SslMode::Disable => vec![None],
+        SslMode::Prefer => vec![Some(encrypt_only()), None],
+        SslMode::Require => vec![Some(encrypt_only())],
+        SslMode::VerifyFull => vec![Some(SslOpts::default())],
+    }
+}
+
+/// 按 SSL 模式建立连接池并试连一次,返回第一个能连上的。
+async fn open_pool(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+    db: &str,
+    mode: SslMode,
+) -> AppResult<Pool> {
+    crate::tls::install_default_provider();
+    let mut last_err = None;
+    for ssl in ssl_attempts(mode) {
+        let pool = Pool::new(opts(host, port, user, pass, db, ssl));
+        match pool.get_conn().await {
+            Ok(conn) => {
+                drop(conn);
+                return Ok(pool);
+            }
+            Err(e) => {
+                pool.disconnect().await.ok();
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(connerr(last_err.expect("至少尝试一次")))
+}
+
 pub async fn test_connect(
     host: &str,
     port: u16,
     user: &str,
     pass: &str,
     db: &str,
+    ssl: SslMode,
 ) -> AppResult<()> {
-    let mut b = OptsBuilder::default()
-        .ip_or_hostname(host.to_string())
-        .tcp_port(port)
-        .user(Some(user.to_string()))
-        .db_name(Some(db.to_string()));
-    if !pass.is_empty() {
-        b = b.pass(Some(pass.to_string()));
-    }
-    let pool = Pool::new(Opts::from(b));
-    let conn = pool.get_conn().await.map_err(connerr)?;
-    drop(conn);
+    let pool = open_pool(host, port, user, pass, db, ssl).await?;
     pool.disconnect().await.ok();
     Ok(())
 }
 
 impl MyPool {
+    #[allow(clippy::too_many_arguments)]
     pub async fn connect(
         &self,
         id: &str,
@@ -106,19 +155,9 @@ impl MyPool {
         user: &str,
         pass: &str,
         db: &str,
+        ssl: SslMode,
     ) -> AppResult<()> {
-        let mut b = OptsBuilder::default()
-            .ip_or_hostname(host.to_string())
-            .tcp_port(port)
-            .user(Some(user.to_string()))
-            .db_name(Some(db.to_string()));
-        if !pass.is_empty() {
-            b = b.pass(Some(pass.to_string()));
-        }
-        let pool = Pool::new(Opts::from(b));
-        // 试连一次,确保配置可用
-        let conn = pool.get_conn().await.map_err(connerr)?;
-        drop(conn);
+        let pool = open_pool(host, port, user, pass, db, ssl).await?;
         self.pools.lock().await.insert(id.to_string(), pool);
         Ok(())
     }
@@ -295,7 +334,9 @@ mod tests {
     async fn connect_query_edit() {
         let (h, port, u, pw, db) = cfg();
         let pool = MyPool::default();
-        pool.connect("t", &h, port, &u, &pw, &db).await.unwrap();
+        pool.connect("t", &h, port, &u, &pw, &db, SslMode::Prefer)
+            .await
+            .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS my_test")
             .await
             .unwrap();
@@ -341,7 +382,9 @@ mod tests {
     async fn max_rows_caps_result() {
         let (h, port, u, pw, db) = cfg();
         let pool = MyPool::default();
-        pool.connect("t", &h, port, &u, &pw, &db).await.unwrap();
+        pool.connect("t", &h, port, &u, &pw, &db, SslMode::Prefer)
+            .await
+            .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS my_cap_test")
             .await
             .unwrap();

@@ -54,6 +54,26 @@ impl Env {
     }
 }
 
+/// 网络连接的加密方式(PG / MySQL / Redis;SQLite 是本地文件,不涉及)。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SslMode {
+    /// 不加密
+    Disable,
+    /// 服务器支持就加密,不支持退回明文;不校验证书(与 libpq 的 prefer 一致)。
+    /// Redis 无法在同一端口协商加密,此档等同不加密。
+    #[default]
+    Prefer,
+    /// 必须加密,不校验证书(防窃听,不防中间人)
+    Require,
+    /// 必须加密,并用系统证书库校验证书与主机名
+    VerifyFull,
+}
+
+impl SslMode {
+    pub const ALL: [SslMode; 4] = [Self::Disable, Self::Prefer, Self::Require, Self::VerifyFull];
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
@@ -71,6 +91,9 @@ pub struct Connection {
     /// 仅 SQLite 使用:数据库文件的绝对路径。其他类型为 None。
     #[serde(default)]
     pub file_path: Option<String>,
+    /// 加密方式;旧配置没有这一项时取默认的「优先」
+    #[serde(default)]
+    pub ssl_mode: SslMode,
 }
 
 impl Connection {
@@ -105,6 +128,7 @@ mod tests {
             database: "appdb".into(),
             plaintext_password: None,
             file_path: None,
+            ssl_mode: Default::default(),
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Connection = serde_json::from_str(&json).unwrap();

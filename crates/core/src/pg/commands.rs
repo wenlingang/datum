@@ -15,6 +15,7 @@ fn build_config(conn: &Connection, password: &str) -> tokio_postgres::Config {
         .user(&conn.user)
         .password(password)
         .dbname(&conn.database);
+    crate::pg::client::apply_ssl_mode(&mut cfg, conn.ssl_mode);
     cfg
 }
 
@@ -27,7 +28,7 @@ pub async fn pg_connect(state: &AppState, id: String) -> AppResult<()> {
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
     let password = credentials::load_password(&state.backend, &conn)?;
     let config = build_config(&conn, &password);
-    state.pg_pool.connect(&id, &config).await
+    state.pg_pool.connect(&id, &config, conn.ssl_mode).await
 }
 
 pub async fn pg_list_objects(state: &AppState, id: String) -> AppResult<Vec<String>> {
@@ -94,6 +95,7 @@ mod tests {
             database: "my-app-dev".into(),
             plaintext_password: None,
             file_path: None,
+            ssl_mode: Default::default(),
         }
     }
 

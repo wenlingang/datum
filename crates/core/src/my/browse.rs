@@ -107,7 +107,17 @@ mod tests {
     async fn lists_and_table_detail() {
         let (h, port, u, pw, db) = cfg();
         let pool = MyPool::default();
-        pool.connect("t", &h, port, &u, &pw, &db).await.unwrap();
+        pool.connect(
+            "t",
+            &h,
+            port,
+            &u,
+            &pw,
+            &db,
+            crate::core::connection::SslMode::Prefer,
+        )
+        .await
+        .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS my_detail_test")
             .await
             .unwrap();

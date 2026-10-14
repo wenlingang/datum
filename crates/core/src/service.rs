@@ -267,6 +267,7 @@ pub async fn test_connection(
         password.into(),
         conn.database.clone(),
         conn.file_path.clone(),
+        conn.ssl_mode,
     )
     .await
 }

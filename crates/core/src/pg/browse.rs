@@ -129,7 +129,13 @@ mod tests {
     #[ignore]
     async fn lists_tables_and_full_detail() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_detail_test")
             .await
             .unwrap();

@@ -50,7 +50,13 @@ mod tests {
     #[ignore]
     async fn commits_a_cell_edit() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         let edits = vec![CellEdit {
             table: "users".into(),
             pk_col: "id".into(),
@@ -71,7 +77,13 @@ mod tests {
     #[ignore]
     async fn bad_edit_rolls_back() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         // 先确保 id=1 的 email 是已知值
         pool.query("t", "UPDATE users SET email='a@x.com' WHERE id=1")
             .await
@@ -105,7 +117,13 @@ mod tests {
     #[ignore]
     async fn deletes_rows_in_txn() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_deltest")
             .await
             .unwrap();
@@ -157,7 +175,13 @@ mod tests {
     #[ignore]
     async fn edits_a_numeric_column() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_numtest")
             .await
             .unwrap();
@@ -194,7 +218,13 @@ mod tests {
     #[ignore]
     async fn typed_values_and_hostile_strings() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect(
+            "t",
+            &test_config(),
+            crate::core::connection::SslMode::Disable,
+        )
+        .await
+        .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_types")
             .await
             .unwrap();

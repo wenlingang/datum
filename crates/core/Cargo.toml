@@ -11,7 +11,7 @@ tokio.workspace = true
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }
 # 流式消费查询结果(行数上限截断时不整体物化)
 futures-util = { version = "0.3", default-features = false }
-redis = { version = "0.27", features = ["tokio-comp"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "tls-rustls-insecure", "tls-rustls-webpki-roots"] }
 mysql_async = { version = "0.34", default-features = false, features = ["default-rustls"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 thiserror = "1"
@@ -24,6 +24,10 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 ed25519-dalek = "2"
 rust-i18n = "4"
+tokio-postgres-rustls = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
 
 [features]
 # 允许用环境变量 DATUM_UPDATE_MANIFEST_URL 覆盖更新清单地址(仅测试用,正式包不开启)

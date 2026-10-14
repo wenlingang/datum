@@ -1,9 +1,26 @@
+use crate::core::connection::SslMode;
 use crate::error::{AppError, AppResult, ErrorKind};
 use rust_i18n::t;
 use serde::Serialize;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
-use tokio_postgres::{Client, Config, NoTls, SimpleQueryMessage};
+use tokio_postgres::config::SslMode as PgSslMode;
+use tokio_postgres::{Client, Config, SimpleQueryMessage};
+use tokio_postgres_rustls::MakeRustlsConnect;
+
+/// 按 SSL 模式设置握手策略:禁用 / 优先(服务器不支持就退回明文)/ 必须。
+/// 「校验证书」在握手层面也是「必须」,区别在连接器是否校验证书。
+pub fn apply_ssl_mode(cfg: &mut Config, mode: SslMode) {
+    cfg.ssl_mode(match mode {
+        SslMode::Disable => PgSslMode::Disable,
+        SslMode::Prefer => PgSslMode::Prefer,
+        SslMode::Require | SslMode::VerifyFull => PgSslMode::Require,
+    });
+}
+
+fn tls_connector(mode: SslMode) -> MakeRustlsConnect {
+    MakeRustlsConnect::new(crate::tls::client_config(mode == SslMode::VerifyFull))
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct QueryResult {
@@ -78,6 +95,7 @@ pub async fn test_connect(
     user: &str,
     pass: &str,
     db: &str,
+    ssl: SslMode,
 ) -> AppResult<()> {
     let mut cfg = Config::new();
     cfg.host(host)
@@ -85,8 +103,9 @@ pub async fn test_connect(
         .user(user)
         .password(pass)
         .dbname(db);
+    apply_ssl_mode(&mut cfg, ssl);
     // 建连成功(完成握手与认证)即视为连通;立即丢弃。
-    let (_client, _connection) = cfg.connect(NoTls).await.map_err(|e| {
+    let (_client, _connection) = cfg.connect(tls_connector(ssl)).await.map_err(|e| {
         AppError::new(
             ErrorKind::Connection,
             t!("core.err.connect_failed", db = "PostgreSQL"),
@@ -100,8 +119,9 @@ impl PgPool {
     /// 用 Config 建立连接并缓存到 id。
     /// 用 Config(显式 setter)而非手拼连接串:空密码或含特殊字符的库名都能正确处理,
     /// 避免 `password= dbname=...` 这类空格分隔串在空值时解析丢失 dbname 的问题。
-    pub async fn connect(&self, id: &str, config: &Config) -> AppResult<()> {
-        let (client, connection) = config.connect(NoTls).await.map_err(|e| {
+    /// `config` 需已按 `ssl` 调用过 [`apply_ssl_mode`]。
+    pub async fn connect(&self, id: &str, config: &Config, ssl: SslMode) -> AppResult<()> {
+        let (client, connection) = config.connect(tls_connector(ssl)).await.map_err(|e| {
             AppError::new(
                 ErrorKind::Connection,
                 t!("core.err.connect_failed", db = "PostgreSQL"),
@@ -314,7 +334,9 @@ mod tests {
     #[ignore]
     async fn connects_and_queries_users() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         assert!(pool.is_connected("t").await);
         let r = pool
             .query("t", "SELECT id, name FROM users ORDER BY id")
@@ -328,7 +350,9 @@ mod tests {
     #[ignore]
     async fn max_rows_caps_result() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         let capped = pool
             .query_capped("t", "SELECT generate_series(1, 10)", Some(4))
             .await
@@ -345,7 +369,9 @@ mod tests {
     #[ignore]
     async fn query_error_surfaces_as_app_error() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         let err = pool
             .query("t", "SELECT * FROM no_such_table")
             .await
@@ -360,7 +386,9 @@ mod tests {
     #[ignore]
     async fn query_error_detail_includes_server_message() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         let err = pool
             .query("t", "CREATE INDEX idx_x ON no_such_table (id)")
             .await
@@ -378,7 +406,9 @@ mod tests {
     #[ignore]
     async fn empty_result_still_returns_columns() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_empty_test")
             .await
             .unwrap();
@@ -401,7 +431,9 @@ mod tests {
     #[ignore]
     async fn create_index_executes() {
         let pool = PgPool::default();
-        pool.connect("t", &test_config()).await.unwrap();
+        pool.connect("t", &test_config(), SslMode::Disable)
+            .await
+            .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS dbstudio_idx_test")
             .await
             .unwrap();
@@ -444,7 +476,10 @@ mod tests {
             .user("postgres")
             .dbname("postgres")
             .password("");
-        admin.connect("admin", &admin_cfg).await.unwrap();
+        admin
+            .connect("admin", &admin_cfg, SslMode::Disable)
+            .await
+            .unwrap();
         admin
             .query("admin", "DROP DATABASE IF EXISTS dbstudio_dbname_test")
             .await
@@ -461,7 +496,7 @@ mod tests {
             .user("postgres")
             .dbname("dbstudio_dbname_test")
             .password("");
-        pool.connect("t", &cfg).await.unwrap();
+        pool.connect("t", &cfg, SslMode::Disable).await.unwrap();
         let r = pool.query("t", "SELECT current_database()").await.unwrap();
         assert_eq!(r.rows[0][0].as_deref(), Some("dbstudio_dbname_test"));
     }

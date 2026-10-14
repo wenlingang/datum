@@ -82,6 +82,7 @@ mod tests {
             database: "postgres".into(),
             plaintext_password: Some("pw".into()),
             file_path: None,
+            ssl_mode: Default::default(),
         }
     }
 

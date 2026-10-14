@@ -124,6 +124,7 @@ mod tests {
             database: "d".into(),
             plaintext_password: None,
             file_path: None,
+            ssl_mode: Default::default(),
         }
     }
 

@@ -5,7 +5,7 @@ use crate::runtime;
 use crate::store::{Stores, Toast};
 use crate::theme::ActivePalette as _;
 use crate::ui;
-use datum_core::core::connection::{Connection, DbKind, Env};
+use datum_core::core::connection::{Connection, DbKind, Env, SslMode};
 use datum_core::service;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -35,6 +35,7 @@ pub struct ConnectionForm {
     editing: bool,
     kind: DbKind,
     env: Env,
+    ssl_mode: SslMode,
     name: Entity<InputState>,
     host: Entity<InputState>,
     port: Entity<InputState>,
@@ -63,6 +64,7 @@ impl ConnectionForm {
             database: "postgres".into(),
             plaintext_password: None,
             file_path: None,
+            ssl_mode: SslMode::default(),
         });
         let input =
             |value: String, placeholder: &str, window: &mut Window, cx: &mut Context<Self>| {
@@ -123,6 +125,7 @@ impl ConnectionForm {
             editing,
             kind: c.kind,
             env: c.env,
+            ssl_mode: c.ssl_mode,
             name,
             host,
             port,
@@ -197,6 +200,7 @@ impl ConnectionForm {
             },
             plaintext_password: None,
             file_path: sqlite.then(|| Self::value(&self.file_path, cx).trim().to_string()),
+            ssl_mode: self.ssl_mode,
         }
     }
 
@@ -234,7 +238,18 @@ impl ConnectionForm {
         } else {
             format!(":{}", port.trim())
         };
-        format!("{}://{auth}{host}{port}/{db}", self.kind.scheme())
+        let scheme = match (self.kind, self.ssl_mode) {
+            (DbKind::Redis, SslMode::Require | SslMode::VerifyFull) => "rediss",
+            _ => self.kind.scheme(),
+        };
+        let query = match (self.kind, self.ssl_mode) {
+            (DbKind::Redis, _) => "",
+            (_, SslMode::Disable) => "?sslmode=disable",
+            (_, SslMode::Prefer) => "?sslmode=prefer",
+            (_, SslMode::Require) => "?sslmode=require",
+            (_, SslMode::VerifyFull) => "?sslmode=verify-full",
+        };
+        format!("{scheme}://{auth}{host}{port}/{db}{query}")
     }
 
     fn pick_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -423,6 +438,43 @@ impl Render for ConnectionForm {
                     }))
             }));
 
+        let ssl_mode = self.ssl_mode;
+        let redis = self.kind == DbKind::Redis;
+        let ssl_button = Button::new("ssl-mode")
+            .outline()
+            .w_full()
+            .justify_start()
+            .icon(ui::icon(if ssl_mode == SslMode::Disable {
+                "lock-open"
+            } else {
+                "lock"
+            }))
+            .label(ssl_label(ssl_mode))
+            .dropdown_caret(true)
+            .tooltip(if redis {
+                t!("conn_form.ssl_redis_hint")
+            } else {
+                t!("conn_form.ssl_hint")
+            })
+            .dropdown_menu({
+                let this = cx.entity().downgrade();
+                move |menu: PopupMenu, _, _| {
+                    SslMode::ALL.iter().fold(menu, |menu, m| {
+                        let (m, this) = (*m, this.clone());
+                        menu.item(
+                            PopupMenuItem::new(ssl_label(m))
+                                .checked(m == ssl_mode)
+                                .on_click(move |_, _, cx| {
+                                    let _ = this.update(cx, |f, cx| {
+                                        f.ssl_mode = m;
+                                        cx.notify();
+                                    });
+                                }),
+                        )
+                    })
+                }
+            });
+
         let (test_icon, test_label) = match &self.test {
             TestStatus::Idle => ("activity", t!("conn_form.test")),
             TestStatus::Testing => ("loader-circle", t!("conn_form.testing")),
@@ -498,11 +550,20 @@ impl Render for ConnectionForm {
                                     cx,
                                 )),
                         )
-                        .child(Self::field(
-                            t!("conn_form.database"),
-                            Input::new(&self.database),
-                            cx,
-                        ))
+                        .child(
+                            h_flex()
+                                .gap_4()
+                                .child(Self::field(
+                                    t!("conn_form.database"),
+                                    Input::new(&self.database),
+                                    cx,
+                                ))
+                                .child(div().w(px(200.)).flex_shrink_0().child(Self::field(
+                                    t!("conn_form.ssl_mode"),
+                                    ssl_button,
+                                    cx,
+                                ))),
+                        )
                 }
             })
             .child(
@@ -602,4 +663,14 @@ pub fn open(conn: Option<Connection>, window: &mut Window, cx: &mut gpui_kit::Ap
             })
             .child(form.clone())
     });
+}
+
+fn ssl_label(m: SslMode) -> String {
+    match m {
+        SslMode::Disable => t!("conn_form.ssl_disable"),
+        SslMode::Prefer => t!("conn_form.ssl_prefer"),
+        SslMode::Require => t!("conn_form.ssl_require"),
+        SslMode::VerifyFull => t!("conn_form.ssl_verify_full"),
+    }
+    .to_string()
 }

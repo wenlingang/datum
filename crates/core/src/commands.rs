@@ -166,11 +166,18 @@ pub async fn test_connection(
     password: String,
     database: String,
     file_path: Option<String>,
+    ssl: crate::core::connection::SslMode,
 ) -> AppResult<()> {
     match kind.as_str() {
-        "pg" => crate::pg::client::test_connect(&host, port, &user, &password, &database).await,
-        "mysql" => crate::my::client::test_connect(&host, port, &user, &password, &database).await,
-        "redis" => crate::rds::client::test_connect(&host, port, &user, &password, &database).await,
+        "pg" => {
+            crate::pg::client::test_connect(&host, port, &user, &password, &database, ssl).await
+        }
+        "mysql" => {
+            crate::my::client::test_connect(&host, port, &user, &password, &database, ssl).await
+        }
+        "redis" => {
+            crate::rds::client::test_connect(&host, port, &user, &password, &database, ssl).await
+        }
         "sqlite" => crate::sqlite::client::test_connect(file_path.as_deref().unwrap_or("")),
         _ => Err(AppError::new(
             ErrorKind::Connection,
@@ -239,6 +246,7 @@ mod tests {
             database: "d".into(),
             plaintext_password: pw.map(|s| s.into()),
             file_path: None,
+            ssl_mode: Default::default(),
         }
     }
 

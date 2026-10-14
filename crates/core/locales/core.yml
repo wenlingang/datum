@@ -69,6 +69,10 @@ core:
       en: Redis command failed
       zh-CN: Redis 命令失败
       zh-TW: Redis 指令失敗
+    connect_timeout:
+      en: "Timed out: the server did not respond to the handshake (check that the SSL mode matches the server)"
+      zh-CN: 连接超时:服务器未响应握手(请检查 SSL 模式是否与服务器一致)
+      zh-TW: 連線逾時:伺服器未回應交握(請檢查 SSL 模式是否與伺服器一致)
     invalid_redis_url:
       en: Invalid Redis connection string
       zh-CN: 无效的 Redis 连接串

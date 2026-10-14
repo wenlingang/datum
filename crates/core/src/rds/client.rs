@@ -1,3 +1,4 @@
+use crate::core::connection::SslMode;
 use crate::error::{AppError, AppResult, ErrorKind};
 use redis::aio::MultiplexedConnection;
 use redis::FromRedisValue;
@@ -35,13 +36,9 @@ fn qerr(e: redis::RedisError) -> AppError {
 }
 
 /// 用给定参数尝试建立一次连接以验证可达性与认证(不缓存)。
-pub async fn test_connect(
-    host: &str,
-    port: u16,
-    user: &str,
-    pass: &str,
-    db: &str,
-) -> AppResult<()> {
+/// 构造连接串:redis://[user][:password]@host:port/db;加密用 rediss://。
+/// Redis 无法在同一端口协商加密,「优先」等同不加密;「必须」用 rediss 且不校验证书(#insecure)。
+pub fn build_url(host: &str, port: u16, user: &str, pass: &str, db: &str, ssl: SslMode) -> String {
     let dbn = db.trim().parse::<u8>().unwrap_or(0);
     let auth = if !user.is_empty() {
         format!("{user}:{pass}@")
@@ -50,22 +47,45 @@ pub async fn test_connect(
     } else {
         String::new()
     };
-    let url = format!("redis://{auth}{host}:{port}/{dbn}");
+    match ssl {
+        SslMode::Disable | SslMode::Prefer => format!("redis://{auth}{host}:{port}/{dbn}"),
+        SslMode::Require => format!("rediss://{auth}{host}:{port}/{dbn}#insecure"),
+        SslMode::VerifyFull => format!("rediss://{auth}{host}:{port}/{dbn}"),
+    }
+}
+
+pub async fn test_connect(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+    db: &str,
+    ssl: SslMode,
+) -> AppResult<()> {
+    open(&build_url(host, port, user, pass, db, ssl)).await?;
+    Ok(())
+}
+
+/// 握手 + 认证的总时限。rediss 连到明文端口时服务端不会回应 TLS 握手,不设时限会一直挂住。
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn open(url: &str) -> AppResult<MultiplexedConnection> {
+    crate::tls::install_default_provider();
     let client = redis::Client::open(url).map_err(|e| {
         AppError::new(ErrorKind::Connection, t!("core.err.invalid_redis_url"))
             .with_detail(e.to_string())
     })?;
-    let _con = client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            AppError::new(
-                ErrorKind::Connection,
-                t!("core.err.connect_failed", db = "Redis"),
-            )
-            .with_detail(e.to_string())
-        })?;
-    Ok(())
+    let failed = || {
+        AppError::new(
+            ErrorKind::Connection,
+            t!("core.err.connect_failed", db = "Redis"),
+        )
+    };
+    match tokio::time::timeout(CONNECT_TIMEOUT, client.get_multiplexed_async_connection()).await {
+        Ok(Ok(con)) => Ok(con),
+        Ok(Err(e)) => Err(failed().with_detail(e.to_string())),
+        Err(_) => Err(failed().with_detail(t!("core.err.connect_timeout").to_string())),
+    }
 }
 
 /// 字节转 UTF-8,非法字节用替换符(兼容二进制值)。
@@ -93,20 +113,7 @@ fn format_reply(v: &redis::Value) -> String {
 
 impl RedisPool {
     pub async fn connect(&self, id: &str, url: &str) -> AppResult<()> {
-        let client = redis::Client::open(url).map_err(|e| {
-            AppError::new(ErrorKind::Connection, t!("core.err.invalid_redis_url"))
-                .with_detail(e.to_string())
-        })?;
-        let con = client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|e| {
-                AppError::new(
-                    ErrorKind::Connection,
-                    t!("core.err.connect_failed", db = "Redis"),
-                )
-                .with_detail(e.to_string())
-            })?;
+        let con = open(url).await?;
         self.conns.lock().await.insert(id.to_string(), con);
         Ok(())
     }

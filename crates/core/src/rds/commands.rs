@@ -6,17 +6,15 @@ use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rds::client::{KeyDetail, KeyValue};
 use rust_i18n::t;
 
-/// 构造 redis://[user][:password]@host:port/db 连接串。
 fn build_url(conn: &Connection, password: &str) -> String {
-    let db = conn.database.trim().parse::<u8>().unwrap_or(0);
-    let auth = if !conn.user.is_empty() {
-        format!("{}:{}@", conn.user, password)
-    } else if !password.is_empty() {
-        format!(":{}@", password)
-    } else {
-        String::new()
-    };
-    format!("redis://{auth}{}:{}/{}", conn.host, conn.port, db)
+    crate::rds::client::build_url(
+        &conn.host,
+        conn.port,
+        &conn.user,
+        password,
+        &conn.database,
+        conn.ssl_mode,
+    )
 }
 
 pub async fn redis_connect(state: &AppState, id: String) -> AppResult<()> {
