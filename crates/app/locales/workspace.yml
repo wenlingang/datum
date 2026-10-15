@@ -141,6 +141,18 @@ workspace:
     zh-CN: "对话绑定的连接已不存在"
     zh-TW: "對話綁定的連線已不存在"
 sidebar:
+  mongo_insert_doc:
+    en: Insert document
+    zh-CN: 插入文档
+    zh-TW: 插入文件
+  mongo_new_query:
+    en: New query
+    zh-CN: 新建查询
+    zh-TW: 新增查詢
+  mongo_copy_collection:
+    en: Copy collection name
+    zh-CN: 复制集合名
+    zh-TW: 複製集合名稱
   search_tables:
     en: Search tables
     zh-CN: 搜索表

@@ -754,6 +754,46 @@ pub fn analyze_redis(cmd: &str) -> Vec<RiskFinding> {
     }
 }
 
+/// MongoDB 风险审查:基于解析后的语句,不做文本匹配。`src` 用来取每条语句的原文。
+pub fn analyze_mongo(src: &str, stmts: &[crate::mongo::parse::Statement]) -> Vec<RiskFinding> {
+    use crate::mongo::parse::{pipeline_write_stage, MongoOp};
+    let mut out = vec![];
+    for s in stmts {
+        let (level, kind) = match &s.op {
+            MongoOp::DeleteMany { filter, .. } if filter.is_empty() => {
+                (RiskLevel::Danger, "deleteMany({})")
+            }
+            MongoOp::UpdateMany { filter, .. } if filter.is_empty() => {
+                (RiskLevel::Danger, "updateMany({})")
+            }
+            MongoOp::DeleteMany { .. } => (RiskLevel::Warning, "deleteMany"),
+            MongoOp::UpdateMany { .. } => (RiskLevel::Warning, "updateMany"),
+            MongoOp::DeleteOne { filter, .. } if filter.is_empty() => {
+                (RiskLevel::Warning, "deleteOne({})")
+            }
+            MongoOp::UpdateOne { filter, .. } if filter.is_empty() => {
+                (RiskLevel::Warning, "updateOne({})")
+            }
+            MongoOp::ReplaceOne { filter, .. } if filter.is_empty() => {
+                (RiskLevel::Warning, "replaceOne({})")
+            }
+            MongoOp::Aggregate { pipeline, .. } => match pipeline_write_stage(pipeline) {
+                Some("$out") => (RiskLevel::Danger, "aggregate $out"),
+                Some(_) => (RiskLevel::Warning, "aggregate $merge"),
+                None => continue,
+            },
+            _ => continue,
+        };
+        out.push(RiskFinding {
+            sql: src[s.range.clone()].trim().to_string(),
+            level,
+            kind: kind.to_string(),
+            object: s.op.collection().map(str::to_string),
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -940,5 +980,43 @@ mod tests {
     fn redis_flush() {
         assert_eq!(analyze_redis("flushdb")[0].kind, "FLUSHDB");
         assert!(analyze_redis("get flushall").is_empty());
+    }
+
+    fn mongo(src: &str) -> Vec<RiskFinding> {
+        let stmts = crate::mongo::parse::parse_script(src).unwrap();
+        analyze_mongo(src, &stmts)
+    }
+
+    #[test]
+    fn mongo_risk_table() {
+        let lv = |src: &str| mongo(src).into_iter().map(|f| f.level).collect::<Vec<_>>();
+        assert_eq!(lv("db.a.deleteMany({})"), vec![RiskLevel::Danger]);
+        assert_eq!(lv("db.a.deleteMany({ /* 空 */ })"), vec![RiskLevel::Danger]);
+        assert_eq!(
+            lv("db.a.updateMany({}, {$set: {x: 1}})"),
+            vec![RiskLevel::Danger]
+        );
+        assert_eq!(lv("db.a.aggregate([{$out: 'b'}])"), vec![RiskLevel::Danger]);
+        assert_eq!(lv("db.a.deleteMany({x: 1})"), vec![RiskLevel::Warning]);
+        assert_eq!(
+            lv("db.a.updateMany({x: 1}, {$set: {y: 1}})"),
+            vec![RiskLevel::Warning]
+        );
+        assert_eq!(lv("db.a.deleteOne({})"), vec![RiskLevel::Warning]);
+        assert_eq!(
+            lv("db.a.updateOne({}, {$set: {y: 1}})"),
+            vec![RiskLevel::Warning]
+        );
+        assert_eq!(lv("db.a.replaceOne({}, {y: 1})"), vec![RiskLevel::Warning]);
+        assert_eq!(
+            lv("db.a.aggregate([{$merge: {into: 'b'}}])"),
+            vec![RiskLevel::Warning]
+        );
+        assert!(mongo("db.a.deleteOne({x: 1})").is_empty());
+        assert!(mongo("db.a.find({})").is_empty());
+        let f = &mongo("db.a.find()\ndb.orders.deleteMany({})")[0];
+        assert_eq!(f.sql, "db.orders.deleteMany({})");
+        assert_eq!(f.object.as_deref(), Some("orders"));
+        assert_eq!(f.kind, "deleteMany({})");
     }
 }

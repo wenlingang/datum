@@ -17,6 +17,7 @@ pub enum ErrorKind {
     Credential,
     Config,
     NotFound,
+    Mongo,
 }
 
 impl AppError {

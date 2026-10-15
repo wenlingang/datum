@@ -310,6 +310,17 @@ impl Workspace {
         let t = tab.read(cx);
         if let (Some(result), Some(row_ix)) = (&t.result, t.selected_row) {
             if let Some(values) = t.view_row(row_ix) {
+                if let Some(m) = &t.mongo {
+                    // Mongo:该文档没有的字段不列出(缺失 ≠ null)
+                    let (cols, vals): (Vec<String>, Vec<_>) = result
+                        .columns
+                        .iter()
+                        .cloned()
+                        .zip(values.iter().cloned())
+                        .filter(|(_, v)| v.is_some())
+                        .unzip();
+                    return panel.child(row_detail(&cols, &vals, &m.types, cx));
+                }
                 let types = t.column_types();
                 return panel.child(row_detail(&result.columns, values, &types, cx));
             }

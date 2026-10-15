@@ -13,6 +13,10 @@ core:
       en: This operation is not supported for Redis
       zh-CN: Redis 不支持该操作
       zh-TW: Redis 不支援此操作
+    mongo_unsupported:
+      en: This operation is not supported for MongoDB
+      zh-CN: MongoDB 不支持该操作
+      zh-TW: MongoDB 不支援此操作
     not_connected:
       en: Not connected. Please connect first
       zh-CN: 连接未建立,请先连接
@@ -334,3 +338,183 @@ core:
       en: "%{cmd} failed: %{error}"
       zh-CN: "%{cmd} 失败: %{error}"
       zh-TW: "%{cmd} 失敗: %{error}"
+  mongo:
+    parse:
+      at:
+        en: "Line %{line}, column %{col}: %{message}"
+        zh-CN: "第 %{line} 行第 %{col} 列:%{message}"
+        zh-TW: "第 %{line} 行第 %{col} 欄:%{message}"
+      expected:
+        en: "Expected %{what}"
+        zh-CN: "这里应为 %{what}"
+        zh-TW: "此處應為 %{what}"
+      expected_key:
+        en: Expected a field name
+        zh-CN: 这里应为字段名
+        zh-TW: 此處應為欄位名稱
+      expected_string:
+        en: Expected a string
+        zh-CN: 这里应为字符串
+        zh-TW: 此處應為字串
+      expected_object:
+        en: "Expected a document ({ … })"
+        zh-CN: "这里应为文档({ … })"
+        zh-TW: "此處應為文件({ … })"
+      unexpected:
+        en: "Unexpected character '%{ch}'"
+        zh-CN: "无法识别的字符 '%{ch}'"
+        zh-TW: "無法辨識的字元 '%{ch}'"
+      unexpected_end:
+        en: Unexpected end of input
+        zh-CN: 内容不完整
+        zh-TW: 內容不完整
+      trailing:
+        en: Unexpected content after the value
+        zh-CN: 值后面有多余内容
+        zh-TW: 值後面有多餘內容
+      unterminated_string:
+        en: Unterminated string
+        zh-CN: 字符串缺少结束引号
+        zh-TW: 字串缺少結束引號
+      unterminated_regex:
+        en: Unterminated regular expression
+        zh-CN: 正则表达式缺少结束的 /
+        zh-TW: 正規表示式缺少結束的 /
+      bad_escape:
+        en: Invalid escape sequence
+        zh-CN: 无效的转义序列
+        zh-TW: 無效的跳脫序列
+      bad_number:
+        en: "Invalid number '%{text}'"
+        zh-CN: "无效的数字 '%{text}'"
+        zh-TW: "無效的數字 '%{text}'"
+      bad_date:
+        en: "Invalid date '%{text}'"
+        zh-CN: "无效的日期 '%{text}'"
+        zh-TW: "無效的日期 '%{text}'"
+      bad_ctor_arg:
+        en: "Invalid argument for %{name}()"
+        zh-CN: "%{name}() 的参数无效"
+        zh-TW: "%{name}() 的參數無效"
+      unsupported_ctor:
+        en: "%{name} is not supported"
+        zh-CN: "不支持 %{name}"
+        zh-TW: "不支援 %{name}"
+      expected_separator:
+        en: "Separate statements with ';' or a new line"
+        zh-CN: "多条语句之间请用 ; 或换行分隔"
+        zh-TW: "多個語句之間請用 ; 或換行分隔"
+      expected_statement:
+        en: "Expected a statement like db.<collection>.find(…) or show collections"
+        zh-CN: "这里应为 db.<集合>.find(…) 或 show collections 这样的语句"
+        zh-TW: "此處應為 db.<集合>.find(…) 或 show collections 這樣的語句"
+      expected_collection:
+        en: Expected a collection name
+        zh-CN: 这里应为集合名
+        zh-TW: 此處應為集合名稱
+      expected_method:
+        en: Expected a method name
+        zh-CN: 这里应为方法名
+        zh-TW: 此處應為方法名稱
+      expected_doc_array:
+        en: "Expected an array of documents ([{ … }, …])"
+        zh-CN: "这里应为文档数组([{ … }, …])"
+        zh-TW: "此處應為文件陣列([{ … }, …])"
+      expected_uint:
+        en: Expected a non-negative integer
+        zh-CN: 这里应为非负整数
+        zh-TW: 此處應為非負整數
+      missing_arg:
+        en: "%{name}() is missing an argument"
+        zh-CN: "%{name}() 缺少参数"
+        zh-TW: "%{name}() 缺少參數"
+      too_many_args:
+        en: "%{name}() takes at most %{n} argument(s); options are not supported yet"
+        zh-CN: "%{name}() 最多 %{n} 个参数,暂不支持 options"
+        zh-TW: "%{name}() 最多 %{n} 個參數,暫不支援 options"
+      update_needs_operator:
+        en: "Update must use $ operators (e.g. $set); use replaceOne to replace the whole document"
+        zh-CN: "更新文档必须使用 $ 操作符(如 $set);整篇替换请用 replaceOne"
+        zh-TW: "更新文件必須使用 $ 運算子(如 $set);整篇取代請用 replaceOne"
+      chain_only_after_find:
+        en: ".%{name}() can only follow find()"
+        zh-CN: ".%{name}() 只能接在 find() 后面"
+        zh-TW: ".%{name}() 只能接在 find() 後面"
+      unsupported_method:
+        en: "%{name}() is not supported yet"
+        zh-CN: "暂不支持 %{name}()"
+        zh-TW: "暫不支援 %{name}()"
+      unsupported_show:
+        en: "Only 'show dbs' and 'show collections' are supported"
+        zh-CN: "只支持 show dbs 与 show collections"
+        zh-TW: "只支援 show dbs 與 show collections"
+    err:
+      secret_param:
+        en: "Connection string option %{key} carries a secret and would be saved in plain text; remove it from the string"
+        zh-CN: "连接串参数 %{key} 含有机密信息,会被明文保存到配置文件,请从连接串中去掉"
+        zh-TW: "連線字串參數 %{key} 含有機密資訊,會以明文儲存在設定檔中,請從連線字串中移除"
+      tls_rejected:
+        en: The server rejected the TLS handshake
+        zh-CN: 服务器拒绝了 TLS 握手
+        zh-TW: 伺服器拒絕了 TLS 交握
+      invalid_uri:
+        en: Invalid MongoDB connection string
+        zh-CN: MongoDB 连接串无效
+        zh-TW: MongoDB 連線字串無效
+      unauthorized:
+        en: Not authorized for this operation
+        zh-CN: 没有权限执行该操作
+        zh-TW: 沒有權限執行此操作
+      duplicate_key:
+        en: Duplicate key (a document with this key already exists)
+        zh-CN: 键重复(已存在相同键的文档)
+        zh-TW: 鍵重複(已存在相同鍵的文件)
+      max_time:
+        en: Query exceeded 60 seconds and was stopped. Add a filter or an index.
+        zh-CN: 查询超过 60 秒已终止,请增加过滤条件或索引
+        zh-TW: 查詢超過 60 秒已終止,請增加篩選條件或索引
+      server_selection:
+        en: Cannot reach the MongoDB server (check address, network and TLS)
+        zh-CN: 无法连上 MongoDB 服务器(请检查地址、网络与 TLS 设置)
+        zh-TW: 無法連上 MongoDB 伺服器(請檢查位址、網路與 TLS 設定)
+      command_failed:
+        en: MongoDB command failed
+        zh-CN: MongoDB 命令执行失败
+        zh-TW: MongoDB 命令執行失敗
+      no_database:
+        en: No database selected. Pick one from the database list first.
+        zh-CN: 尚未选择数据库,请先在库列表中选择
+        zh-TW: 尚未選擇資料庫,請先在資料庫清單中選擇
+      cannot_list_dbs:
+        en: Not authorized to list databases. Set a default database in the connection.
+        zh-CN: 无权列出数据库,请在连接中填写默认库
+        zh-TW: 無權列出資料庫,請在連線中填寫預設資料庫
+      doc_gone:
+        en: The document was deleted or its _id changed
+        zh-CN: 文档已被删除或 _id 已变化
+        zh-TW: 文件已被刪除或 _id 已變更
+      read_only:
+        en: Write operations are not allowed in read-only mode
+        zh-CN: 只读模式下不能执行写操作
+        zh-TW: 唯讀模式下不能執行寫入操作
+      statement_failed:
+        en: "Statement %{n} failed: %{message}"
+        zh-CN: "第 %{n} 条语句失败:%{message}"
+        zh-TW: "第 %{n} 條語句失敗:%{message}"
+    summary:
+      inserted:
+        en: "Inserted %{n}"
+        zh-CN: "已插入 %{n} 条"
+        zh-TW: "已插入 %{n} 筆"
+      updated:
+        en: "Matched %{matched}, modified %{modified}"
+        zh-CN: "已匹配 %{matched} 条,已修改 %{modified} 条"
+        zh-TW: "已比對 %{matched} 筆,已修改 %{modified} 筆"
+      deleted:
+        en: "Deleted %{n}"
+        zh-CN: "已删除 %{n} 条"
+        zh-TW: "已刪除 %{n} 筆"
+      aggregate_written:
+        en: Aggregation results written to the target collection
+        zh-CN: 聚合结果已写入目标集合
+        zh-TW: 聚合結果已寫入目標集合

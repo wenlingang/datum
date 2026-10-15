@@ -8,7 +8,7 @@ use crate::dialogs::{
 use crate::runtime;
 use crate::store::{Stores, Toast};
 use crate::ui;
-use datum_core::core::connection::{Connection, DbKind, Env};
+use datum_core::core::connection::{Connection, Env};
 use datum_core::grid::{file_timestamp, to_csv, to_markdown};
 use datum_core::service;
 use datum_core::sql::Dialect;
@@ -552,7 +552,7 @@ impl Workspace {
             .read(cx)
             .active()
             .cloned()
-            .filter(|c| c.kind != DbKind::Redis);
+            .filter(|c| c.kind.supports_sql());
         let this = cx.entity().downgrade();
         crate::erd::open(conn.map(|c| c.id), this, window, cx);
     }

@@ -58,7 +58,7 @@ impl ImportView {
                 .conns
                 .read(cx)
                 .get(id)
-                .is_some_and(|c| c.kind.is_relational())
+                .is_some_and(|c| c.kind.supports_sql())
         });
         Self {
             conn_id,
@@ -162,7 +162,7 @@ impl Render for ImportView {
         let choices: Vec<(String, String, DbKind)> = store
             .connections
             .iter()
-            .filter(|c| c.kind.is_relational())
+            .filter(|c| c.kind.supports_sql())
             .map(|c| (c.id.clone(), c.name.clone(), c.kind))
             .collect();
         let current = self

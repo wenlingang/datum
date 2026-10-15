@@ -45,6 +45,10 @@ pub struct GridData {
     pub sort: Option<(String, bool)>,
     /// 允许删除行(表浏览且有主键)
     pub deletable: bool,
+    /// 缺失值显示为空白而不是 NULL(Mongo:字段缺失 ≠ null)
+    pub missing_blank: bool,
+    /// Mongo 集合 tab:行右键提供「编辑文档 / 删除文档」
+    pub doc_editable: bool,
 }
 
 pub struct ResultDelegate {
@@ -262,7 +266,13 @@ impl TableDelegate for ResultDelegate {
                     v.replace(['\n', '\r'], " ")
                 }
             })
-            .unwrap_or_else(|| "NULL".into())
+            .unwrap_or_else(|| {
+                if self.data.missing_blank {
+                    String::new()
+                } else {
+                    "NULL".into()
+                }
+            })
             .into();
 
         let tab = self.tab.clone();
@@ -319,6 +329,32 @@ impl TableDelegate for ResultDelegate {
         _: &mut Context<TableState<Self>>,
     ) -> PopupMenu {
         let col_ix = self.context_col.get();
+        if self.data.doc_editable {
+            let (t1, t2, t3) = (self.tab.clone(), self.tab.clone(), self.tab.clone());
+            return menu
+                .item(
+                    PopupMenuItem::new(t!("mongo.edit_doc").to_string()).on_click(
+                        move |_, w, cx| {
+                            let _ = t1.update(cx, |t, cx| t.open_doc_editor(Some(row_ix), w, cx));
+                        },
+                    ),
+                )
+                .item(
+                    PopupMenuItem::new(t!("grid.view_detail").to_string()).on_click(
+                        move |_, w, cx| {
+                            let _ = t2.update(cx, |t, cx| t.open_row_detail(row_ix, w, cx));
+                        },
+                    ),
+                )
+                .separator()
+                .item(
+                    PopupMenuItem::new(t!("mongo.delete_doc").to_string()).on_click(
+                        move |_, w, cx| {
+                            let _ = t3.update(cx, |t, cx| t.confirm_delete_doc(row_ix, w, cx));
+                        },
+                    ),
+                );
+        }
         let editable = self.data.pk_index.is_some();
         let tab = self.tab.clone();
         let item =

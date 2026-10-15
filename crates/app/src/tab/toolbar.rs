@@ -6,7 +6,6 @@ use crate::actions::{ExplainQuery, FormatSql, RunQuery, ToggleHistory};
 use crate::prefs::{MAX_ROWS_OPTIONS, Prefs, normalize_max_rows};
 use crate::theme::ActivePalette as _;
 use crate::ui;
-use datum_core::core::connection::DbKind;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::popover::Popover;
@@ -63,7 +62,7 @@ fn shortcut(text: &'static str, cx: &gpui_kit::App) -> impl IntoElement {
 }
 
 pub fn render(tab: &WorkTab, cx: &mut Context<WorkTab>) -> impl IntoElement {
-    let relational = tab.db_kind != DbKind::Redis;
+    let relational = tab.db_kind.supports_sql();
     let max_rows = Prefs::global(cx).max_rows;
     let palette = *cx.palette();
 

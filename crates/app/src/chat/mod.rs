@@ -163,7 +163,7 @@ impl ChatPanel {
             .read(cx)
             .active()
             .cloned()
-            .filter(|c| c.kind.is_relational())?;
+            .filter(|c| c.kind.supports_sql())?;
         Some(BoundConn {
             conn_id: conn.id.clone(),
             kind: conn.kind,

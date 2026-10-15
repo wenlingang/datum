@@ -243,6 +243,35 @@ impl Workspace {
         Some(tab)
     }
 
+    /// 集合右键「新建查询」:新开查询 tab 并预填 `db.<集合>.find({})`。
+    pub fn new_mongo_query(
+        &mut self,
+        conn_id: &str,
+        coll: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let conns = Stores::global(cx).conns.clone();
+        conns.update(cx, |s, cx| s.activate(conn_id, cx));
+        if let Some(tab) = self.new_query_tab(window, cx) {
+            let sql = format!("{}.find({{}})", datum_core::mongo::parse::coll_ref(coll));
+            tab.update(cx, |t, cx| t.set_sql(&sql, window, cx));
+        }
+    }
+
+    /// 集合右键「插入文档」:打开(或聚焦)集合 tab 并弹出新增文档编辑器。
+    pub fn insert_document(
+        &mut self,
+        conn_id: &str,
+        coll: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tab) = self.open_table(conn_id, coll, window, cx) {
+            tab.update(cx, |t, cx| t.open_doc_editor(None, window, cx));
+        }
+    }
+
     /// 在当前连接下新开一个查询 tab;连接未建立时顺带建立并缓存表列表。
     pub fn new_query_tab(
         &mut self,
@@ -262,10 +291,15 @@ impl Workspace {
             .iter()
             .filter(|t| t.read(cx).kind == TabKind::Query && t.read(cx).conn_id == conn.id)
             .count();
-        let title: SharedString = if n == 0 {
-            "SQL Query".into()
+        let base = if conn.kind == datum_core::core::connection::DbKind::Mongo {
+            "Mongo Query"
         } else {
-            format!("SQL Query {}", n + 1).into()
+            "SQL Query"
+        };
+        let title: SharedString = if n == 0 {
+            base.into()
+        } else {
+            format!("{base} {}", n + 1).into()
         };
         let tab = cx.new(|cx| WorkTab::new_query(&conn, title, window, cx));
         self.add_tab(tab.clone(), window, cx);
@@ -678,6 +712,52 @@ impl Workspace {
                 u.update(cx, |u, cx| u.install(cx));
             }
             "newconn" => self.open_connection_form(None, window, cx),
+            // mfilter:<文本>:写入 Mongo 过滤栏的 Filter 并应用
+            "mfilter" => {
+                if let Some(t) = self.active_tab(cx) {
+                    t.update(cx, |t, cx| t.snapshot_mongo_filter(arg, window, cx));
+                }
+            }
+            // mproj:<文本>:写入 Projection 并应用
+            "mproj" => {
+                if let Some(t) = self.active_tab(cx) {
+                    t.update(cx, |t, cx| t.snapshot_mongo_projection(arg, window, cx));
+                }
+            }
+            // msort:<列名>:模拟点表头排序
+            "msort" => {
+                if let Some(t) = self.active_tab(cx) {
+                    t.update(cx, |t, cx| t.cycle_sort(arg, window, cx));
+                }
+            }
+            // medit:<视图行>:打开文档编辑器(负数 = 新增)
+            "medit" => {
+                if let Some(t) = self.active_tab(cx) {
+                    let ix: i64 = arg.parse().unwrap_or(-1);
+                    t.update(cx, |t, cx| {
+                        t.open_doc_editor((ix >= 0).then_some(ix as usize), window, cx)
+                    });
+                }
+            }
+            "mjson" => self.with_active_tab(cx, |t, cx| {
+                if let Some(m) = t.mongo.as_mut() {
+                    m.json_view = !m.json_view;
+                }
+                cx.notify();
+            }),
+            "mpage" => {
+                if let Some(t) = self.active_tab(cx) {
+                    let p = arg.parse().unwrap_or(0);
+                    t.update(cx, |t, cx| t.mongo_goto_page(p, window, cx));
+                }
+            }
+            // editconn:<连接 id>:打开该连接的编辑表单
+            "editconn" => {
+                let conn = Stores::global(cx).conns.read(cx).get(arg).cloned();
+                if let Some(c) = conn {
+                    self.open_connection_form(Some(c), window, cx);
+                }
+            }
             "import" => self.open_import(None, window, cx),
             "erd" => self.open_erd(window, cx),
             "ddl" => {

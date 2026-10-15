@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-A clean, modern desktop database client for **PostgreSQL**, **MySQL**, **SQLite** and **Redis**.
+A clean, modern desktop database client for **PostgreSQL**, **MySQL**, **SQLite**, **Redis** and **MongoDB**.
 
 This is the native Rust rewrite of Datum: the UI is built on [GPUI Kit](https://github.com/longbridge/gpui-kit) (GPUI + gpui-component),
 and the data layer reuses the Rust backend of the original Tauri version — no WebView, no Node.js.
@@ -23,6 +23,12 @@ and the data layer reuses the Rust backend of the original Tauri version — no 
 
 ![ER diagram of a sample shop schema](docs/screenshots/er-diagram.png)
 
+**MongoDB, the way you already query it.** Open a collection to page through documents with Filter / Sort / Projection, flip between a table and JSON, and edit whole documents without types silently changing. The query tab speaks a mongosh subset — `find`, `aggregate`, `updateMany` and friends.
+
+![A MongoDB collection filtered and sorted, with the document details panel](docs/screenshots/mongo-collection.png)
+
+![An aggregation pipeline in the Mongo query tab](docs/screenshots/mongo-query.png)
+
 **Hard to shoot yourself in the foot.** Connections are tagged local / staging / prod, and anything destructive waits for an explicit confirmation.
 
 <table>
@@ -40,6 +46,7 @@ and the data layer reuses the Rust backend of the original Tauri version — no 
 - **Table browsing**: server-side pagination and sorting, column colors by type, result filters (AND / OR, many operators), full-cell viewer (JSON auto-formatted), staged edits and deletes committed in a single transaction with ⌘S, copy as INSERT, export to CSV / SQL / Markdown
 - **SQL editor**: syntax highlighting, schema-aware completion (tables, `table.` / alias columns, in-scope columns, clause templates), keyword auto-uppercasing, run the statement under the cursor or the selection, formatting, Explain, row limit, per-database query history
 - **Destructive statement review**: DROP / TRUNCATE / DELETE or UPDATE without WHERE, etc. require confirmation before running; Redis FLUSHALL / FLUSHDB are intercepted too; read-only execution is enforced by the database itself (PG `default_transaction_read_only`, MySQL `SESSION TRANSACTION READ ONLY`, SQLite `query_only`)
+- **MongoDB**: connect with fields or a connection string (incl. Atlas `mongodb+srv://`; the password is split out and stored like other credentials); browse collections with Filter / Sort / Projection, server-side paging and counts, table or JSON view; edit, insert and delete whole documents in a mongosh-style editor that round-trips every BSON type (`NumberLong`, `NumberDecimal`, `ISODate`, `ObjectId`, …); a query tab for a mongosh subset (`find` with `sort/skip/limit/projection`, `findOne`, `countDocuments`, `distinct`, `aggregate`, `getIndexes`, `insertOne/Many`, `updateOne/Many`, `replaceOne`, `deleteOne/Many`, `show dbs/collections`) with collection-name completion; empty-filter bulk writes and `$out` / `$merge` pipelines go through the destructive review; reads are capped at 60 s server-side
 - **Redis**: browse keys, type-aware value views, run any command (with command and key-name completion), key details (type / TTL / size)
 - **AI assistant**: multiple providers (OpenAI-compatible / Anthropic / Gemini, with presets for DeepSeek, Qwen, Kimi and more), switch models inside the panel; per-connection conversations; table schemas and knowledge-base documents injected automatically (ships with database development guidelines, replaceable); generated SQL is shown as cards you confirm before running or open in the editor
 - **ER diagram**: physical foreign keys plus logical ones inferred from `xxx_id` naming, layered layout, drag, zoom, search highlighting, schema view / engineering ER view, PNG export
@@ -61,7 +68,7 @@ The app then checks for updates automatically. Update packages carry an Ed25519 
 
 ```text
 crates/
-├── core/   datum-core: connections, credentials, history, PG/MySQL/SQLite/Redis drivers, AI, self-update,
+├── core/   datum-core: connections, credentials, history, PG/MySQL/SQLite/Redis/MongoDB drivers, AI, self-update,
 │           plus pure logic for SQL splitting / risk detection / generation / formatting,
 │           filtering, sorting, export, ER layout and completion
 └── app/    datum: GPUI Kit UI (workspace, tabs, result grid, dialogs, AI panel, ER diagram)
@@ -71,7 +78,7 @@ crates/
 
 - **Rust** ≥ 1.88 (developed and verified with 1.96)
 - **macOS** (current packaging target; GPUI itself supports Linux / Windows)
-- Data-layer integration tests need reachable local PostgreSQL / Redis instances (or Docker)
+- Data-layer integration tests need reachable local PostgreSQL / Redis / MongoDB instances (or Docker)
 
 ## Development
 
@@ -111,6 +118,15 @@ DATUM_TLS_PG_PLAIN=5432 DATUM_TLS_PG_SSL=5444 DATUM_TLS_MYSQL=3306 DATUM_TLS_RED
 ```
 
 `DATUM_TLS_PG_SSL` points to a PG with `ssl=on` (a self-signed certificate is fine); `DATUM_TLS_PG_PLAIN` / `DATUM_TLS_REDIS` point to instances without TLS.
+
+The MongoDB tests run against a local instance on the given port:
+
+```bash
+docker run -d --name datum-mongo -p 27017:27017 mongo:7
+DATUM_MONGO=27017 cargo test -p datum-core --test mongo -- --ignored --test-threads=1
+```
+
+Set `DATUM_MONGO_AUTH=<port>` as well to run the authentication cases against an instance started with a root user (see `crates/core/tests/mongo.rs` for the setup).
 
 ## Packaging and releases
 

@@ -255,7 +255,7 @@ impl Sidebar {
                 )
                 .child(EnvBadge::new(conn.env))
                 // 关系图针对当前连接的库;Redis 没有关系图
-                .when(conn.kind != DbKind::Redis, |this| this.child(erd_button()))
+                .when(conn.kind.supports_sql(), |this| this.child(erd_button()))
                 .child(
                     Button::new("conn-actions")
                         .ghost()
@@ -435,10 +435,10 @@ impl Sidebar {
                                 )
                             })
                             .child(
-                                ui::icon(if kind == DbKind::Redis {
-                                    "key-round"
-                                } else {
-                                    "table"
+                                ui::icon(match kind {
+                                    DbKind::Redis => "key-round",
+                                    DbKind::Mongo => "inbox",
+                                    _ => "table",
                                 })
                                 .size(px(13.))
                                 .text_color(if is_active {
@@ -596,7 +596,7 @@ fn conn_menu(menu: PopupMenu, ws: &WeakEntity<Workspace>, conn: &Connection) -> 
                 conns.update(cx, |s, cx| s.load_tables(&c2.id, cx).detach());
             }),
         ));
-    if conn.kind.is_relational() {
+    if conn.kind.supports_sql() {
         menu = menu
             .item(item(
                 t!("sidebar.import_sql").into(),
@@ -645,6 +645,20 @@ fn table_menu(
     if kind == DbKind::Redis {
         return menu.item(copy_item(t!("sidebar.copy_key_name").into()));
     }
+    if kind == DbKind::Mongo {
+        let (c1, t1) = (conn_id.to_string(), table.to_string());
+        let (c2, t2) = (conn_id.to_string(), table.to_string());
+        return menu
+            .item(item(
+                t!("sidebar.mongo_new_query").into(),
+                std::rc::Rc::new(move |ws, w, cx| ws.new_mongo_query(&c1, &t1, w, cx)),
+            ))
+            .item(item(
+                t!("sidebar.mongo_insert_doc").into(),
+                std::rc::Rc::new(move |ws, w, cx| ws.insert_document(&c2, &t2, w, cx)),
+            ))
+            .item(copy_item(t!("sidebar.mongo_copy_collection").into()));
+    }
     let (c1, t1, c2, t2, c3, t3) = (
         conn_id.to_string(),
         table.to_string(),
@@ -690,7 +704,7 @@ fn db_menu(menu: PopupMenu, ws: &WeakEntity<Workspace>, kind: DbKind, db: &str) 
         t!("sidebar.edit_connection").into(),
         std::rc::Rc::new(move |ws, w, cx| ws.edit_conn_with_db(&d1, w, cx)),
     ));
-    if kind == DbKind::Redis {
+    if !kind.supports_sql() {
         return menu;
     }
     menu.item(item(

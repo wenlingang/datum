@@ -651,6 +651,77 @@ pub fn redis_completions(
     (!items.is_empty()).then_some(Completions { replace, items })
 }
 
+/// mongosh 的补全:`db.` 之后补集合名,`db.<集合>.` 之后补方法名。
+pub fn mongo_completions(
+    text: &str,
+    offset: usize,
+    collections: &[String],
+    explicit: bool,
+) -> Option<Completions> {
+    const METHODS: [&str; 13] = [
+        "find",
+        "findOne",
+        "countDocuments",
+        "distinct",
+        "aggregate",
+        "getIndexes",
+        "insertOne",
+        "insertMany",
+        "updateOne",
+        "updateMany",
+        "replaceOne",
+        "deleteOne",
+        "deleteMany",
+    ];
+    let before = text.get(..offset.min(text.len()))?;
+    let word_start = before
+        .rfind(|c: char| !(c.is_alphanumeric() || c == '_' || c == '$' || c == '-'))
+        .map_or(0, |i| i + 1);
+    let word = &before[word_start..];
+    let head = &before[..word_start];
+    let lower = word.to_lowercase();
+    let at_db = head.ends_with("db.")
+        && head[..head.len() - 3]
+            .chars()
+            .last()
+            .is_none_or(|c| !(c.is_alphanumeric() || c == '_' || c == '.'));
+    let items: Vec<Item> = if at_db {
+        collections
+            .iter()
+            .filter(|c| c.to_lowercase().starts_with(&lower))
+            .map(|c| {
+                let full = crate::mongo::parse::coll_ref(c);
+                Item {
+                    label: c.clone(),
+                    detail: String::new(),
+                    kind: ItemKind::Table,
+                    insert: full.strip_prefix("db.").unwrap_or(&full).to_string(),
+                }
+            })
+            .collect()
+    } else if head.ends_with('.') && head.trim_end_matches('.').contains("db.") {
+        METHODS
+            .iter()
+            .filter(|m| m.to_lowercase().starts_with(&lower))
+            .map(|m| Item {
+                label: m.to_string(),
+                detail: String::new(),
+                kind: ItemKind::Command,
+                insert: m.to_string(),
+            })
+            .collect()
+    } else {
+        return None;
+    };
+    if items.is_empty() && !explicit {
+        return None;
+    }
+    Some(Completions {
+        replace: word_start..offset,
+        items,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -754,5 +825,24 @@ mod tests {
         assert_eq!(got.items.len(), 2);
         assert_eq!(got.replace, 4..6);
         assert!(redis_completions("KEYS us", 7, &keys, false).is_none());
+    }
+
+    #[test]
+    fn mongo_completes_collections_after_db_dot() {
+        let colls = vec![
+            "orders".to_string(),
+            "order-items".to_string(),
+            "users".to_string(),
+        ];
+        let text = "db.or";
+        let r = mongo_completions(text, text.len(), &colls, false).unwrap();
+        assert_eq!(r.replace, 3..5);
+        let labels: Vec<_> = r.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, vec!["orders", "order-items"]);
+        assert_eq!(r.items[1].insert, "getCollection(\"order-items\")");
+        assert!(mongo_completions("x = 1", 5, &colls, false).is_none());
+        let text = "db.orders.fi";
+        let r = mongo_completions(text, text.len(), &colls, false).unwrap();
+        assert!(r.items.iter().any(|i| i.label == "find"));
     }
 }

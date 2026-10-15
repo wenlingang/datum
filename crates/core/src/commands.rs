@@ -20,6 +20,7 @@ pub struct AppState {
     pub redis_pool: RedisPool,
     pub my_pool: MyPool,
     pub sqlite_pool: SqlitePool,
+    pub mongo_pool: crate::mongo::client::MongoPool,
 }
 
 impl AppState {
@@ -33,6 +34,7 @@ impl AppState {
             redis_pool: RedisPool::default(),
             my_pool: MyPool::default(),
             sqlite_pool: SqlitePool::default(),
+            mongo_pool: Default::default(),
         }
     }
 
@@ -107,6 +109,17 @@ pub fn delete_connection(state: &AppState, id: String) -> AppResult<()> {
     state.repo().save(&all)
 }
 
+/// 已保存连接的密码(编辑表单里没改密码时,「测试连接」用它)。
+pub fn saved_password(state: &AppState, id: &str) -> AppResult<String> {
+    let conn = state
+        .repo()
+        .load()?
+        .into_iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
+    credentials::load_password(&state.backend, &conn)
+}
+
 /// 克隆连接的命名/ID:去掉旧「/库名」「@库名」后缀再拼新库名,连环切库不叠加后缀。
 fn switched_name(name: &str, old_db: &str, new_db: &str) -> String {
     let base = name.strip_suffix(&format!("/{old_db}")).unwrap_or(name);
@@ -117,7 +130,7 @@ fn switched_id(id: &str, database: &str) -> String {
     format!("{base}@{database}")
 }
 
-/// 侧栏切库:同实例(kind/host/port/user 相同)下目标库已有连接则直接复用,
+/// 侧栏切库:同实例(kind/host/port/user、连接串、认证库、加密方式都相同)下目标库已有连接则直接复用,
 /// 否则克隆当前连接(密码一并复制到钥匙串/明文字段)并持久化。返回目标连接(不含密码)。
 pub fn switch_database(state: &AppState, id: String, database: String) -> AppResult<Connection> {
     let _g = state.lock.lock().unwrap();
@@ -132,6 +145,9 @@ pub fn switch_database(state: &AppState, id: String, database: String) -> AppRes
             && c.port == src.port
             && c.user == src.user
             && c.database == database
+            && c.uri == src.uri
+            && c.auth_source == src.auth_source
+            && c.ssl_mode == src.ssl_mode
     }) {
         return Ok(sanitize(existing.clone()));
     }
@@ -247,6 +263,8 @@ mod tests {
             plaintext_password: pw.map(|s| s.into()),
             file_path: None,
             ssl_mode: Default::default(),
+            uri: None,
+            auth_source: None,
         }
     }
 
@@ -284,5 +302,63 @@ mod tests {
     fn switched_id_derives_from_base_id() {
         assert_eq!(switched_id("c1", "reporting"), "c1@reporting");
         assert_eq!(switched_id("c1@reporting", "analytics"), "c1@analytics");
+    }
+
+    #[test]
+    fn switch_database_does_not_reuse_connection_of_other_cluster() {
+        let dir = std::env::temp_dir().join(format!("datum-switch-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = AppState::new(dir);
+        let mut a = conn("a", Env::Local, Some("pw"));
+        a.kind = DbKind::Mongo;
+        a.uri = Some("mongodb+srv://u@cluster-a.example.net/".into());
+        a.database = "app".into();
+        let mut b = a.clone();
+        b.id = "b".into();
+        b.uri = Some("mongodb+srv://u@cluster-b.example.net/".into());
+        b.database = "logs".into();
+        save_connection(&state, a, Some("pw".into())).unwrap();
+        save_connection(&state, b, Some("pw".into())).unwrap();
+        // 从 a 切到 logs:b 的 host/port/user 与 a 相同,但不是同一集群,不能复用
+        let switched = switch_database(&state, "a".into(), "logs".into()).unwrap();
+        assert_ne!(switched.id, "b");
+        assert_eq!(
+            switched.uri.as_deref(),
+            Some("mongodb+srv://u@cluster-a.example.net/")
+        );
+    }
+
+    #[test]
+    fn saved_password_is_loaded_for_testing_an_edited_connection() {
+        let dir = std::env::temp_dir().join(format!("datum-pw-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = AppState::new(dir);
+        save_connection(&state, conn("c1", Env::Local, None), Some("s3cret".into())).unwrap();
+        assert_eq!(saved_password(&state, "c1").unwrap(), "s3cret");
+        assert!(saved_password(&state, "missing").is_err());
+    }
+
+    #[test]
+    fn switch_database_does_not_reuse_connection_with_other_auth_or_tls() {
+        let dir = std::env::temp_dir().join(format!("datum-switch2-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = AppState::new(dir);
+        let mut a = conn("a", Env::Local, Some("pw"));
+        a.kind = DbKind::Mongo;
+        a.auth_source = Some("admin".into());
+        a.ssl_mode = crate::core::connection::SslMode::Require;
+        a.database = "app".into();
+        let mut b = a.clone();
+        b.id = "b".into();
+        b.auth_source = Some("app".into());
+        b.ssl_mode = crate::core::connection::SslMode::Disable;
+        b.database = "logs".into();
+        save_connection(&state, a, Some("pw".into())).unwrap();
+        save_connection(&state, b, Some("pw".into())).unwrap();
+        // b 的认证库与加密方式都不同:切到 logs 不能复用 b,否则会换认证库、丢掉 TLS
+        let switched = switch_database(&state, "a".into(), "logs".into()).unwrap();
+        assert_ne!(switched.id, "b");
+        assert_eq!(switched.auth_source.as_deref(), Some("admin"));
+        assert_eq!(switched.ssl_mode, crate::core::connection::SslMode::Require);
     }
 }

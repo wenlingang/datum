@@ -8,7 +8,7 @@ use crate::ui;
 use datum_core::core::connection::{Connection, DbKind, Env, SslMode};
 use datum_core::service;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{Editor, EditorState, Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -43,6 +43,10 @@ pub struct ConnectionForm {
     password: Entity<InputState>,
     database: Entity<InputState>,
     file_path: Entity<InputState>,
+    /// 仅 Mongo:true = 连接串模式
+    uri_mode: bool,
+    uri: Entity<EditorState>,
+    auth_source: Entity<InputState>,
     test: TestStatus,
     attempt: u64,
     error: Option<String>,
@@ -65,6 +69,8 @@ impl ConnectionForm {
             plaintext_password: None,
             file_path: None,
             ssl_mode: SslMode::default(),
+            uri: None,
+            auth_source: None,
         });
         let input =
             |value: String, placeholder: &str, window: &mut Window, cx: &mut Context<Self>| {
@@ -109,17 +115,52 @@ impl ConnectionForm {
             window,
             cx,
         );
+        let uri_mode = c.uri.is_some();
+        // 存下来的连接串不含库名:回填时放回去,否则原样保存会清空默认库
+        let uri_value = c
+            .uri
+            .as_deref()
+            .map(|u| datum_core::mongo::uri::with_database(u, &c.database))
+            .unwrap_or_default();
+        let uri = cx.new(|cx| {
+            EditorState::new(window, cx)
+                .language("text")
+                .line_number(false)
+                .soft_wrap(true)
+                .placeholder("mongodb+srv://user:password@cluster0.example.mongodb.net/app")
+                .default_value(uri_value)
+        });
+        let auth_source = input(
+            c.auth_source.clone().unwrap_or_default(),
+            "admin",
+            window,
+            cx,
+        );
         // 任一字段变化都要刷新连接串预览
-        let subs = [&name, &host, &port, &user, &password, &database, &file_path]
-            .into_iter()
-            .map(|e| {
-                cx.subscribe(e, |_, _, ev: &InputEvent, cx| {
-                    if matches!(ev, InputEvent::Change) {
-                        cx.notify();
-                    }
-                })
+        let mut subs: Vec<Subscription> = [
+            &name,
+            &host,
+            &port,
+            &user,
+            &password,
+            &database,
+            &file_path,
+            &auth_source,
+        ]
+        .into_iter()
+        .map(|e| {
+            cx.subscribe(e, |_, _, ev: &InputEvent, cx| {
+                if matches!(ev, InputEvent::Change) {
+                    cx.notify();
+                }
             })
-            .collect();
+        })
+        .collect();
+        subs.push(cx.subscribe(&uri, |_, _, ev: &InputEvent, cx| {
+            if matches!(ev, InputEvent::Change) {
+                cx.notify();
+            }
+        }));
         Self {
             id: (!c.id.is_empty()).then_some(c.id.clone()),
             editing,
@@ -133,6 +174,9 @@ impl ConnectionForm {
             password,
             database,
             file_path,
+            uri_mode,
+            uri,
+            auth_source,
             test: TestStatus::Idle,
             attempt: 0,
             error: None,
@@ -159,6 +203,7 @@ impl ConnectionForm {
             let (port, user, db) = match kind {
                 DbKind::Redis => ("6379", Self::value(&self.user, cx), "0".to_string()),
                 DbKind::Mysql => ("3306", "root".to_string(), String::new()),
+                DbKind::Mongo => ("27017", String::new(), String::new()),
                 _ => ("5432", "postgres".to_string(), "postgres".to_string()),
             };
             Self::set(&self.port, port, window, cx);
@@ -201,11 +246,60 @@ impl ConnectionForm {
             plaintext_password: None,
             file_path: sqlite.then(|| Self::value(&self.file_path, cx).trim().to_string()),
             ssl_mode: self.ssl_mode,
+            uri: None,
+            auth_source: (self.kind == DbKind::Mongo && !self.uri_mode)
+                .then(|| Self::value(&self.auth_source, cx).trim().to_string())
+                .filter(|s| !s.is_empty()),
         }
+    }
+
+    /// 连接串模式:拆出密码与库名。返回 (连接, 密码);密码 None 表示沿用已存的。
+    fn apply_uri(
+        &self,
+        mut conn: Connection,
+        cx: &gpui_kit::App,
+    ) -> Result<(Connection, Option<String>), String> {
+        let raw = self.uri.read(cx).value().to_string();
+        let parts = datum_core::mongo::uri::split_uri(&raw)
+            .map_err(|e| t!("conn_form.uri_invalid", error = e).to_string())?;
+        conn.uri = Some(parts.sanitized);
+        conn.host = parts.hosts;
+        conn.port = 0;
+        conn.user = parts.user;
+        conn.database = parts.database;
+        conn.ssl_mode = SslMode::default();
+        let password = match parts.password {
+            Some(p) => Some(p),
+            None if self.editing => None,
+            None => Some(String::new()),
+        };
+        Ok((conn, password))
+    }
+
+    /// 表单当前对应的 (连接, 密码);密码 None 表示编辑时沿用已存的。
+    fn connection_and_password(
+        &self,
+        cx: &gpui_kit::App,
+    ) -> Result<(Connection, Option<String>), String> {
+        let conn = self.connection(cx);
+        if conn.kind == DbKind::Mongo && self.uri_mode {
+            return self.apply_uri(conn, cx);
+        }
+        let pw = Self::value(&self.password, cx);
+        // 编辑时密码留空 = 不修改;新建时留空 = 无密码
+        let password = if self.editing && pw.is_empty() {
+            None
+        } else {
+            Some(pw)
+        };
+        Ok((conn, password))
     }
 
     /// 连接串预览(密码以圆点掩码)。
     fn conn_string(&self, cx: &gpui_kit::App) -> String {
+        if self.kind == DbKind::Mongo {
+            return self.mongo_preview(cx);
+        }
         if self.kind == DbKind::Sqlite {
             let p = Self::value(&self.file_path, cx);
             return format!(
@@ -252,6 +346,34 @@ impl ConnectionForm {
         format!("{scheme}://{auth}{host}{port}/{db}{query}")
     }
 
+    fn mongo_preview(&self, cx: &gpui_kit::App) -> String {
+        use datum_core::mongo::uri;
+        if self.uri_mode {
+            return uri::redact(self.uri.read(cx).value().trim());
+        }
+        let or = |v: String, d: &str| {
+            if v.trim().is_empty() {
+                d.to_string()
+            } else {
+                v.trim().to_string()
+            }
+        };
+        let host = or(Self::value(&self.host, cx), "127.0.0.1");
+        let port = Self::value(&self.port, cx).trim().parse().unwrap_or(27017);
+        let user = Self::value(&self.user, cx);
+        let auth = Self::value(&self.auth_source, cx);
+        let has_pw = !Self::value(&self.password, cx).is_empty();
+        let uris = uri::form_uris(
+            &host,
+            port,
+            user.trim(),
+            if has_pw { "PW" } else { "" },
+            Some(auth.trim()),
+            self.ssl_mode,
+        );
+        uris.first().map(|u| uri::redact(u)).unwrap_or_default()
+    }
+
     fn pick_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
@@ -281,8 +403,23 @@ impl ConnectionForm {
         self.attempt += 1;
         let attempt = self.attempt;
         self.test = TestStatus::Testing;
-        let conn = self.connection(cx);
-        let password = Self::value(&self.password, cx);
+        let (conn, password) = match self.connection_and_password(cx) {
+            // 编辑时没改密码:用已保存的密码测试(连接串模式下密码框是隐藏的)
+            Ok((c, pw)) => (
+                c,
+                pw.or_else(|| {
+                    self.id.as_deref().and_then(|id| {
+                        datum_core::commands::saved_password(&runtime::state(), id).ok()
+                    })
+                })
+                .unwrap_or_default(),
+            ),
+            Err(e) => {
+                self.test = TestStatus::Failed(e);
+                cx.notify();
+                return;
+            }
+        };
         let started = Instant::now();
         cx.notify();
         let probe = runtime::spawn(async move {
@@ -328,7 +465,14 @@ impl ConnectionForm {
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let conn = self.connection(cx);
+        let (conn, password) = match self.connection_and_password(cx) {
+            Ok(v) => v,
+            Err(e) => {
+                self.error = Some(e);
+                cx.notify();
+                return;
+            }
+        };
         if conn.name.is_empty() {
             self.error = Some(t!("conn_form.name_required").to_string());
             cx.notify();
@@ -339,13 +483,6 @@ impl ConnectionForm {
             cx.notify();
             return;
         }
-        let pw = Self::value(&self.password, cx);
-        // 编辑时密码留空 = 不修改;新建时留空 = 无密码
-        let password = if self.editing && pw.is_empty() {
-            None
-        } else {
-            Some(pw)
-        };
         let conns = Stores::global(cx).conns.clone();
         match conns.update(cx, |s, cx| s.save(conn, password, cx)) {
             Ok(saved) => {
@@ -438,6 +575,44 @@ impl Render for ConnectionForm {
                     }))
             }));
 
+        let mongo = self.kind == DbKind::Mongo;
+        let uri_mode = mongo && self.uri_mode;
+        let mode_segment = h_flex()
+            .gap_1p5()
+            .p_1()
+            .rounded_full()
+            .bg(palette.raised)
+            .children(
+                [
+                    (false, t!("conn_form.mode_form")),
+                    (true, t!("conn_form.mode_uri")),
+                ]
+                .map(|(value, label)| {
+                    let active = self.uri_mode == value;
+                    h_flex()
+                        .id(SharedString::from(format!("mongo-mode-{value}")))
+                        .flex_1()
+                        .h(px(32.))
+                        .justify_center()
+                        .rounded_full()
+                        .cursor_pointer()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .when(active, |d| {
+                            d.bg(cx.theme().background)
+                                .shadow_sm()
+                                .text_color(cx.theme().foreground)
+                        })
+                        .when(!active, |d| d.text_color(palette.fg_faint))
+                        .child(label)
+                        .on_click(cx.listener(move |f, _, _, cx| {
+                            f.uri_mode = value;
+                            f.error = None;
+                            cx.notify();
+                        }))
+                }),
+            );
+
         let ssl_mode = self.ssl_mode;
         let redis = self.kind == DbKind::Redis;
         let ssl_button = Button::new("ssl-mode")
@@ -520,8 +695,35 @@ impl Render for ConnectionForm {
                             ),
                         cx,
                     ))
+                } else if uri_mode {
+                    this.child(Self::field(t!("conn_form.env"), env_segment, cx))
+                        .child(Self::field(t!("conn_form.mode"), mode_segment, cx))
+                        .child(Self::field(
+                            t!("conn_form.uri"),
+                            div()
+                                .h(px(84.))
+                                .rounded(cx.theme().radius)
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .overflow_hidden()
+                                .child(
+                                    Editor::new(&self.uri)
+                                        .bordered(false)
+                                        .h(gpui_kit::relative(1.)),
+                                ),
+                            cx,
+                        ))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(palette.fg_faint)
+                                .child(t!("conn_form.uri_hint")),
+                        )
                 } else {
                     this.child(Self::field(t!("conn_form.env"), env_segment, cx))
+                        .when(mongo, |this| {
+                            this.child(Self::field(t!("conn_form.mode"), mode_segment, cx))
+                        })
                         .child(
                             h_flex()
                                 .gap_4()
@@ -558,6 +760,15 @@ impl Render for ConnectionForm {
                                     Input::new(&self.database),
                                     cx,
                                 ))
+                                .when(mongo, |this| {
+                                    this.child(div().w(px(150.)).flex_shrink_0().child(
+                                        Self::field(
+                                            t!("conn_form.auth_source"),
+                                            Input::new(&self.auth_source),
+                                            cx,
+                                        ),
+                                    ))
+                                })
                                 .child(div().w(px(200.)).flex_shrink_0().child(Self::field(
                                     t!("conn_form.ssl_mode"),
                                     ssl_button,

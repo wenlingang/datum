@@ -169,7 +169,7 @@ impl ConnectionStore {
                 this.connected.insert(id.clone());
                 cx.notify();
             });
-            if kind.is_relational() {
+            if kind.has_columns() {
                 let task_id = id.clone();
                 let cols = runtime::backend(move |s| async move {
                     service::fetch_columns(&s, &kind, &task_id).await

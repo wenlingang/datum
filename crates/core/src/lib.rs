@@ -13,6 +13,7 @@ pub mod core;
 pub mod erd;
 pub mod error;
 pub mod grid;
+pub mod mongo;
 pub mod my;
 pub mod pg;
 pub mod rds;

@@ -4,6 +4,9 @@
 
 use crate::core::connection::DbKind;
 use crate::error::{AppError, AppResult, ErrorKind};
+pub use crate::mongo::client::FindPage;
+use crate::mongo::convert::MongoResult;
+use crate::mongo::parse::MongoOp;
 use crate::pg::browse::TableDetail;
 use crate::pg::client::QueryResult;
 use crate::pg::edit::{CellEdit, RowDelete};
@@ -11,11 +14,16 @@ use crate::rds::client::{KeyDetail, KeyValue};
 use crate::schema::{self, ColumnsByTable, ErdSchema};
 use crate::sql::build::{build_insert_row, ident};
 use crate::sql::Dialect;
-use crate::{my, pg, rds, sqlite, AppState};
+use crate::{mongo, my, pg, rds, sqlite, AppState};
+use mongodb::bson::{Bson, Document};
 use rust_i18n::t;
 
 fn unsupported() -> AppError {
     AppError::new(ErrorKind::Connection, t!("core.err.redis_unsupported"))
+}
+
+fn mongo_unsupported() -> AppError {
+    AppError::new(ErrorKind::Mongo, t!("core.err.mongo_unsupported"))
 }
 
 /// 建立连接(读取已保存配置与密码)。
@@ -26,6 +34,7 @@ pub async fn connect(state: &AppState, kind: &DbKind, id: &str) -> AppResult<()>
         DbKind::Mysql => my::commands::my_connect(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_connect(state, id).await,
         DbKind::Redis => rds::commands::redis_connect(state, id).await,
+        DbKind::Mongo => mongo::commands::mongo_connect(state, &id).await,
     }
 }
 
@@ -37,6 +46,10 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
         DbKind::Mysql => my::commands::my_disconnect(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_disconnect(state, id).await,
         DbKind::Redis => Ok(()),
+        DbKind::Mongo => {
+            state.mongo_pool.disconnect(&id).await;
+            Ok(())
+        }
     };
 }
 
@@ -48,6 +61,7 @@ pub async fn list_objects(state: &AppState, kind: &DbKind, id: &str) -> AppResul
         DbKind::Mysql => my::commands::my_list_objects(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_list_objects(state, id).await,
         DbKind::Redis => rds::commands::redis_scan(state, id, "*".into()).await,
+        DbKind::Mongo => state.mongo_pool.list_collections(&id).await,
     }
 }
 
@@ -58,6 +72,7 @@ pub async fn list_databases(state: &AppState, kind: &DbKind, id: &str) -> AppRes
         DbKind::Pg => pg::commands::pg_list_databases(state, id).await,
         DbKind::Mysql => my::commands::my_list_databases(state, id).await,
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
+        DbKind::Mongo => state.mongo_pool.list_databases(&id).await,
         DbKind::Sqlite => Ok(vec![]),
     }
 }
@@ -76,6 +91,7 @@ pub async fn query(
         DbKind::Mysql => my::commands::my_query(state, id, sql, max_rows).await,
         DbKind::Sqlite => sqlite::commands::sqlite_query(state, id, sql, max_rows).await,
         DbKind::Redis => Err(unsupported()),
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -97,6 +113,7 @@ pub async fn query_read_only(
         DbKind::Mysql => state.my_pool.query_read_only(id, sql, max_rows).await,
         DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, max_rows),
         DbKind::Redis => Err(unsupported()),
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -112,6 +129,7 @@ pub async fn table_detail(
         DbKind::Mysql => my::commands::my_table_detail(state, id, table).await,
         DbKind::Sqlite => sqlite::commands::sqlite_table_detail(state, id, table).await,
         DbKind::Redis => Err(unsupported()),
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -129,6 +147,7 @@ pub async fn commit_edits(
         DbKind::Mysql => my::commands::my_commit_edits(state, id, edits, deletes).await,
         DbKind::Sqlite => sqlite::commands::sqlite_commit_edits(state, id, edits, deletes).await,
         DbKind::Redis => Err(unsupported()),
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -145,6 +164,7 @@ pub async fn import_sql(
         DbKind::Mysql => my::commands::my_import_sql(state, id, statements).await,
         DbKind::Sqlite => sqlite::commands::sqlite_import_sql(state, id, statements).await,
         DbKind::Redis => Err(unsupported()),
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -253,11 +273,15 @@ pub async fn test_connection(
     conn: &crate::core::connection::Connection,
     password: &str,
 ) -> AppResult<()> {
+    if conn.kind == DbKind::Mongo {
+        return mongo::client::test_connect(&mongo::uri::connect_uris(conn, password)).await;
+    }
     let kind = match conn.kind {
         DbKind::Pg => "pg",
         DbKind::Mysql => "mysql",
         DbKind::Redis => "redis",
         DbKind::Sqlite => "sqlite",
+        DbKind::Mongo => "mongo",
     };
     crate::commands::test_connection(
         kind.into(),
@@ -270,4 +294,71 @@ pub async fn test_connection(
         conn.ssl_mode,
     )
     .await
+}
+
+pub async fn mongo_find_page(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    page: FindPage,
+) -> AppResult<MongoResult> {
+    state.mongo_pool.find_page(id, coll, page).await
+}
+
+/// (数量, 是否精确):无过滤条件时为估算值。
+pub async fn mongo_count(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    filter: Option<Document>,
+) -> AppResult<(u64, bool)> {
+    state.mongo_pool.count(id, coll, filter).await
+}
+
+pub async fn mongo_execute(
+    state: &AppState,
+    id: &str,
+    ops: Vec<MongoOp>,
+    max_rows: u32,
+    read_only: bool,
+) -> AppResult<MongoResult> {
+    state.mongo_pool.execute(id, ops, max_rows, read_only).await
+}
+
+/// 按 `_id` 取完整文档(文档编辑器用,忽略当前页的 Projection)。
+pub async fn mongo_find_by_id(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    doc_id: Bson,
+) -> AppResult<Option<String>> {
+    state.mongo_pool.find_by_id(id, coll, doc_id).await
+}
+
+pub async fn mongo_replace_one(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    doc_id: Bson,
+    doc: Document,
+) -> AppResult<()> {
+    state.mongo_pool.replace_one(id, coll, doc_id, doc).await
+}
+
+pub async fn mongo_insert_one(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    doc: Document,
+) -> AppResult<Bson> {
+    state.mongo_pool.insert_one(id, coll, doc).await
+}
+
+pub async fn mongo_delete_one(
+    state: &AppState,
+    id: &str,
+    coll: &str,
+    doc_id: Bson,
+) -> AppResult<()> {
+    state.mongo_pool.delete_one(id, coll, doc_id).await
 }

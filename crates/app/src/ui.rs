@@ -21,6 +21,7 @@ pub fn db_icon(kind: DbKind) -> Icon {
         DbKind::Mysql => "db-mysql",
         DbKind::Redis => "db-redis",
         DbKind::Sqlite => "db-sqlite",
+        DbKind::Mongo => "db-mongo",
     };
     icon(name)
 }

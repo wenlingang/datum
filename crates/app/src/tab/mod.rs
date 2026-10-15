@@ -5,10 +5,13 @@
 //! - 查询(`TabKind::Query`):编辑器 + 工具条 + 结果,运行光标所在语句或选区。
 
 mod cell_dialog;
+mod doc_view;
 pub mod editor;
 mod filter;
 mod grid;
 mod history;
+mod mongo;
+mod mongo_filter;
 mod selection_chip;
 mod toolbar;
 
@@ -121,6 +124,8 @@ pub struct WorkTab {
     measured_width: Rc<StdCell<f32>>,
     fitted_width: f32,
     _refit: Option<Task<()>>,
+    /// 仅 Mongo:文档文本、`_id`、过滤栏与分页
+    pub mongo: Option<mongo::MongoTabState>,
     _subscriptions: Vec<Subscription>,
     _task: Option<Task<()>>,
 }
@@ -180,6 +185,13 @@ impl WorkTab {
         // schema 到达后刷新补全上下文
         let stores = Stores::global(cx).conns.clone();
         subs.push(cx.observe(&stores, |this, _, cx| this.sync_schema(cx)));
+        let mongo = if conn.kind == DbKind::Mongo {
+            let (state, mut extra) = mongo::init(None, window, cx);
+            subs.append(&mut extra);
+            Some(state)
+        } else {
+            None
+        };
         let mut this = Self {
             kind,
             conn_id: conn.id.clone(),
@@ -212,6 +224,7 @@ impl WorkTab {
             measured_width: Rc::new(StdCell::new(0.)),
             fitted_width: 0.,
             _refit: None,
+            mongo,
             _subscriptions: subs,
             _task: None,
         };
@@ -238,7 +251,12 @@ impl WorkTab {
     ) -> Self {
         let mut this = Self::base(TabKind::Table, conn, table.to_string().into(), window, cx);
         this.table = Some(table.to_string());
-        if conn.kind.is_relational() {
+        if conn.kind == DbKind::Mongo {
+            let (state, mut extra) = mongo::init(Some(table), window, cx);
+            this.mongo = Some(state);
+            this._subscriptions.append(&mut extra);
+        }
+        if conn.kind.supports_sql() {
             this.browse_table = Some(table.to_string());
         }
         this.refresh(window, cx);
@@ -280,7 +298,7 @@ impl WorkTab {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.db_kind == DbKind::Redis {
+        if !self.db_kind.supports_sql() {
             return;
         }
         let (text, cursor, sel) = {
@@ -345,6 +363,10 @@ impl WorkTab {
             let end = text[cursor..].find('\n').map_or(text.len(), |i| cursor + i);
             return text[start..end].trim().to_string();
         }
+        if self.db_kind == DbKind::Mongo {
+            // 未选中时执行整个编辑器内容(多条语句依次执行)
+            return e.value().trim().to_string();
+        }
         current_statement(&e.value(), e.cursor())
     }
 
@@ -396,21 +418,17 @@ impl WorkTab {
             columns: result.columns.clone(),
             rows: Arc::new(result.rows.clone()),
             view: self.view.clone(),
-            types: self
-                .detail
-                .as_ref()
-                .map(|d| {
-                    d.columns
-                        .iter()
-                        .map(|c| (c.name.clone(), c.data_type.clone()))
-                        .collect()
-                })
-                .unwrap_or_default(),
+            types: match &self.mongo {
+                Some(m) => m.types.clone(),
+                None => self.column_types(),
+            },
             pk_index,
             dirty: self.dirty.keys().cloned().collect(),
             deleted: self.deletes.iter().cloned().collect::<HashSet<_>>(),
             sort: self.sort.clone(),
             deletable: self.table.is_some() && pk_index.is_some(),
+            missing_blank: self.mongo.is_some(),
+            doc_editable: self.mongo.as_ref().is_some_and(|m| m.coll.is_some()),
         };
         let width = self.fitted_width;
         self.grid.update(cx, |grid, cx| {
@@ -499,6 +517,10 @@ impl WorkTab {
                 t!("tab.empty_sql").to_string().into()
             });
             cx.notify();
+            return;
+        }
+        if self.db_kind == DbKind::Mongo {
+            self.run_mongo(sql, skip_history, skip_risk, window, cx);
             return;
         }
         if !skip_risk {
@@ -646,6 +668,7 @@ impl WorkTab {
                 DbKind::Mysql => "mysql",
                 DbKind::Sqlite => "sqlite",
                 DbKind::Redis => "redis",
+                DbKind::Mongo => "mongo",
             }
             .into(),
             conn_name,
@@ -660,7 +683,7 @@ impl WorkTab {
 
     /// EXPLAIN 当前/选中的 SQL(纯 EXPLAIN 不执行查询)。
     pub fn explain(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.db_kind == DbKind::Redis || self.kind != TabKind::Query {
+        if !self.db_kind.supports_sql() || self.kind != TabKind::Query {
             return;
         }
         let sql = self.sql_to_run(cx);
@@ -687,7 +710,7 @@ impl WorkTab {
 
     /// 格式化整篇 SQL(保留撤销历史)。
     pub fn beautify(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.db_kind == DbKind::Redis {
+        if !self.db_kind.supports_sql() {
             return;
         }
         let Some(editor) = self.editor.clone() else {
@@ -736,6 +759,10 @@ impl WorkTab {
 
     /// 点击表头:浏览表时循环 倒序 → 升序 → 无 并重查第一页;其余结果做客户端排序(升 ↔ 降)。
     pub fn cycle_sort(&mut self, col: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.mongo.is_some() {
+            self.mongo_cycle_sort(col, window, cx);
+            return;
+        }
         if self.browse_table.is_some() {
             let next = match &self.sort {
                 Some((c, true)) if c == col => Some((col.to_string(), false)),
@@ -773,7 +800,11 @@ impl WorkTab {
                 cx.emit(TabEvent::Toast(Toast::Info(
                     t!("tab.refreshed_tables").to_string().into(),
                 )));
-            } else if self.db_kind != DbKind::Redis && !is_query(&sql) {
+            } else if (self.db_kind == DbKind::Mongo
+                && datum_core::mongo::parse::parse_script(&sql)
+                    .is_ok_and(|v| v.iter().any(|st| st.op.is_write())))
+                || (self.db_kind.supports_sql() && !is_query(&sql))
+            {
                 cx.emit(TabEvent::Toast(Toast::Info(
                     t!("tab.refresh_skip_write").to_string().into(),
                 )));
@@ -783,6 +814,10 @@ impl WorkTab {
                 )));
                 self.run(None, false, false, window, cx);
             }
+            return;
+        }
+        if self.mongo.as_ref().is_some_and(|m| m.coll.is_some()) {
+            self.mongo_refresh(window, cx);
             return;
         }
         let Some(table) = self.table.clone() else {
@@ -1155,11 +1190,15 @@ impl WorkTab {
                     .filter(|n| *n > 0)
                     .map(|n| format!(" · {}", t!("tab.affected_rows", n = n)))
                     .unwrap_or_default();
+                let text = match self.mongo.as_ref().and_then(|m| m.summary.clone()) {
+                    Some(s) => format!("✓ {}", s.replace('\n', " · ")),
+                    None => format!("✓ {}{affected}", t!("tab.exec_ok")),
+                };
                 div()
                     .p_3()
                     .text_sm()
                     .text_color(palette.data)
-                    .child(format!("✓ {}{affected}", t!("tab.exec_ok")))
+                    .child(text)
                     .into_any_element()
             } else if rows == 0 && result.columns.is_empty() {
                 ui::hint(t!("tab.query_ok_no_rows").to_string(), cx).into_any_element()
@@ -1174,7 +1213,12 @@ impl WorkTab {
                 v_flex()
                     .size_full()
                     .when(
-                        self.browse_table.is_none() && self.result_is_query && rows >= max_rows,
+                        self.browse_table.is_none()
+                            && self.result_is_query
+                            && match &self.mongo {
+                                Some(m) => m.truncated,
+                                None => rows >= max_rows,
+                            },
                         |this| {
                             this.child(
                                 div()
@@ -1188,7 +1232,31 @@ impl WorkTab {
                             )
                         },
                     )
-                    .child(
+                    .when_some(
+                        self.mongo
+                            .as_ref()
+                            .and_then(|m| m.summary.clone())
+                            .filter(|_| rows > 0),
+                        |this, s| {
+                            this.child(
+                                div()
+                                    .px_3()
+                                    .py_1p5()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .border_b_1()
+                                    .border_color(cx.theme().border)
+                                    .child(s.replace('\n', " · ")),
+                            )
+                        },
+                    )
+                    .child(if self.mongo.as_ref().is_some_and(|m| m.json_view) {
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(doc_view::render(self, cx))
+                            .into_any_element()
+                    } else {
                         div()
                             .relative()
                             .flex_1()
@@ -1201,8 +1269,9 @@ impl WorkTab {
                                     .with_size(px(36.))
                                     .header_row_height(px(44.))
                                     .scrollbar_visible(true, true),
-                            ),
-                    )
+                            )
+                            .into_any_element()
+                    })
                     .into_any_element()
             }
         } else if self.running {
@@ -1320,6 +1389,16 @@ impl Render for WorkTab {
         } else {
             None
         };
+        let mongo_bar = self
+            .mongo
+            .as_ref()
+            .filter(|m| m.bar.is_some())
+            .map(|_| mongo_filter::render_bar(self, cx));
+        let mongo_pager = self
+            .mongo
+            .as_ref()
+            .filter(|m| m.coll.is_some())
+            .map(|_| mongo_filter::render_pager(self, cx));
         let body = match (&self.kind, &self.editor) {
             (TabKind::Query, Some(editor)) => v_resizable("query-split")
                 .child(
@@ -1371,7 +1450,7 @@ impl Render for WorkTab {
                                                 .bordered(false)
                                                 .context_menu({
                                                     let editor = editor.clone();
-                                                    let relational = self.db_kind != DbKind::Redis;
+                                                    let relational = self.db_kind.supports_sql();
                                                     move |menu, _, cx| {
                                                         let has_selection = !editor
                                                             .read(cx)
@@ -1417,8 +1496,10 @@ impl Render for WorkTab {
             .id("work-tab")
             .track_focus(&self.focus)
             .size_full()
+            .children(mongo_bar)
             .children(filter_bar)
             .child(div().flex_1().min_h_0().child(body))
+            .children(mongo_pager)
     }
 }
 

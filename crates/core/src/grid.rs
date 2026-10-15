@@ -18,10 +18,10 @@ pub fn compare_cells(a: &str, b: &str) -> Ordering {
     a.cmp(b)
 }
 
-/// 按某列对行排序(返回新数组)。NULL 始终排在最后,与方向无关。
-pub fn sort_rows(rows: &[Vec<Cell>], col_ix: usize, descending: bool) -> Vec<Vec<Cell>> {
-    let mut out = rows.to_vec();
-    out.sort_by(|ra, rb| match (&ra[col_ix], &rb[col_ix]) {
+/// 按某列排序后的行下标(稳定排序)。NULL 始终排在最后,与方向无关。
+pub fn sort_order(rows: &[Vec<Cell>], col_ix: usize, descending: bool) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..rows.len()).collect();
+    order.sort_by(|&ia, &ib| match (&rows[ia][col_ix], &rows[ib][col_ix]) {
         (None, None) => Ordering::Equal,
         (None, _) => Ordering::Greater,
         (_, None) => Ordering::Less,
@@ -34,7 +34,15 @@ pub fn sort_rows(rows: &[Vec<Cell>], col_ix: usize, descending: bool) -> Vec<Vec
             }
         }
     });
-    out
+    order
+}
+
+/// 按某列对行排序(返回新数组)。NULL 始终排在最后,与方向无关。
+pub fn sort_rows(rows: &[Vec<Cell>], col_ix: usize, descending: bool) -> Vec<Vec<Cell>> {
+    sort_order(rows, col_ix, descending)
+        .into_iter()
+        .map(|i| rows[i].clone())
+        .collect()
 }
 
 // ---------------------------------------------------------------- 筛选
@@ -376,13 +384,14 @@ pub fn classify_cell(value: Option<&str>, data_type: Option<&str>) -> CellStyle 
         };
         return CellStyle { tier, mono: true };
     }
-    if t.contains("uuid") || t.contains("bytea") {
+    if t.contains("uuid") || t.contains("bytea") || t.contains("objectid") || t.contains("bindata")
+    {
         return CellStyle {
             tier: CellTier::Hash,
             mono: true,
         };
     }
-    if ["char", "text", "citext", "name"]
+    if ["char", "text", "citext", "name", "string"]
         .iter()
         .any(|k| t.contains(k))
     {
@@ -591,5 +600,40 @@ mod tests {
             vec![300.0, 300.0]
         );
         assert_eq!(column_widths(&[80.0], 1000.0, 170.0, &[true]), vec![500.0]);
+    }
+
+    #[test]
+    fn sort_order_returns_stable_permutation_with_nulls_last() {
+        let rows = vec![
+            vec![Some("b".to_string())],
+            vec![None],
+            vec![Some("a".to_string())],
+            vec![Some("b".to_string())],
+        ];
+        assert_eq!(sort_order(&rows, 0, false), vec![2, 0, 3, 1]);
+        assert_eq!(sort_order(&rows, 0, true), vec![0, 3, 2, 1]);
+        let sorted = sort_rows(&rows, 0, false);
+        let by_order: Vec<_> = sort_order(&rows, 0, false)
+            .into_iter()
+            .map(|i| rows[i].clone())
+            .collect();
+        assert_eq!(sorted, by_order);
+    }
+
+    #[test]
+    fn mongo_type_names_get_matching_tiers() {
+        assert_eq!(
+            classify_cell(Some("ObjectId(\"x\")"), Some("objectId")).tier,
+            CellTier::Hash
+        );
+        assert_eq!(classify_cell(Some("5"), Some("int64")).tier, CellTier::Dim);
+        assert_eq!(
+            classify_cell(Some("2026-01-01"), Some("date")).tier,
+            CellTier::Dim
+        );
+        assert_eq!(
+            classify_cell(Some("hi"), Some("string")).tier,
+            CellTier::Strong
+        );
     }
 }

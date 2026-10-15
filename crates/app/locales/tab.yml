@@ -229,6 +229,10 @@ cell:
     zh-CN: "查看单元格"
     zh-TW: "檢視儲存格"
 tab:
+  editor_placeholder_mongo:
+    en: "db.users.find({ age: { $gt: 18 } })"
+    zh-CN: "db.users.find({ age: { $gt: 18 } })"
+    zh-TW: "db.users.find({ age: { $gt: 18 } })"
   editor_placeholder_redis:
     en: "Enter a Redis command, ⌘↵ to run"
     zh-CN: "输入 Redis 命令,⌘↵ 运行"
@@ -496,3 +500,96 @@ erd:
     en: "Failed to create canvas"
     zh-CN: "无法创建画布"
     zh-TW: "無法建立畫布"
+mongo:
+  doc_gone:
+    en: The document no longer exists. Refresh and try again.
+    zh-CN: 文档已不存在,请刷新后重试
+    zh-TW: 文件已不存在,請重新整理後再試
+  example:
+    en: "e.g. %{example}"
+    zh-CN: "例如 %{example}"
+    zh-TW: "例如 %{example}"
+  apply:
+    en: Apply
+    zh-CN: 应用
+    zh-TW: 套用
+  reset:
+    en: Reset
+    zh-CN: 重置
+    zh-TW: 重設
+  json_view:
+    en: JSON
+    zh-CN: JSON
+    zh-TW: JSON
+  table_view:
+    en: Table
+    zh-CN: 表格
+    zh-TW: 表格
+  page:
+    en: "Page %{n}"
+    zh-CN: "第 %{n} 页"
+    zh-TW: "第 %{n} 頁"
+  per_page:
+    en: "%{n}/page"
+    zh-CN: "%{n} 条/页"
+    zh-TW: "%{n} 筆/頁"
+  total_exact:
+    en: "%{n} documents"
+    zh-CN: "共 %{n} 条"
+    zh-TW: "共 %{n} 筆"
+  total_estimated:
+    en: "About %{n} documents"
+    zh-CN: "约 %{n} 条"
+    zh-TW: "約 %{n} 筆"
+  count:
+    en: Count
+    zh-CN: 计数
+    zh-TW: 計數
+  new_doc:
+    en: New document
+    zh-CN: 新增文档
+    zh-TW: 新增文件
+  edit_doc:
+    en: Edit document
+    zh-CN: 编辑文档
+    zh-TW: 編輯文件
+  delete_doc:
+    en: Delete document
+    zh-CN: 删除文档
+    zh-TW: 刪除文件
+  need_id_hint:
+    en: Only documents with _id can be edited or deleted (keep _id in Projection)
+    zh-CN: 只有带 _id 的文档才能编辑或删除(Projection 里不要排除 _id)
+    zh-TW: 只有帶 _id 的文件才能編輯或刪除(Projection 中不要排除 _id)
+  edit_title:
+    en: Edit document
+    zh-CN: 编辑文档
+    zh-TW: 編輯文件
+  new_title:
+    en: New document
+    zh-CN: 新增文档
+    zh-TW: 新增文件
+  doc_valid:
+    en: Valid document
+    zh-CN: 文档格式正确
+    zh-TW: 文件格式正確
+  id_changed:
+    en: _id cannot be changed
+    zh-CN: 不能修改 _id
+    zh-TW: 不能修改 _id
+  save:
+    en: Save
+    zh-CN: 保存
+    zh-TW: 儲存
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  saved:
+    en: Saved
+    zh-CN: 已保存
+    zh-TW: 已儲存
+  deleted:
+    en: Document deleted
+    zh-CN: 文档已删除
+    zh-TW: 文件已刪除

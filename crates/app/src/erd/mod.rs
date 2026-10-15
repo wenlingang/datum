@@ -189,7 +189,7 @@ impl ErdView {
         let Some(kind) = Stores::global(cx).conns.read(cx).get(&id).map(|c| c.kind) else {
             return;
         };
-        if kind == DbKind::Redis {
+        if !kind.supports_sql() {
             return;
         }
         self.loading = true;
@@ -1267,7 +1267,7 @@ impl Render for ErdView {
             .read(cx)
             .connections
             .iter()
-            .filter(|c| c.kind.is_relational())
+            .filter(|c| c.kind.supports_sql())
             .map(|c| (c.id.clone(), c.name.clone(), c.kind))
             .collect();
         let current = self

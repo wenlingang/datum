@@ -53,10 +53,16 @@ impl CompletionProvider for SqlCompletions {
         let text = rope.to_string();
         let explicit = trigger.trigger_kind == lsp_types::CompletionTriggerKind::INVOKED;
         let schema = self.schema.borrow();
-        let result = if self.kind == DbKind::Redis {
-            completion::redis_completions(&text, offset, &schema.tables, explicit)
-        } else {
-            completion::sql_completions(&text, offset, &schema.tables, &schema.columns, explicit)
+        let result = match self.kind {
+            DbKind::Redis => completion::redis_completions(&text, offset, &schema.tables, explicit),
+            DbKind::Mongo => completion::mongo_completions(&text, offset, &schema.tables, explicit),
+            _ => completion::sql_completions(
+                &text,
+                offset,
+                &schema.tables,
+                &schema.columns,
+                explicit,
+            ),
         };
         let Some(result) = result else {
             return Task::ready(Ok(CompletionResponse::Array(vec![])));
@@ -107,13 +113,17 @@ pub fn new_editor(
     });
     let editor = cx.new(|cx| {
         let mut state = EditorState::new(window, cx)
-            .language(if kind == DbKind::Redis { "text" } else { "sql" })
+            .language(match kind {
+                DbKind::Redis => "text",
+                DbKind::Mongo => "javascript",
+                _ => "sql",
+            })
             .line_number(true)
             .soft_wrap(false)
-            .placeholder(if kind == DbKind::Redis {
-                t!("tab.editor_placeholder_redis")
-            } else {
-                t!("tab.editor_placeholder_sql")
+            .placeholder(match kind {
+                DbKind::Redis => t!("tab.editor_placeholder_redis"),
+                DbKind::Mongo => t!("tab.editor_placeholder_mongo"),
+                _ => t!("tab.editor_placeholder_sql"),
             });
         state.lsp_mut().completion_provider = Some(provider);
         state

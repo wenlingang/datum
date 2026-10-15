@@ -419,6 +419,34 @@ settings:
 
 # 新建/编辑连接(dialogs/connection_form.rs)
 conn_form:
+  mode:
+    en: Connect with
+    zh-CN: 连接方式
+    zh-TW: 連線方式
+  mode_form:
+    en: Fields
+    zh-CN: 表单
+    zh-TW: 表單
+  mode_uri:
+    en: Connection string
+    zh-CN: 连接串
+    zh-TW: 連線字串
+  uri:
+    en: Connection string
+    zh-CN: 连接串
+    zh-TW: 連線字串
+  uri_hint:
+    en: The password is stored separately (keychain outside Local); TLS options in the string take precedence.
+    zh-CN: 密码会单独保存(非 Local 环境存入钥匙串);连接串中的 TLS 参数优先。
+    zh-TW: 密碼會單獨儲存(非 Local 環境存入鑰匙圈);連線字串中的 TLS 參數優先。
+  uri_invalid:
+    en: "Invalid connection string: %{error}"
+    zh-CN: "连接串无效:%{error}"
+    zh-TW: "連線字串無效:%{error}"
+  auth_source:
+    en: Auth database
+    zh-CN: 认证库
+    zh-TW: 驗證資料庫
   new_title:
     en: New Connection
     zh-CN: 新建连接

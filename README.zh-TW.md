@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | 繁體中文
 
-一款簡約現代的桌面資料庫管理工具,支援 **PostgreSQL**、**MySQL**、**SQLite** 與 **Redis**。
+一款簡約現代的桌面資料庫管理工具,支援 **PostgreSQL**、**MySQL**、**SQLite**、**Redis** 與 **MongoDB**。
 
 這是 Datum 的 Rust 原生重寫版:介面基於 [GPUI Kit](https://github.com/longbridge/gpui-kit)(GPUI + gpui-component),
 資料層沿用原 Tauri 版的 Rust 後端,不再依賴 WebView 與 Node.js。
@@ -23,6 +23,12 @@
 
 ![範例商店資料庫的關聯圖](docs/screenshots/er-diagram.png)
 
+**用你習慣的方式查 MongoDB。** 開啟集合就能用 Filter / Sort / Projection 翻看文件,表格與 JSON 一鍵切換,整篇編輯文件也不會悄悄改掉欄位型別。查詢分頁支援 mongosh 語法子集:`find`、`aggregate`、`updateMany` 等。
+
+![依條件篩選、排序後的 MongoDB 集合與文件詳細資訊](docs/screenshots/mongo-collection.png)
+
+![Mongo 查詢分頁中的聚合管線](docs/screenshots/mongo-query.png)
+
 **不容易誤操作。** 連線依 local / staging / prod 標色,任何破壞性語句都要你明確確認後才會執行。
 
 <table>
@@ -40,6 +46,7 @@
 - **資料表瀏覽**:伺服器端分頁與排序、欄位型別分級配色、結果篩選(且/或、多種運算子)、儲存格全文檢視(JSON 自動格式化)、暫存編輯與刪除後 ⌘S 單一交易提交、複製 INSERT、匯出 CSV / SQL / Markdown
 - **SQL 編輯器**:語法醒目提示、schema 感知自動完成(資料表名稱、`表.` / 別名欄位、作用域欄位、子句範本)、關鍵字自動大寫、執行游標所在陳述式或選取範圍、格式化、Explain、列數上限、查詢紀錄(依資料庫隔離)
 - **破壞性陳述式審查**:DROP / TRUNCATE / 無 WHERE 的 DELETE、UPDATE 等執行前統一確認;Redis 的 FLUSHALL / FLUSHDB 同樣攔截;唯讀執行由資料庫強制(PG `default_transaction_read_only`、MySQL `SESSION TRANSACTION READ ONLY`、SQLite `query_only`)
+- **MongoDB**:表單或連線字串兩種連線方式(支援 Atlas `mongodb+srv://`,連線字串中的密碼會拆出來依憑證規則儲存);集合瀏覽支援 Filter / Sort / Projection、伺服器端分頁與計數、表格 / JSON 檢視;在 mongosh 風格的編輯器中整篇編輯、新增、刪除文件,所有 BSON 型別(`NumberLong`、`NumberDecimal`、`ISODate`、`ObjectId` 等)往返不變;查詢分頁支援 mongosh 子集(`find` 及 `sort/skip/limit/projection`、`findOne`、`countDocuments`、`distinct`、`aggregate`、`getIndexes`、`insertOne/Many`、`updateOne/Many`、`replaceOne`、`deleteOne/Many`、`show dbs/collections`)與集合名稱自動完成;空條件的批次寫入、含 `$out` / `$merge` 的聚合都要經過破壞性審查;讀取操作在伺服器端限時 60 秒
 - **Redis**:瀏覽 key、依型別顯示值、執行任意命令(命令與 key 名稱自動完成)、key 詳細資訊(型別 / TTL / 大小)
 - **AI 助理**:可設定多個服務供應商(OpenAI 相容 / Anthropic / Gemini,內建 DeepSeek、通義、Kimi 等預設),在面板內切換模型;依連線分開對話;自動帶入資料表結構與知識庫文件(內建資料庫開發規範,可替換);產生的 SQL 以卡片呈現,確認後執行或在編輯器中執行
 - **關聯圖**:實體外鍵 + 依 `xxx_id` 命名推斷的邏輯外鍵,分層配置、拖曳、縮放、搜尋醒目提示、表結構圖 / 工程 ER 圖切換、匯出 PNG
@@ -61,7 +68,7 @@ Datum 目前尚未經過 Apple 公證,第一次開啟會被系統阻擋,任選�
 
 ```text
 crates/
-├── core/   datum-core:連線、憑證、紀錄、PG/MySQL/SQLite/Redis 驅動程式、AI、自動更新,
+├── core/   datum-core:連線、憑證、紀錄、PG/MySQL/SQLite/Redis/MongoDB 驅動程式、AI、自動更新,
 │           以及 SQL 切分/風險辨識/產生/格式化、篩選排序匯出、ER 配置、自動完成等純邏輯
 └── app/    datum:GPUI Kit 介面(工作區、分頁、結果表格、對話框、AI 面板、關聯圖)
 ```
@@ -70,7 +77,7 @@ crates/
 
 - **Rust** ≥ 1.88(開發時以 1.96 驗證)
 - **macOS**(目前的封裝目標;GPUI 本身支援 Linux / Windows)
-- 執行資料層整合測試時需要本機可連線的 PostgreSQL / Redis(或 Docker)
+- 執行資料層整合測試時需要本機可連線的 PostgreSQL / Redis / MongoDB(或 Docker)
 
 ## 開發
 
@@ -110,6 +117,15 @@ DATUM_TLS_PG_PLAIN=5432 DATUM_TLS_PG_SSL=5444 DATUM_TLS_MYSQL=3306 DATUM_TLS_RED
 ```
 
 `DATUM_TLS_PG_SSL` 指向開啟 `ssl=on`(自簽憑證即可)的 PG,`DATUM_TLS_PG_PLAIN` / `DATUM_TLS_REDIS` 指向未開啟加密的執行個體。
+
+MongoDB 測試連線至本機指定連接埠的執行個體:
+
+```bash
+docker run -d --name datum-mongo -p 27017:27017 mongo:7
+DATUM_MONGO=27017 cargo test -p datum-core --test mongo -- --ignored --test-threads=1
+```
+
+同時設定 `DATUM_MONGO_AUTH=<連接埠>` 可執行驗證相關測試,需要一個帶 root 使用者啟動的執行個體(準備方式見 `crates/core/tests/mongo.rs`)。
 
 ## 封裝與發布
 
