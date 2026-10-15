@@ -9,6 +9,31 @@
 
 > Datum(/ˈdeɪtəm/,"data" 的单数)—— 专注于数据的工具。
 
+<p align="center">
+  <img src="docs/screenshots/table.png" alt="浏览数据表,右侧展开行详情" width="100%">
+</p>
+
+## 看一眼
+
+**顺手地写 SQL。** 补全认得你的表、别名和列;⌘↵ 只跑光标所在的那一条。当然也有深色模式。
+
+![SQL 编辑器:聚合查询及其结果](docs/screenshots/sql-editor.png)
+
+**表之间怎么关联,一眼看清。** 关系图既读取真实外键,也会按 `xxx_id` 命名推断出没建外键的关联。
+
+![示例商城库的关系图](docs/screenshots/er-diagram.png)
+
+**不容易误操作。** 连接按 local / staging / prod 标色,任何破坏性语句都要你明确确认后才会执行。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/new-connection.png" alt="新建连接"></td>
+    <td width="50%"><img src="docs/screenshots/destructive-review.png" alt="破坏性语句审查"></td>
+  </tr>
+</table>
+
+<sub>截图使用一个虚构的咖啡烘焙店数据库,由<a href="#无窗口截图">开发</a>一节介绍的无窗口截图模式渲染。</sub>
+
 ## 功能
 
 - **连接管理**:新建/编辑/删除/测试连接,连接串预览;SSL 模式(关闭 / 优先 / 必须 / 校验证书,PG 与 MySQL 的「优先」在服务器不支持时退回明文);按环境(local / staging / prod)着色;凭据按环境路由——`local` 明文存本地、`staging/prod` 存 macOS 钥匙串;侧栏切库(同实例复用或自动克隆连接)、库右键导出/删除

@@ -9,6 +9,31 @@
 
 > Datum(/ˈdeɪtəm/,"data" 的單數)—— 專注於資料的工具。
 
+<p align="center">
+  <img src="docs/screenshots/table.png" alt="瀏覽資料表,右側展開列詳情" width="100%">
+</p>
+
+## 看一眼
+
+**順手地寫 SQL。** 補全認得你的資料表、別名與欄位;⌘↵ 只執行游標所在的那一句。當然也有深色模式。
+
+![SQL 編輯器:彙總查詢及其結果](docs/screenshots/sql-editor.png)
+
+**資料表之間怎麼關聯,一眼看清。** 關聯圖既讀取真實外鍵,也會依 `xxx_id` 命名推斷沒建外鍵的關聯。
+
+![範例商店資料庫的關聯圖](docs/screenshots/er-diagram.png)
+
+**不容易誤操作。** 連線依 local / staging / prod 標色,任何破壞性語句都要你明確確認後才會執行。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/new-connection.png" alt="新增連線"></td>
+    <td width="50%"><img src="docs/screenshots/destructive-review.png" alt="破壞性語句審查"></td>
+  </tr>
+</table>
+
+<sub>截圖使用一個虛構的咖啡烘焙店資料庫,由<a href="#無視窗截圖">開發</a>一節介紹的無視窗截圖模式渲染。</sub>
+
 ## 功能
 
 - **連線管理**:新增/編輯/刪除/測試連線,連線字串預覽;SSL 模式(關閉 / 優先 / 必須 / 驗證憑證,PG 與 MySQL 的「優先」在伺服器不支援時退回明文);依環境(local / staging / prod)著色;憑證依環境存放——`local` 明文存於本機、`staging/prod` 存於 macOS 鑰匙圈;側欄切換資料庫(同一執行個體共用或自動複製連線)、資料庫右鍵匯出/刪除

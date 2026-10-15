@@ -9,6 +9,31 @@ and the data layer reuses the Rust backend of the original Tauri version — no 
 
 > Datum (/ˈdeɪtəm/, the singular of "data") — a tool focused on your data.
 
+<p align="center">
+  <img src="docs/screenshots/table.png" alt="Browsing a table with the row details panel open" width="100%">
+</p>
+
+## A look around
+
+**Write SQL the way you think.** Completion knows your tables, aliases and columns; hit ⌘↵ to run just the statement under the cursor. Dark mode included.
+
+![SQL editor with an aggregate query and its results](docs/screenshots/sql-editor.png)
+
+**See how everything connects.** The ER diagram picks up real foreign keys and infers the ones you only expressed through `xxx_id` naming.
+
+![ER diagram of a sample shop schema](docs/screenshots/er-diagram.png)
+
+**Hard to shoot yourself in the foot.** Connections are tagged local / staging / prod, and anything destructive waits for an explicit confirmation.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/new-connection.png" alt="New connection dialog"></td>
+    <td width="50%"><img src="docs/screenshots/destructive-review.png" alt="Destructive statement review"></td>
+  </tr>
+</table>
+
+<sub>Screenshots use a made-up coffee roastery database and were rendered with the headless snapshot mode described under <a href="#headless-screenshots">Development</a>.</sub>
+
 ## Features
 
 - **Connections**: create / edit / delete / test connections with a live connection-string preview; SSL mode (disable / prefer / require / verify-full — for PG and MySQL, "prefer" falls back to plaintext when the server has no TLS); color-coded environments (local / staging / prod); credentials routed by environment — `local` stored in plain text on disk, `staging/prod` in the macOS Keychain; switch databases from the sidebar (reuses the same instance or clones the connection), export / drop a database from its context menu
