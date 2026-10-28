@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datum</title>
+<meta name="description" content="A native desktop database client for PostgreSQL, MySQL, SQLite, Redis and MongoDB on macOS. Free and open source.">
+<meta property="og:title" content="Datum">
+<meta property="og:description" content="A native desktop database client for PostgreSQL, MySQL, SQLite, Redis and MongoDB.">
+<meta property="og:image" content="https://wenlingang.github.io/datum/screenshots/table.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F3F4F8;
+  --surface: #FFFFFF;
+  --raised: #EBECF3;
+  --ink: #171A2B;
+  --muted: #5B6078;
+  --line: #D9DBE6;
+  --accent: #6B4EFF;
+  --accent-ink: #FFFFFF;
+  --type: #0E8F8A;
+  --local: #0E9F9A;
+  --staging: #B7790B;
+  --prod: #D6455D;
+  --null: #9CA0B4;
+  --sel: #ECE8FF;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10121F;
+    --surface: #171A2B;
+    --raised: #1E2236;
+    --ink: #E8E9F2;
+    --muted: #9A9FB8;
+    --line: #2A2F47;
+    --accent: #8C76FF;
+    --type: #3CC9C2;
+    --local: #3CC9C2;
+    --staging: #E2A93B;
+    --prod: #F0687E;
+    --null: #5E6380;
+    --sel: #2A2550;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10121F;
+  --surface: #171A2B;
+  --raised: #1E2236;
+  --ink: #E8E9F2;
+  --muted: #9A9FB8;
+  --line: #2A2F47;
+  --accent: #8C76FF;
+  --type: #3CC9C2;
+  --local: #3CC9C2;
+  --staging: #E2A93B;
+  --prod: #F0687E;
+  --null: #5E6380;
+  --sel: #2A2550;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Familjen Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.55;
+}
+html[data-lang="en"] [lang="zh-CN"], html[data-lang="zh-CN"] [lang="en"] { display: none; }
+img { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; padding-top: 20px; padding-bottom: 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 21px; text-decoration: none; }
+.brand img { width: 34px; height: 34px; border-radius: 8px; }
+.top nav { display: flex; align-items: center; gap: 22px; font-size: 16px; }
+.top nav a { text-decoration: none; color: var(--muted); }
+.top nav a:hover { color: var(--ink); }
+.lang {
+  font: inherit; font-size: 15px; color: var(--muted); cursor: pointer;
+  background: none; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px;
+}
+.lang:hover { color: var(--ink); border-color: var(--muted); }
+
+/* Hero */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 56px;
+  align-items: center;
+  padding-top: 48px;
+  padding-bottom: 72px;
+}
+h1 {
+  font-size: clamp(42px, 6.2vw, 76px);
+  line-height: 1.0;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+  margin: 0 0 22px;
+  max-width: 11ch;
+}
+h1[lang="zh-CN"] { font-size: clamp(38px, 4.8vw, 60px); letter-spacing: 0; line-height: 1.15; max-width: 9em; }
+.lede { font-size: 21px; color: var(--muted); max-width: 30em; margin: 0 0 32px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--accent); color: var(--accent-ink);
+  text-decoration: none; font-weight: 600; font-size: 18px;
+  padding: 13px 22px; border-radius: 10px;
+}
+.btn:hover { background: var(--ink); color: var(--bg); }
+.req { font-size: 15px; color: var(--muted); }
+
+/* The query console: the page's one moving part */
+.console {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -36px rgba(23, 26, 43, .45);
+}
+.console-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--raised);
+  font-size: 14px; color: var(--muted);
+}
+.crumb { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--local); flex: none; }
+.crumb b { color: var(--ink); font-weight: 600; }
+.run {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; flex: none;
+  color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px;
+}
+.run:hover { border-color: var(--accent); }
+.run kbd { font-family: inherit; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.editor {
+  margin: 0; padding: 18px 20px; min-height: 108px;
+  font: 15px/1.7 "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap; border-bottom: 1px solid var(--line);
+}
+.editor .kw { color: var(--accent); font-weight: 700; }
+.editor .id { color: var(--ink); }
+.editor .caret { display: inline-block; width: 2px; height: 1.15em; vertical-align: -0.2em; background: var(--accent); margin-left: 1px; }
+.grid { width: 100%; border-collapse: collapse; font-size: 15px; }
+.grid th, .grid td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.grid th { font-weight: 600; vertical-align: bottom; }
+.grid th small { display: block; font: 500 11.5px "JetBrains Mono", ui-monospace, monospace; color: var(--type); }
+.grid td.n { text-align: right; color: var(--muted); width: 1%; }
+.grid td.null { color: var(--null); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+.grid tbody tr:hover td { background: var(--sel); }
+.js .grid tbody tr { opacity: 0; }
+.js .console.done .grid tbody tr { opacity: 1; transition: opacity .18s ease; }
+.js .console.done .grid tbody tr:nth-child(2) { transition-delay: .05s; }
+.js .console.done .grid tbody tr:nth-child(3) { transition-delay: .1s; }
+.js .console.done .grid tbody tr:nth-child(4) { transition-delay: .15s; }
+.js .console.done .grid tbody tr:nth-child(5) { transition-delay: .2s; }
+.status { display: flex; justify-content: space-between; gap: 12px; padding: 9px 16px; font-size: 13.5px; color: var(--muted); background: var(--raised); }
+.status b { color: var(--ink); font-weight: 600; }
+.js .status .took { visibility: hidden; }
+.js .console.done .status .took { visibility: visible; }
+
+/* Sections */
+section.block { border-top: 1px solid var(--line); padding: 88px 0; }
+h2 {
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.08; letter-spacing: -0.02em; font-weight: 700;
+  margin: 0 0 18px; max-width: 18ch;
+}
+h2[lang="zh-CN"] { letter-spacing: 0; max-width: 14em; }
+h3 { font-size: 21px; line-height: 1.3; margin: 0 0 8px; font-weight: 600; }
+p { margin: 0 0 16px; max-width: 36em; }
+.muted { color: var(--muted); }
+kbd {
+  font-family: inherit; font-size: .88em; font-weight: 500;
+  display: inline-block; min-width: 1.6em; text-align: center;
+  padding: 0 6px; border-radius: 5px;
+  background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px;
+}
+code {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: .84em;
+  background: var(--surface); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere;
+}
+
+.scene { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+.scene + .scene { margin-top: 96px; }
+.scene.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
+.scene.flip > :first-child { order: 2; }
+.shot { border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+
+/* Environment tags, as they look in the app */
+.envs { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 20px; }
+.env {
+  font-size: 14px; font-weight: 600; padding: 2px 11px; border-radius: 999px;
+  border: 1.5px solid currentColor;
+}
+.env.local { color: var(--local); }
+.env.staging { color: var(--staging); }
+.env.prod { color: var(--prod); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; margin-top: 96px; }
+.facts p { font-size: 17px; color: var(--muted); margin: 0; }
+
+.steps { list-style: none; padding: 0; margin: 40px 0 0; counter-reset: step; display: grid; gap: 30px; max-width: 760px; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 48px 1fr; gap: 16px; }
+.steps > li::before {
+  content: counter(step);
+  width: 38px; height: 38px; border-radius: 9px;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 18px;
+  background: var(--ink); color: var(--bg);
+}
+.steps p { margin: 0 0 8px; }
+.steps ul { margin: 6px 0 0; padding-left: 20px; color: var(--muted); }
+
+footer { border-top: 1px solid var(--line); padding: 40px 0 56px; font-size: 15px; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+footer a { color: var(--ink); }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; padding-top: 28px; gap: 40px; }
+  .scene, .scene.flip { grid-template-columns: 1fr; gap: 28px; }
+  .scene.flip > :first-child { order: 0; }
+  .facts { grid-template-columns: 1fr; gap: 28px; margin-top: 72px; }
+  section.block { padding: 64px 0; }
+}
+@media (max-width: 560px) {
+  body { font-size: 17px; }
+  .wrap { padding: 0 16px; }
+  .top nav { gap: 14px; }
+  .top nav .opt { display: none; }
+  .lede { font-size: 19px; }
+  .editor { font-size: 13.5px; padding: 14px 16px; }
+  .grid { font-size: 14px; }
+  .grid th, .grid td { padding: 8px 10px; }
+  .grid .wide { display: none; }
+  .pair { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .console.done .grid tbody tr { transition: none; }
+}
+</style>
+</head>
+<body>
+<script>
+document.documentElement.classList.add("js");
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem("datum-site-lang"); } catch (e) {}
+  var lang = saved || (/^zh/i.test(navigator.language || "") ? "zh-CN" : "en");
+  document.documentElement.setAttribute("data-lang", lang);
+  document.documentElement.lang = lang;
+})();
+</script>
+
+<header class="wrap top">
+  <a class="brand" href="./"><img src="icon.png" alt="" width="34" height="34">Datum</a>
+  <nav aria-label="Main">
+    <a class="opt" href="#install"><span lang="en">Install</span><span lang="zh-CN">安装</span></a>
+    <a href="https://github.com/wenlingang/datum">GitHub</a>
+    <button class="lang" id="lang" type="button"><span lang="en">中文</span><span lang="zh-CN">English</span></button>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1 lang="en">Your databases, one quiet window.</h1>
+      <h1 lang="zh-CN">所有数据库，一个安静的窗口。</h1>
+      <p class="lede" lang="en">Datum is a native Mac client for PostgreSQL, MySQL, SQLite, Redis and MongoDB. Write SQL with completion that knows your schema, browse and edit tables, and see how everything connects.</p>
+      <p class="lede" lang="zh-CN">Datum 是一款原生 Mac 数据库客户端，支持 PostgreSQL、MySQL、SQLite、Redis 与 MongoDB。补全懂你的表结构，浏览、编辑表格，一眼看清表之间的关系。</p>
+      <div class="actions">
+        <a class="btn" href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg"><span lang="en">Download for Mac</span><span lang="zh-CN">下载 Mac 版</span></a>
+        <span class="req"><span id="ver"><span lang="en">Free and open source</span><span lang="zh-CN">免费开源</span></span>, <span lang="en">macOS 10.15 or later</span><span lang="zh-CN">macOS 10.15 及以上</span></span>
+      </div>
+    </div>
+
+    <div class="console" id="console" aria-label="Example query and its result">
+      <div class="console-bar">
+        <span class="crumb"><span class="dot"></span><b>datum</b><span class="mono">/ supported</span></span>
+        <button class="run" id="run" type="button"><span lang="en">Run</span><span lang="zh-CN">运行</span><kbd>⌘↵</kbd></button>
+      </div>
+      <pre class="editor" id="editor"><span class="kw">SELECT</span> engine, speaks, extras
+<span class="kw">FROM</span> supported
+<span class="kw">ORDER BY</span> engine;</pre>
+      <table class="grid">
+        <thead>
+          <tr>
+            <th></th>
+            <th>engine<small>text</small></th>
+            <th>speaks<small>text</small></th>
+            <th class="wide">extras<small>text</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">1</td><td>MongoDB</td><td class="mono">mongosh</td><td class="wide"><span lang="en">aggregate, BSON-safe edits</span><span lang="zh-CN">聚合、BSON 类型不丢</span></td></tr>
+          <tr><td class="n">2</td><td>MySQL</td><td class="mono">SQL</td><td class="wide">ER, Explain, TLS</td></tr>
+          <tr><td class="n">3</td><td>PostgreSQL</td><td class="mono">SQL</td><td class="wide">ER, Explain, TLS</td></tr>
+          <tr><td class="n">4</td><td>Redis</td><td class="mono"><span lang="en">commands</span><span lang="zh-CN">命令</span></td><td class="wide"><span lang="en">TTL, typed values</span><span lang="zh-CN">TTL、按类型展示</span></td></tr>
+          <tr><td class="n">5</td><td>SQLite</td><td class="mono">SQL</td><td class="null wide">NULL</td></tr>
+        </tbody>
+      </table>
+      <div class="status">
+        <span><span class="dot" style="display:inline-block;margin-right:6px"></span><span lang="en">Connected</span><span lang="zh-CN">已连接</span></span>
+        <span class="took"><b>5</b> <span lang="en">rows</span><span lang="zh-CN">行</span>, <span lang="en">in</span><span lang="zh-CN">耗时</span> <span class="mono">12 ms</span></span>
+      </div>
+    </div>
+  </div>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="scene">
+        <div>
+          <h2 lang="en">Write SQL the way you think.</h2>
+          <h2 lang="zh-CN">按你的思路写 SQL。</h2>
+          <p lang="en">Completion knows your tables, aliases and columns. Press <kbd>⌘↵</kbd> to run just the statement under the cursor, format with one key, and keep a history per database.</p>
+          <p lang="zh-CN">补全认识你的表、别名和列。按 <kbd>⌘↵</kbd> 只执行光标所在的那条语句，一键格式化，每个数据库都有自己的查询历史。</p>
+          <p class="muted" lang="en">Results page on the server, so a big table opens as fast as a small one.</p>
+          <p class="muted" lang="zh-CN">结果在服务端分页，大表和小表打开一样快。</p>
+        </div>
+        <img class="shot" src="screenshots/sql-editor.png" width="1600" height="1025" loading="lazy" alt="The SQL editor with an aggregate query and its results">
+      </div>
+
+      <div class="scene flip">
+        <div>
+          <h2 lang="en">Edit rows, then commit once.</h2>
+          <h2 lang="zh-CN">先改，再一次提交。</h2>
+          <p lang="en">Change cells and delete rows right in the grid. Nothing touches the database until you press <kbd>⌘S</kbd>, and then everything goes in a single transaction.</p>
+          <p lang="zh-CN">直接在表格里改单元格、删行。按下 <kbd>⌘S</kbd> 之前不会动数据库，提交时所有改动放在同一个事务里。</p>
+          <p class="muted" lang="en">Filter with AND / OR, open any cell in full with JSON formatted, and export to CSV, SQL or Markdown.</p>
+          <p class="muted" lang="zh-CN">支持 AND / OR 筛选，单元格可展开查看完整内容并自动格式化 JSON，可导出 CSV、SQL、Markdown。</p>
+        </div>
+        <img class="shot" src="screenshots/table.png" width="1600" height="1025" loading="lazy" alt="Browsing a table with the row details panel open">
+      </div>
+
+      <div class="scene">
+        <div>
+          <h2 lang="en">See how everything connects.</h2>
+          <h2 lang="zh-CN">一眼看清表之间的关系。</h2>
+          <p lang="en">The ER diagram reads real foreign keys and infers the ones you only expressed by naming a column <code>customer_id</code>.</p>
+          <p lang="zh-CN">ER 图既读取真实外键，也能从 <code>customer_id</code> 这样的列名推断出逻辑关系。</p>
+          <p class="muted" lang="en">Drag, zoom, search, and export it as a PNG.</p>
+          <p class="muted" lang="zh-CN">可拖拽、缩放、搜索，并导出为 PNG。</p>
+        </div>
+        <img class="shot" src="screenshots/er-diagram.png" width="1600" height="1025" loading="lazy" alt="ER diagram of a sample shop schema">
+      </div>
+
+      <div class="scene flip">
+        <div>
+          <h2 lang="en">MongoDB, the way you already query it.</h2>
+          <h2 lang="zh-CN">用你熟悉的方式查 MongoDB。</h2>
+          <p lang="en">Page through a collection with Filter, Sort and Projection, switch between a table and JSON, and edit whole documents without types quietly changing.</p>
+          <p lang="zh-CN">用 Filter、Sort、Projection 翻阅集合，在表格和 JSON 之间切换，编辑整篇文档时类型不会悄悄改变。</p>
+          <p class="muted" lang="en">The query tab speaks a mongosh subset: <code>find</code>, <code>aggregate</code>, <code>updateMany</code> and friends.</p>
+          <p class="muted" lang="zh-CN">查询页支持 mongosh 子集：<code>find</code>、<code>aggregate</code>、<code>updateMany</code> 等。</p>
+        </div>
+        <img class="shot" src="screenshots/mongo-collection.png" width="1600" height="1025" loading="lazy" alt="A MongoDB collection filtered and sorted, with the document details panel">
+      </div>
+
+      <div class="scene">
+        <div>
+          <h2 lang="en">Hard to shoot yourself in the foot.</h2>
+          <h2 lang="zh-CN">不容易误操作。</h2>
+          <div class="envs" aria-hidden="true">
+            <span class="env local">local</span><span class="env staging">staging</span><span class="env prod">prod</span>
+          </div>
+          <p lang="en">Every connection carries its environment's color. <code>DROP</code>, <code>TRUNCATE</code>, or a <code>DELETE</code> without <code>WHERE</code> waits for you to confirm, and read-only connections are enforced by the database itself.</p>
+          <p lang="zh-CN">每个连接都带着所属环境的颜色。<code>DROP</code>、<code>TRUNCATE</code>、不带 <code>WHERE</code> 的 <code>DELETE</code> 都要你确认后才执行，只读连接由数据库本身强制保证。</p>
+          <p class="muted" lang="en">Passwords for staging and prod live in the macOS Keychain.</p>
+          <p class="muted" lang="zh-CN">staging 与 prod 的密码存放在 macOS 钥匙串里。</p>
+        </div>
+        <div class="pair">
+          <img class="shot" src="screenshots/new-connection.png" width="1000" height="864" loading="lazy" alt="The new connection dialog">
+          <img class="shot" src="screenshots/destructive-review.png" width="1000" height="413" loading="lazy" alt="Review of a destructive statement before it runs">
+        </div>
+      </div>
+
+      <div class="facts">
+        <div>
+          <h3 lang="en">An assistant that knows your schema</h3>
+          <h3 lang="zh-CN">懂表结构的 AI 助手</h3>
+          <p lang="en">OpenAI-compatible, Anthropic and Gemini providers. It sees your table schemas, and the SQL it writes waits for you to run it.</p>
+          <p lang="zh-CN">支持 OpenAI 兼容、Anthropic、Gemini 等服务商。它能看到你的表结构，生成的 SQL 由你确认后再执行。</p>
+        </div>
+        <div>
+          <h3 lang="en">Redis without the guesswork</h3>
+          <h3 lang="zh-CN">Redis 也顺手</h3>
+          <p lang="en">Browse keys, view values by type, check TTL and size, and run any command with completion. <code>FLUSHALL</code> asks first.</p>
+          <p lang="zh-CN">浏览键，按类型查看值，查看 TTL 与大小，带补全执行任意命令。<code>FLUSHALL</code> 会先问你。</p>
+        </div>
+        <div>
+          <h3 lang="en">Native, light and dark</h3>
+          <h3 lang="zh-CN">原生，浅色深色都好看</h3>
+          <p lang="en">Built in Rust on GPUI Kit, with no WebView. English, Simplified and Traditional Chinese, following your system.</p>
+          <p lang="zh-CN">基于 GPUI Kit 用 Rust 原生实现，没有 WebView。支持英文、简体中文、繁体中文，默认跟随系统。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <h2 lang="en">Install</h2>
+      <h2 lang="zh-CN">安装</h2>
+      <p class="muted" lang="en">Universal build for Apple Silicon and Intel Macs.</p>
+      <p class="muted" lang="zh-CN">通用包，Apple Silicon 与 Intel 芯片的 Mac 都能用。</p>
+      <ol class="steps">
+        <li>
+          <div>
+            <p lang="en"><a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">Download Datum.dmg</a>, open it and drag Datum into Applications. Don't run it from inside the dmg.</p>
+            <p lang="zh-CN"><a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">下载 Datum.dmg</a>，打开后把 Datum 拖进「应用程序」。不要直接在 dmg 里运行。</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <p lang="en">Datum isn't notarized by Apple, so macOS blocks the first launch. Allow it either way:</p>
+            <p lang="zh-CN">Datum 没有经过苹果公证，第一次打开会被系统拦截。任选一种方式放行：</p>
+            <ul lang="en">
+              <li>System Settings › Privacy &amp; Security, then <strong>Open Anyway</strong> at the bottom</li>
+              <li>or before opening the dmg, run <code>xattr -d com.apple.quarantine ~/Downloads/Datum.dmg</code></li>
+            </ul>
+            <ul lang="zh-CN">
+              <li>打开「系统设置 › 隐私与安全性」，在页面底部点<strong>仍要打开</strong></li>
+              <li>或在打开 dmg 之前执行 <code>xattr -d com.apple.quarantine ~/Downloads/Datum.dmg</code></li>
+            </ul>
+          </div>
+        </li>
+        <li>
+          <div>
+            <p lang="en">Add a connection and start querying. Later versions install themselves from Settings › About.</p>
+            <p lang="zh-CN">新建一个连接就能开始查询。之后的新版本可以在「设置 › 关于」里一键安装。</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span lang="en">Built with <a href="https://github.com/longbridge/gpui-kit">GPUI Kit</a>. Screenshots use a made-up coffee roastery database.</span>
+    <span lang="zh-CN">基于 <a href="https://github.com/longbridge/gpui-kit">GPUI Kit</a> 构建。截图使用的是虚构的咖啡烘焙店数据库。</span>
+    <span><a href="https://github.com/wenlingang/datum">Source</a> &nbsp; <a href="https://github.com/wenlingang/datum/releases">Releases</a></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var consoleEl = document.getElementById("console");
+  var editor = document.getElementById("editor");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var source = editor.innerHTML;
+  var plain = editor.textContent;
+  var timer = 0;
+
+  // Re-highlight the typed prefix with the same keyword spans as the finished query.
+  var KW = /\b(SELECT|FROM|ORDER BY)\b/g;
+  function render(text, caret) {
+    var html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(KW, '<span class="kw">$1</span>');
+    editor.innerHTML = html + (caret ? '<span class="caret"></span>' : "");
+  }
+
+  function run() {
+    clearTimeout(timer);
+    consoleEl.classList.remove("done");
+    if (reduce) { editor.innerHTML = source; consoleEl.classList.add("done"); return; }
+    var i = 0;
+    (function type() {
+      i += 1;
+      render(plain.slice(0, i), true);
+      if (i < plain.length) {
+        timer = setTimeout(type, plain[i - 1] === "\n" ? 160 : 28);
+      } else {
+        timer = setTimeout(function () { editor.innerHTML = source; consoleEl.classList.add("done"); }, 260);
+      }
+    })();
+  }
+
+  document.getElementById("run").addEventListener("click", run);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); }
+  });
+
+  if ("IntersectionObserver" in window) {
+    var seen = false;
+    new IntersectionObserver(function (entries, obs) {
+      if (!seen && entries[0].isIntersecting) { seen = true; obs.disconnect(); run(); }
+    }, { threshold: 0.4 }).observe(consoleEl);
+  } else {
+    run();
+  }
+
+  document.getElementById("lang").addEventListener("click", function () {
+    var next = root.getAttribute("data-lang") === "zh-CN" ? "en" : "zh-CN";
+    root.setAttribute("data-lang", next);
+    root.lang = next;
+    try { localStorage.setItem("datum-site-lang", next); } catch (e) {}
+  });
+
+  fetch("https://api.github.com/repos/wenlingang/datum/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.tag_name) return;
+      var v = d.tag_name.replace(/^v/, "");
+      document.getElementById("ver").innerHTML = '<span lang="en">Version ' + v + '</span><span lang="zh-CN">版本 ' + v + "</span>";
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>
