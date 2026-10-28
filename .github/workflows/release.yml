@@ -1,33 +1,22 @@
-# 发版:推送 v* 标签(如 v0.0.1)后自动 测试 → 构建 → 签名 →(可选)公证 → 建 Release。
+# 发版:推送 v* 附注标签(如 v0.0.1)后自动 校验版本 → 测试 → 构建 → 签名打包 → 建 Release。
 #
 # 标签必须与 Cargo.toml 的 version 一致;附注标签(git tag -a)的说明会作为更新说明,
-# 显示在应用「关于与更新」里。Release 附件:dmg、自更新 zip、latest.json
-# (应用通过 releases/latest/download/latest.json 检查更新)。
+# 显示在应用「关于与更新」里。带 `-` 的版本(如 v0.1.0-rc1)发为预发布,不会成为
+# releases/latest,已安装的应用不会更新到它。
+# Release 附件:Datum-<版本>.dmg(及 .sha256)、Datum.dmg(固定名,下载链接不过期)、
+# latest.json(应用通过 releases/latest/download/latest.json 检查更新)。
 #
-# 仓库 Settings → Secrets and variables → Actions:
-#   UPDATE_SIGNING_KEY    必需。更新包 Ed25519 私钥(datum-sign keygen 生成的 64 位十六进制)
-#   MACOS_CERT_P12        代码签名证书(含私钥)导出的 .p12,base64 编码。可用自签名证书
-#                         (签名身份固定,钥匙串授权更新后保留)或 Developer ID 证书(可公证)。
-#                         不配置则 ad-hoc 签名(每次更新钥匙串都会重新弹授权)
-#   以下可选:
-#   MACOS_CERT_PASSWORD   导出 .p12 时设置的密码
-#   NOTARY_API_KEY        App Store Connect API Key(.p8 文件全文)
-#   NOTARY_KEY_ID         该 API Key 的 Key ID
-#   NOTARY_ISSUER         该 API Key 的 Issuer ID
+# 手动运行(Actions › Release › Run workflow)只打包不发布,产物作为 artifact 供下载试装。
+#
+# 仓库 Settings → Secrets and variables → Actions(由 script/release-cert.sh 一次性生成):
+#   RELEASE_CERT_P12       自签名发版证书 "Datum Release" 的 .p12,base64 编码
+#   RELEASE_CERT_PASSWORD  该 .p12 的密码
 name: Release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "要发布的已存在标签,如 v0.0.1"
-        required: true
-      universal:
-        description: "构建 Apple Silicon + Intel 通用包"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -40,110 +29,55 @@ jobs:
   release:
     runs-on: macos-14
     timeout-minutes: 90
-    env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
-      UNIVERSAL: ${{ github.event.inputs.universal || 'false' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
-          fetch-depth: 0
-
-      - name: 校验标签与版本号一致
-        run: |
-          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
-          if [[ "$TAG" != "v$VERSION" ]]; then
-            echo "::error::标签 $TAG 与 Cargo.toml 版本 $VERSION 不一致"
-            exit 1
-          fi
-          # 附注标签的说明作为更新说明;轻量标签退回默认文案。
-          # 分隔符随机生成,防止说明里恰好出现分隔符行而向后续步骤注入环境变量。
-          NOTES="$(git tag -l --format='%(contents)' "$TAG" | sed '/^-----BEGIN PGP/,$d')"
-          DELIM="NOTES_$(uuidgen)"
-          {
-            echo "NOTES<<$DELIM"
-            echo "${NOTES:-Datum $VERSION}"
-            echo "$DELIM"
-          } >> "$GITHUB_ENV"
-
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ github.event.inputs.universal == 'true' && 'aarch64-apple-darwin,x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
-
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
-
-      - name: 测试
-        run: cargo test --workspace
-
-      - name: 导入签名证书到临时钥匙串(未配置则跳过,改用 ad-hoc 签名)
-        env:
-          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      - name: 校验标签与版本号一致
+        if: startsWith(github.ref, 'refs/tags/')
+        run: script/check-version.sh "$GITHUB_REF_NAME"
+      - run: cargo test --workspace --locked
+      # 证书进入 runner 之前先把所有东西编译好:crates.io 的 build script 和过程宏
+      # 绝不能在发版私钥已解锁时运行。下面 package.sh 里的 cargo build 只是命中缓存。
+      - name: 构建(导入证书之前)
         run: |
-          if [[ -z "$MACOS_CERT_P12" ]]; then
-            echo "未配置 MACOS_CERT_P12,使用 ad-hoc 签名"
-            exit 0
-          fi
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          KEYCHAIN_PW="$(uuidgen)"
-          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" \
-            -A -t cert -f pkcs12 -k "$KEYCHAIN"
-          rm -f "$RUNNER_TEMP/cert.p12"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
-          # 把临时钥匙串加入搜索列表(保留原有项),codesign 才能找到证书
-          EXISTING=()
-          while IFS= read -r k; do
-            k="${k#"${k%%[![:space:]]*}"}"; k="${k#\"}"; k="${k%\"}"
-            [[ -n "$k" ]] && EXISTING+=("$k")
-          done < <(security list-keychains -d user)
-          security list-keychains -d user -s "$KEYCHAIN" "${EXISTING[@]}"
-          # 不加 -v:自签名证书不受系统信任,-v 会把它过滤掉,但 codesign 仍可用它签名
-          IDENTITY="$(security find-identity -p codesigning "$KEYCHAIN" \
-            | sed -n 's/^ *[0-9]*) [0-9A-F]* "\(.*\)".*/\1/p' | head -1)"
-          if [[ -z "$IDENTITY" ]]; then
-            echo "::error::证书里没有可用于代码签名的身份"
-            exit 1
-          fi
-          echo "签名身份:$IDENTITY"
-          echo "DATUM_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo "SIGN_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
-
-      - name: 写入公证 API Key(未配置则跳过公证)
+          cargo build --release --locked -p datum --target aarch64-apple-darwin
+          cargo build --release --locked -p datum --target x86_64-apple-darwin
+      - name: 导入签名证书
         env:
-          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
-        run: |
-          if [[ -z "$NOTARY_API_KEY" ]]; then
-            echo "未配置 NOTARY_API_KEY,不公证"
-            exit 0
-          fi
-          KEY_PATH="$RUNNER_TEMP/notary_key.p8"
-          printf '%s' "$NOTARY_API_KEY" > "$KEY_PATH"
-          echo "NOTARY_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
-
-      - name: 构建、签名、公证并发布
+          P12: ${{ secrets.RELEASE_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.RELEASE_CERT_PASSWORD }}
+        run: script/ci-import-cert.sh
+      - name: 打包
+        run: script/package.sh
+      - name: 上传试装产物
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: datum-dmg
+          path: target/release-dist/Datum-*.dmg*
+      - name: 创建 GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
-          DATUM_UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
-          RELEASE_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ -z "$DATUM_UPDATE_SIGNING_KEY" ]]; then
-            echo "::error::未配置 UPDATE_SIGNING_KEY,无法给更新包签名"
-            exit 1
-          fi
-          ARGS=(--notes "$NOTES" --publish)
-          [[ "$UNIVERSAL" == "true" ]] && ARGS=(--universal "${ARGS[@]}")
-          # 有证书但没配公证凭据:只签名不公证
-          [[ -z "${NOTARY_KEY_PATH:-}" ]] && ARGS+=(--skip-notarize)
-          script/release-macos.sh "${ARGS[@]}"
-
-      - name: 清理钥匙串与密钥
+          version=$(script/app-version.sh)
+          dmg="target/release-dist/Datum-$version.dmg"
+          sha=$(cut -d' ' -f1 "$dmg.sha256")
+          script/release-notes.sh "$version" "$sha" > "$RUNNER_TEMP/notes.md"
+          # 附注标签的说明就是应用内更新对话框里显示的更新说明
+          git fetch --force --depth=1 origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d' > "$RUNNER_TEMP/update-notes.txt"
+          script/update-manifest.sh "$version" "$sha" "$(stat -f %z "$dmg")" "$RUNNER_TEMP/update-notes.txt" > "$RUNNER_TEMP/latest.json"
+          # 预发布(vX.Y.Z-rc1)不能成为 releases/latest,所有已安装的应用都会更新到 latest
+          prerelease=()
+          [[ $version == *-* ]] && prerelease=(--prerelease)
+          # 不带版本号的副本:releases/latest/download/Datum.dmg 是永不过期的下载链接
+          cp "$dmg" "$RUNNER_TEMP/Datum.dmg"
+          gh release create "$GITHUB_REF_NAME" "$dmg" "$dmg.sha256" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/Datum.dmg" \
+            --title "Datum $version" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes "${prerelease[@]}"
+      - name: 删除临时钥匙串
         if: always()
-        run: |
-          [[ -n "${SIGN_KEYCHAIN:-}" ]] && security delete-keychain "$SIGN_KEYCHAIN" || true
-          rm -f "$RUNNER_TEMP/notary_key.p8"
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true

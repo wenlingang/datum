@@ -689,18 +689,12 @@ impl UpdateStore {
         let UpdateStatus::Available(m) = &self.status else {
             return;
         };
-        let sha256 = m.sha256.clone();
-        let signature = m.signature.clone();
-        let Some(zip) = m.zip_url.clone() else {
-            // 旧清单没有 zip 包:退回浏览器下载 dmg
-            cx.open_url(&m.url);
-            return;
-        };
+        let m = m.clone();
         self.status = UpdateStatus::Downloading(None);
         cx.notify();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ProgressEvent>();
         let done = runtime::spawn(async move {
-            update::download_and_install(zip, sha256, signature, move |e| {
+            update::download_and_install(m, move |e| {
                 let _ = tx.send(e);
             })
             .await

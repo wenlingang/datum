@@ -24,7 +24,6 @@ regex = "1"
 sqlformat = "0.5"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-ed25519-dalek = "2"
 rust-i18n = "4"
 tokio-postgres-rustls = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }

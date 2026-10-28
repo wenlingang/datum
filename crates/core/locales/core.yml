@@ -258,10 +258,6 @@ core:
       zh-CN: "%{kind} 过程调用"
       zh-TW: "%{kind} 程序呼叫"
   update:
-    invalid_private_key:
-      en: Invalid private key (expected 64 hex characters)
-      zh-CN: 私钥格式不对(应为 64 位十六进制)
-      zh-TW: 私密金鑰格式錯誤(應為 64 位十六進位)
     in_progress:
       en: An update is already in progress
       zh-CN: 更新已在进行中
@@ -298,38 +294,30 @@ core:
       en: Update package checksum mismatch (SHA-256); installation refused
       zh-CN: 更新包校验失败(SHA-256 不一致),已拒绝安装
       zh-TW: 更新檔驗證失敗(SHA-256 不一致),已拒絕安裝
-    read_package_failed:
-      en: "Failed to read update package: %{error}"
-      zh-CN: "读取更新包失败: %{error}"
-      zh-TW: "讀取更新檔失敗: %{error}"
-    signature_failed:
-      en: Update package signature verification failed; installation refused
-      zh-CN: 更新包签名校验失败,已拒绝安装
-      zh-TW: 更新檔簽章驗證失敗,已拒絕安裝
-    create_extract_dir_failed:
-      en: "Failed to create extraction directory: %{error}"
-      zh-CN: "创建解压目录失败: %{error}"
-      zh-TW: "建立解壓縮目錄失敗: %{error}"
     app_not_found:
-      en: No .app found in update package
-      zh-CN: 更新包中未找到 .app
-      zh-TW: 更新檔中找不到 .app
+      en: No Datum.app found in the update package
+      zh-CN: 更新包中未找到 Datum.app
+      zh-TW: 更新檔中找不到 Datum.app
     digest_failed:
       en: Failed to compute update package checksum
       zh-CN: 计算更新包摘要失败
       zh-TW: 計算更新檔摘要失敗
-    bundle_id_mismatch:
-      en: Update package bundle ID does not match this app; installation refused
-      zh-CN: 更新包的应用标识与当前应用不一致,已拒绝安装
-      zh-TW: 更新檔的應用程式識別碼與目前的應用程式不符,已拒絕安裝
     codesign_invalid:
-      en: Update package signature is invalid or has been tampered with; installation refused
-      zh-CN: 更新包签名无效或已被篡改,已拒绝安装
-      zh-TW: 更新檔簽章無效或已遭竄改,已拒絕安裝
-    different_developer:
-      en: Update package is not signed by the same developer; installation refused
-      zh-CN: 更新包不是由同一开发者签名,已拒绝安装
-      zh-TW: 更新檔並非由同一開發者簽署,已拒絕安裝
+      en: Update package is not signed with the release certificate, or has been tampered with; installation refused
+      zh-CN: 更新包不是用发版证书签名的,或已被篡改,已拒绝安装
+      zh-TW: 更新檔不是以發行憑證簽署,或已遭竄改,已拒絕安裝
+    unsigned:
+      en: This copy of Datum is not signed with the release certificate (e.g. a local build), so updates cannot be verified. Download the new version from the Releases page
+      zh-CN: 当前应用不是用发版证书签名的(如本机自打包),无法校验更新包。请到 Releases 页面下载新版
+      zh-TW: 目前的應用程式不是以發行憑證簽署(例如本機自行打包),無法驗證更新檔。請至 Releases 頁面下載新版
+    version_mismatch:
+      en: "Update package contains version %{found}, expected %{expected}; installation refused"
+      zh-CN: "更新包里的版本是 %{found},应为 %{expected},已拒绝安装"
+      zh-TW: "更新檔內的版本為 %{found},應為 %{expected},已拒絕安裝"
+    replace_failed:
+      en: "Failed to replace %{path}: %{error}"
+      zh-CN: "替换 %{path} 失败: %{error}"
+      zh-TW: "取代 %{path} 失敗: %{error}"
     invalid_path:
       en: "Path contains invalid characters: %{path}"
       zh-CN: "路径包含非法字符: %{path}"

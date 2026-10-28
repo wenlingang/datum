@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 构建 Datum.app(未签名,本机自测用)。正式发布用 release-macos.sh。
+# 构建 Datum.app(未签名,本机自测用)。正式发布用 package.sh(会调用本脚本)。
 #
 # 用法:script/bundle-macos.sh [--universal]
 # 产物:target/bundle/Datum.app
@@ -18,15 +18,15 @@ APP="$OUT/Datum.app"
 
 if [[ "${1:-}" == "--universal" ]]; then
   rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
-  cargo build --release --target aarch64-apple-darwin -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
-  cargo build --release --target x86_64-apple-darwin -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
+  cargo build --release --locked --target aarch64-apple-darwin -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
+  cargo build --release --locked --target x86_64-apple-darwin -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
   BIN_TMP="$(mktemp -d)/datum"
   lipo -create -output "$BIN_TMP" \
     target/aarch64-apple-darwin/release/datum \
     target/x86_64-apple-darwin/release/datum
   BIN="$BIN_TMP"
 else
-  cargo build --release -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
+  cargo build --release --locked -p datum ${BUNDLE_FEATURES:+--features "$BUNDLE_FEATURES"}
   BIN="target/release/datum"
 fi
 

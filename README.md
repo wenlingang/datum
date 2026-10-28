@@ -55,14 +55,14 @@ and the data layer reuses the Rust backend of the original Tauri version — no 
 
 ## Install
 
-Download `Datum_<version>_aarch64.dmg` from [Releases](https://github.com/wenlingang/datum/releases) and drag Datum into Applications.
+Download `Datum-<version>.dmg` (universal: Apple Silicon + Intel) from [Releases](https://github.com/wenlingang/datum/releases) and drag Datum into Applications.
 
 Datum is not notarized by Apple yet, so macOS blocks it on first launch. Allow it once using either method (in-app updates are not affected afterwards):
 
 - Open "System Settings → Privacy & Security", find the Datum notice near the bottom and click "Open Anyway";
 - Or run `xattr -dr com.apple.quarantine /Applications/Datum.app` in Terminal.
 
-The app then checks for updates automatically. Update packages carry an Ed25519 signature and are installed only if verification passes.
+The app then checks for updates automatically. An update is installed only if it is signed with the same release certificate as the running app.
 
 ## Layout
 
@@ -132,77 +132,54 @@ Set `DATUM_MONGO_AUTH=<port>` as well to run the authentication cases against an
 
 ### Releasing (GitHub Actions)
 
-After bumping and committing the version, push an annotated tag with the same name. The tag message becomes the in-app release notes:
+1. Bump `version` in the workspace `Cargo.toml`, run `cargo check` to update `Cargo.lock`, and commit.
+2. Optional dry run: Actions › Release › Run workflow, then download the `datum-dmg` artifact.
+3. Push an annotated tag with the same name. The tag message becomes the in-app release notes:
 
 ```bash
-# after setting version = 0.0.2 in Cargo.toml and committing
 git tag -a v0.0.2 -m "What changed in this release"
 git push origin v0.0.2
 ```
 
-`.github/workflows/release.yml` runs on macOS: check the tag matches the version → run tests → build → code-sign →
-notarize (when an Apple certificate is configured) → sign the update package → create a Release in this repository (assets: dmg, self-update zip, `latest.json`).
-It can also be run manually from the Actions page (pick an existing tag; optionally build a universal Apple Silicon + Intel package).
+`.github/workflows/release.yml` runs on macOS: check the tag matches the version → run tests → build both architectures
+(before the signing certificate is imported) → sign and package (`script/package.sh`) → verify (`script/verify-package.sh`)
+→ create a Release with `Datum-<version>.dmg`, its `.sha256`, a versionless `Datum.dmg` and `latest.json`.
+A version with a `-` (e.g. `v0.1.0-rc1`) is published as a pre-release, which installed copies never update to.
 
-Configure these under Settings → Secrets and variables → Actions:
+### Release certificate
 
-| Secret | Required | Content |
-| --- | --- | --- |
-| `UPDATE_SIGNING_KEY` | Yes | Private key for signing update packages (see "Keys" below) |
-| `MACOS_CERT_P12` | No | Code-signing certificate (with private key) as .p12, base64-encoded; ad-hoc signing if absent |
-| `MACOS_CERT_PASSWORD` | No | Password of the .p12 above |
-| `NOTARY_API_KEY` / `NOTARY_KEY_ID` / `NOTARY_ISSUER` | No | App Store Connect API key (full .p8, Key ID, Issuer ID); only Developer ID certificates can be notarized |
+Releases are signed with the self-signed certificate "Datum Release", stored in the `RELEASE_CERT_P12` / `RELEASE_CERT_PASSWORD` secrets.
+**Never replace it**: installed copies only accept updates signed with the same certificate, and Keychain "Always Allow" grants
+(staging / prod passwords) are tied to it. `script/release-cert.sha1` pins its SHA-1; packaging fails if the app is signed with any other certificate.
 
-### Keys
-
-**Update signing key** (required). The app embeds the public key (`UPDATE_PUBLIC_KEY` in `crates/core/src/update.rs`) and installs only update packages signed with the matching private key.
-If the private key is lost you can no longer ship updates to existing users — back it up. If it leaks, rotate the key and have users reinstall manually.
+One-time setup:
 
 ```bash
-cargo run -p datum-core --bin datum-sign -- keygen ~/.config/datum/update-signing.key   # prints the public key
-gh secret set UPDATE_SIGNING_KEY < ~/.config/datum/update-signing.key
+script/release-cert.sh        # writes the certificate to ~/datum-release-cert/ and the pin to script/release-cert.sha1
+# back up datum-release.p12 and password.txt, commit script/release-cert.sha1, then:
+gh secret set RELEASE_CERT_P12 < ~/datum-release-cert/datum-release.p12.base64
+gh secret set RELEASE_CERT_PASSWORD < ~/datum-release-cert/password.txt
 ```
-
-**Code-signing certificate** (recommended). Without an Apple Developer account, use a self-signed code-signing certificate: the signing identity stays stable,
-so users' "Always Allow" for Keychain items (staging / prod passwords) survives updates; with ad-hoc signing they must re-authorize after every update.
-
-```bash
-openssl req -x509 -newkey rsa:3072 -nodes -days 3650 -keyout codesign.key -out codesign.crt \
-  -subj "/CN=Datum Self-Signed Code Signing" -addext "basicConstraints=critical,CA:false" \
-  -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=critical,codeSigning"
-openssl pkcs12 -export -legacy -inkey codesign.key -in codesign.crt \
-  -name "Datum Self-Signed Code Signing" -out codesign.p12   # needs OpenSSL 3; -legacy lets macOS import it
-base64 -i codesign.p12 | gh secret set MACOS_CERT_P12
-gh secret set MACOS_CERT_PASSWORD   # enter the password set during export
-```
-
-Once you have an Apple Developer account, replace `MACOS_CERT_P12` with a Developer ID certificate and configure the notarization secrets — users don't need to reinstall.
 
 ### Local packaging and testing
 
 ```bash
-script/bundle-macos.sh               # unsigned Datum.app
-script/bundle-macos.sh --universal   # universal Apple Silicon + Intel package
-script/release-macos.sh              # ad-hoc signing + update signature + latest.json (reads ~/.config/datum/update-signing.key)
-DATUM_SIGN_IDENTITY="…" script/release-macos.sh --notes "…" --publish   # manual release when CI is unavailable
+script/bundle-macos.sh                               # unsigned Datum.app in target/bundle/
+script/bundle-macos.sh --universal                   # universal Apple Silicon + Intel build
+script/package.sh --identity "<your signing identity>"   # signed dmg in target/release-dist/
 ```
 
-Artifacts go to `target/bundle/`. On launch the app silently checks `latest.json` attached to this repository's latest Release
-(`UPDATE_MANIFEST_URL`, see `crates/core/src/update.rs`):
+### In-app updates
 
-```jsonc
-{
-  "version": "0.0.1",
-  "url": "<direct DMG download link>",
-  "zip_url": "<direct .app zip download link>",
-  "sha256": "<SHA-256 of the zip>",
-  "signature": "<Ed25519 signature of the zip>",
-  "notes": "What changed in this release"
-}
+The app silently checks `releases/latest/download/latest.json` (see `crates/core/src/update.rs`), written by `script/update-manifest.sh`:
+
+```json
+{ "version": "0.0.2", "dmg": "Datum-0.0.2.dmg", "sha256": "<SHA-256 of the dmg>", "size": 12345678, "notes": "What changed" }
 ```
 
-In-app updates verify, in order: the SHA-256 matches the manifest, the Ed25519 signature is valid, the new bundle has the same Bundle ID as the running app,
-and — if the running app is Developer ID signed — the new bundle is fully signed by the same developer team. The app is replaced in place only if all checks pass.
+The download URL is derived from the version, not taken from the manifest. Installing an update: download the dmg → check its SHA-256 →
+mount it and copy `Datum.app` next to the running app → verify its signature against the running app's designated requirement
+(which pins the release certificate) → check its version → swap the bundles. Copies that are ad-hoc signed (local builds) cannot self-update.
 
 ## Keyboard shortcuts
 

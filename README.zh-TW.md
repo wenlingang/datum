@@ -55,14 +55,14 @@
 
 ## 安裝
 
-從 [Releases](https://github.com/wenlingang/datum/releases) 下載 `Datum_<版本>_aarch64.dmg`,將 Datum 拖進「應用程式」。
+從 [Releases](https://github.com/wenlingang/datum/releases) 下載 `Datum-<版本>.dmg`(通用套件,Apple Silicon 與 Intel 皆可),將 Datum 拖進「應用程式」。
 
 Datum 目前尚未經過 Apple 公證,第一次開啟會被系統阻擋,任選一種方式放行(只需一次,之後的 App 內更新不受影響):
 
 - 開啟「系統設定 → 隱私權與安全性」,在頁面下方找到 Datum 的提示,點選「強制打開」;
 - 或在終端機執行 `xattr -dr com.apple.quarantine /Applications/Datum.app`。
 
-之後 App 會自動檢查更新。更新套件帶有 Ed25519 簽章,通過驗證才會安裝。
+之後 App 會自動檢查更新。更新套件必須與目前的 App 以同一張發行憑證簽署,才會安裝。
 
 ## 結構
 
@@ -131,77 +131,52 @@ DATUM_MONGO=27017 cargo test -p datum-core --test mongo -- --ignored --test-thre
 
 ### 發版(GitHub Actions)
 
-修改版本號並提交後,推送一個同名的附註標籤即可,說明文字會作為 App 內的更新說明:
+1. 修改工作區 `Cargo.toml` 的 `version`,執行 `cargo check` 更新 `Cargo.lock`,提交。
+2. 可選試跑:Actions › Release › Run workflow,下載產物 `datum-dmg` 試裝。
+3. 推送同名附註標籤,標籤說明就是 App 內顯示的更新說明:
 
 ```bash
-# 將 Cargo.toml 的 version 改為 0.0.2 並提交後
 git tag -a v0.0.2 -m "本次更新內容"
 git push origin v0.0.2
 ```
 
-`.github/workflows/release.yml` 會在 macOS 上依序:檢查標籤與版本號一致 → 執行測試 → 建置 → 程式碼簽署 →
-(有 Apple 憑證時)公證 → 簽署更新套件 → 在本儲存庫建立 Release(附件:dmg、自動更新 zip、`latest.json`)。
-也可以在 Actions 頁面手動執行(選擇既有標籤,可勾選建置 Apple Silicon + Intel 通用套件)。
+`.github/workflows/release.yml` 在 macOS 上執行:檢查標籤與版本一致 → 跑測試 → 建置兩種架構(在匯入簽署憑證之前)
+→ 簽署封裝(`script/package.sh`)→ 驗證(`script/verify-package.sh`)→ 建立 Release,附件為 `Datum-<版本>.dmg`、
+它的 `.sha256`、不帶版本號的 `Datum.dmg` 與 `latest.json`。版本號帶 `-`(如 `v0.1.0-rc1`)時發為預發布,已安裝的 App 不會更新到它。
 
-儲存庫 Settings → Secrets and variables → Actions 需要設定:
+### 發行憑證
 
-| Secret | 必要 | 內容 |
-| --- | --- | --- |
-| `UPDATE_SIGNING_KEY` | 是 | 更新套件簽章私鑰(見下方「金鑰」) |
-| `MACOS_CERT_P12` | 否 | 程式碼簽署憑證(含私鑰)的 .p12,base64 編碼;未設定則使用 ad-hoc 簽署 |
-| `MACOS_CERT_PASSWORD` | 否 | 上述 .p12 的密碼 |
-| `NOTARY_API_KEY` / `NOTARY_KEY_ID` / `NOTARY_ISSUER` | 否 | App Store Connect API Key(.p8 全文、Key ID、Issuer ID),僅 Developer ID 憑證可公證 |
+發版以自簽憑證 "Datum Release" 簽署,存放在 `RELEASE_CERT_P12` / `RELEASE_CERT_PASSWORD` 兩個 secret 中。
+**不要更換它**:已安裝的 App 只接受同一張憑證簽署的更新,鑰匙圈中對 staging / prod 密碼的「永遠允許」授權也綁定在它上面。
+`script/release-cert.sha1` 釘住它的 SHA-1,以其他憑證簽署時封裝直接失敗。
 
-### 金鑰
-
-**更新簽章金鑰**(必要)。App 內建公鑰(`crates/core/src/update.rs` 的 `UPDATE_PUBLIC_KEY`),只安裝以對應私鑰簽章的更新套件。
-私鑰遺失將無法再推送更新給已安裝的使用者,務必備份;外洩則需要更換金鑰並請使用者手動重新安裝。
+一次性設定:
 
 ```bash
-cargo run -p datum-core --bin datum-sign -- keygen ~/.config/datum/update-signing.key   # 輸出公鑰
-gh secret set UPDATE_SIGNING_KEY < ~/.config/datum/update-signing.key
+script/release-cert.sh        # 憑證寫到 ~/datum-release-cert/,指紋寫到 script/release-cert.sha1
+# 備份 datum-release.p12 與 password.txt,提交 script/release-cert.sha1,然後:
+gh secret set RELEASE_CERT_P12 < ~/datum-release-cert/datum-release.p12.base64
+gh secret set RELEASE_CERT_PASSWORD < ~/datum-release-cert/password.txt
 ```
 
-**程式碼簽署憑證**(建議)。沒有 Apple 開發者帳號時,使用自簽的程式碼簽署憑證:簽署身分固定,使用者對鑰匙圈
-(staging / prod 連線的密碼)的「永遠允許」在更新後仍然有效;ad-hoc 簽署則每次更新都要重新授權。
+### 本機封裝與測試
 
 ```bash
-openssl req -x509 -newkey rsa:3072 -nodes -days 3650 -keyout codesign.key -out codesign.crt \
-  -subj "/CN=Datum Self-Signed Code Signing" -addext "basicConstraints=critical,CA:false" \
-  -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=critical,codeSigning"
-openssl pkcs12 -export -legacy -inkey codesign.key -in codesign.crt \
-  -name "Datum Self-Signed Code Signing" -out codesign.p12   # 需 OpenSSL 3;-legacy 讓 macOS 能匯入
-base64 -i codesign.p12 | gh secret set MACOS_CERT_P12
-gh secret set MACOS_CERT_PASSWORD   # 輸入匯出時設定的密碼
+script/bundle-macos.sh                          # 未簽署的 Datum.app,輸出到 target/bundle/
+script/bundle-macos.sh --universal              # Apple Silicon + Intel 通用套件
+script/package.sh --identity "<本機簽署身分>"     # 已簽署的 dmg,輸出到 target/release-dist/
 ```
 
-日後有了 Apple 開發者帳號,將 `MACOS_CERT_P12` 換成 Developer ID 憑證並設定公證 Secrets 即可,使用者無需重新安裝。
+### App 內更新
 
-### 本機封裝與自我測試
+App 會靜默檢查 `releases/latest/download/latest.json`(見 `crates/core/src/update.rs`),由 `script/update-manifest.sh` 產生:
 
-```bash
-script/bundle-macos.sh               # 未簽署的 Datum.app
-script/bundle-macos.sh --universal   # Apple Silicon + Intel 通用套件
-script/release-macos.sh              # ad-hoc 簽署 + 更新簽章 + latest.json(讀取 ~/.config/datum/update-signing.key)
-DATUM_SIGN_IDENTITY="…" script/release-macos.sh --notes "…" --publish   # CI 無法使用時手動發版
+```json
+{ "version": "0.0.2", "dmg": "Datum-0.0.2.dmg", "sha256": "<dmg 的 SHA-256>", "size": 12345678, "notes": "本次更新內容" }
 ```
 
-產出物在 `target/bundle/`。App 啟動後會在背景檢查本儲存庫最新 Release 附件中的 `latest.json`
-(`UPDATE_MANIFEST_URL`,見 `crates/core/src/update.rs`):
-
-```jsonc
-{
-  "version": "0.0.1",
-  "url": "<DMG 下載直接連結>",
-  "zip_url": "<.app zip 下載直接連結>",
-  "sha256": "<zip 的 SHA-256>",
-  "signature": "<zip 的 Ed25519 簽章>",
-  "notes": "本次更新內容"
-}
-```
-
-App 內更新依序檢查:SHA-256 與清單一致、Ed25519 簽章有效、新套件與目前 App 的 Bundle ID 一致、
-目前 App 有 Developer ID 簽署時新套件也須完整簽署且屬於同一開發者團隊,全部通過才原地替換。
+下載網址由版本號組出,不取自清單。安裝流程:下載 dmg → 驗證 SHA-256 → 掛載並把 `Datum.app` 複製到執行中的 App 旁
+→ 以執行中 App 的 designated requirement(釘住發行憑證)驗證新套件簽章 → 核對版本 → 改名換入。ad-hoc 簽署的 App(本機自行封裝)無法自動更新。
 
 ## 快速鍵
 
