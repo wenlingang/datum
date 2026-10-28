@@ -82,5 +82,5 @@ cat <<MSG
   3. 存为 GitHub secrets:
        gh secret set RELEASE_CERT_P12 < "$out/datum-release.p12.base64"
        gh secret set RELEASE_CERT_PASSWORD < "$out/password.txt"
-  4. 两步都完成后删除 $out。
+  4. 两步都完成后删除 ${out}。
 MSG
