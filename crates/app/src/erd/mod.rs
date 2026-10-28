@@ -29,7 +29,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AppContext as _, AsyncWindowContext, Bounds, ClickEvent, Context, Entity, FontWeight, Hsla,
     InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ParentElement as _, PathBuilder, Pixels, Point, Render, ScrollWheelEvent,
+    MouseUpEvent, ParentElement as _, PathBuilder, Pixels, Point, Render, ScrollEvent,
     SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, WeakEntity,
     Window, canvas, div, point, px,
 };
@@ -1101,7 +1101,7 @@ impl ErdView {
                     cx.notify();
                 }),
             )
-            .on_scroll_wheel(cx.listener(|this, e: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|this, e: &ScrollEvent, _, cx| {
                 let d = e.delta.pixel_delta(px(20.));
                 if e.modifiers.platform || e.modifiers.control {
                     let anchor = this.local(e.position);

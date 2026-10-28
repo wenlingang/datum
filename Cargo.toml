@@ -10,7 +10,7 @@ publish = false
 
 [workspace.dependencies]
 datum-core = { path = "crates/core" }
-gpui-kit = { version = "0.7.3", features = ["tree-sitter-sql", "tree-sitter-javascript"] }
+gpui-kit = { version = "0.8.1", features = ["tree-sitter-sql", "tree-sitter-javascript"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -158,7 +158,7 @@ pub fn run(script: String) {
         }
         if cmd == "key" {
             cx.update_window(handle, |_, window, cx| {
-                if let Ok(k) = gpui_kit::Keystroke::parse(&arg) {
+                if let Ok(k) = gpui_kit::Keystroke::parse_with_os(&arg, cx.platform_info().os) {
                     window.dispatch_keystroke(k, cx);
                 }
             })

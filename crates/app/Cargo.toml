@@ -18,8 +18,8 @@ uuid = { version = "1", features = ["v4"] }
 dirs = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 resvg = "0.45"
-gpui-pre = { version = "=0.3.9", optional = true, features = ["test-support"] }
-gpui-pre-platform = { version = "=0.3.9", optional = true, features = ["test-support"] }
+gpui-pre = { version = "=0.3.10", optional = true, features = ["test-support"] }
+gpui-pre-platform = { version = "=0.3.10", optional = true, features = ["test-support"] }
 image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
 rust-i18n = "4"
 sys-locale = "0.3"
