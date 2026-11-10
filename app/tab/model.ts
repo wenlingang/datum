@@ -1,0 +1,744 @@
+// 工作标签页的模型:绑定一个连接,持有各自的 SQL、结果、分页、排序、筛选与暂存编辑。
+// 对应 GPUI 版 crates/app/src/tab/mod.rs 的 WorkTab。
+//
+// 两种形态:
+// - 表浏览(kind "table"):纯网格,服务端分页与排序,可暂存编辑/删除后 ⌘S 提交;Redis 为 key 的值;
+// - 查询(kind "query"):编辑器 + 工具条 + 结果,运行光标所在语句或选区。
+//
+// 状态都是这个模型自己的 signal(一个 tab 一份),挂在 WorkTab.state 上;界面只读这些 signal、
+// 调这里的动作函数。异步执行用递增的 token 丢弃过期结果(相当于 GPUI 版替换 `_task`)。
+
+import { batch, signal, type Signal } from "nsh";
+import type { EditorRef, EditorSelection } from "nsh/base";
+import { t } from "nsh/i18n";
+import { sendToAi } from "../chat/index";
+import { db, errorText, grid, redisKey, sql as sqlText } from "../lib/native";
+import {
+  type CellEdit,
+  type Conj,
+  type DbKind,
+  type FilterRow,
+  type KeyDetail,
+  type QueryResult,
+  type RiskFinding,
+  type RowDelete,
+  type TableDetail,
+  supportsSql,
+} from "../lib/types";
+import { conns, refreshTables } from "../store/conns";
+import { recordHistory } from "../store/history";
+import { maxRows } from "../store/prefs";
+import { toast } from "../store/toast";
+import { setDetailOpen, type WorkTab } from "../store/workspace";
+import { caretOf, primaryRange } from "./textpos";
+
+/** 表浏览每页行数。 */
+export const PAGE_SIZE = 100;
+
+/** 排序:列名 + 是否倒序。 */
+export interface SortState {
+  col: string;
+  desc: boolean;
+}
+
+/** 破坏性语句审查弹窗的内容。 */
+export interface RiskGate {
+  findings: RiskFinding[];
+  /** 目标连接展示名 */
+  targetLabel: string;
+  /** 当前数据库(SQLite 为文件路径) */
+  database: string | null;
+  /** 关系库(SQL 高亮);Redis 为 false */
+  relational: boolean;
+  /** 「确认执行」 */
+  onConfirm: () => void;
+}
+
+/** 单元格全文弹窗的内容。 */
+export interface CellDialogState {
+  viewIx: number;
+  colIx: number;
+  column: string;
+  dataType: string | null;
+  value: string | null;
+  editable: boolean;
+}
+
+/** Mongo 的接入点:集合 tab / 查询 tab 的额外状态(文档文本、`_id`、过滤栏、分页…)。
+ *  由 Mongo 子任务实现;非 Mongo 连接恒为 null。 */
+export interface MongoTabState {
+  /** 集合名(集合 tab);查询 tab 为 null */
+  coll: string | null;
+}
+
+export interface TabModel {
+  readonly kind: "table" | "query";
+  readonly connId: string;
+  readonly dbKind: DbKind;
+  /** 表浏览的表名(Redis 为 key 名,Mongo 为集合名) */
+  readonly table: string | null;
+
+  /** 编辑器全文(查询 tab) */
+  readonly sql: Signal<string>;
+  /** 编辑器选区(主选区在最后) */
+  readonly selections: Signal<EditorSelection[]>;
+  editor: EditorRef | undefined;
+  readonly editorFocused: Signal<boolean>;
+  /** 表浏览当前页的 SQL */
+  browseSql: string;
+
+  readonly result: Signal<QueryResult | null>;
+  readonly detail: Signal<TableDetail | null>;
+  readonly redisDetail: Signal<KeyDetail | null>;
+  readonly page: Signal<number>;
+  /** 非空表示处于分页浏览(仅关系库表 tab) */
+  readonly browseTable: Signal<string | null>;
+  /** 暂存的编辑:`主键值\0列名` → 编辑 */
+  readonly dirty: Signal<Record<string, CellEdit>>;
+  /** 暂存删除的行(主键值) */
+  readonly deletes: Signal<string[]>;
+  readonly err: Signal<string | null>;
+  /** 视图中选中的行(右栏行详情) */
+  readonly selectedRow: Signal<number | null>;
+  /** 当前结果来自查询(SELECT)还是非查询语句(DDL/DML) */
+  readonly resultIsQuery: Signal<boolean>;
+  readonly sort: Signal<SortState | null>;
+  readonly elapsedMs: Signal<number | null>;
+  readonly running: Signal<boolean>;
+  /** 下一次执行在只读模式下进行(AI 生成、免确认执行的语句),由数据库强制拒绝写入 */
+  readOnlyNext: boolean;
+
+  // 筛选:编辑只改草稿,应用后才作用到结果
+  readonly filterOpen: Signal<boolean>;
+  readonly drafts: Signal<FilterRow[]>;
+  readonly conj: Signal<Conj>;
+  readonly applied: Signal<FilterRow[]>;
+  readonly appliedConj: Signal<Conj>;
+
+  // 工具条浮层与弹窗
+  readonly limitOpen: Signal<boolean>;
+  readonly historyOpen: Signal<boolean>;
+  readonly risk: Signal<RiskGate | null>;
+  readonly cell: Signal<CellDialogState | null>;
+
+  /** 结果区实测宽度(列宽铺满用) */
+  readonly gridWidth: Signal<number>;
+
+  /** Mongo 接入点 */
+  mongo: MongoTabState | null;
+
+  /** 递增:只有最新一次异步执行的结果生效 */
+  token: number;
+  filterSeq: number;
+  viewCache: { result: QueryResult | null; applied: FilterRow[]; conj: Conj; out: number[] } | null;
+}
+
+export function createModel(kind: "table" | "query", connId: string, dbKind: DbKind, table: string | null): TabModel {
+  return {
+    kind,
+    connId,
+    dbKind,
+    table,
+    sql: signal(""),
+    selections: signal<EditorSelection[]>([]),
+    editor: undefined,
+    editorFocused: signal(false),
+    browseSql: "",
+    result: signal<QueryResult | null>(null),
+    detail: signal<TableDetail | null>(null),
+    redisDetail: signal<KeyDetail | null>(null),
+    page: signal(0),
+    browseTable: signal<string | null>(kind === "table" && supportsSql(dbKind) ? table : null),
+    dirty: signal<Record<string, CellEdit>>({}),
+    deletes: signal<string[]>([]),
+    err: signal<string | null>(null),
+    selectedRow: signal<number | null>(null),
+    resultIsQuery: signal(true),
+    sort: signal<SortState | null>(null),
+    elapsedMs: signal<number | null>(null),
+    running: signal(false),
+    readOnlyNext: false,
+    filterOpen: signal(false),
+    drafts: signal<FilterRow[]>([]),
+    conj: signal<Conj>("and"),
+    applied: signal<FilterRow[]>([]),
+    appliedConj: signal<Conj>("and"),
+    limitOpen: signal(false),
+    historyOpen: signal(false),
+    risk: signal<RiskGate | null>(null),
+    cell: signal<CellDialogState | null>(null),
+    gridWidth: signal(0),
+    mongo: dbKind === "mongo" ? { coll: kind === "table" ? table : null } : null,
+    token: 0,
+    filterSeq: 0,
+    viewCache: null,
+  };
+}
+
+/** WorkTab 上挂的模型(ER 图 tab 没有)。 */
+export function modelOf(tab: WorkTab | undefined | null): TabModel | undefined {
+  const s = tab?.state as TabModel | undefined;
+  return s && typeof s === "object" && "sql" in s ? s : undefined;
+}
+
+// ------------------------------------------------------------ 视图与派生
+
+/** 当前视图行(按已应用的筛选)在 result.rows 中的下标。 */
+export function viewIndices(m: TabModel): number[] {
+  const result = m.result();
+  const applied = m.applied();
+  const conj = m.appliedConj();
+  const c = m.viewCache;
+  if (c && c.result === result && c.applied === applied && c.conj === conj) return c.out;
+  let out: number[];
+  if (!result) out = [];
+  else if (!applied.some(isActive)) out = result.rows.map((_, i) => i);
+  else out = grid.filterIndices(result.rows, result.columns, applied, conj);
+  m.viewCache = { result, applied, conj, out };
+  return out;
+}
+
+/** 视图中第 `viewIx` 行的原始数据。 */
+export function viewRow(m: TabModel, viewIx: number): (string | null)[] | undefined {
+  const result = m.result();
+  const ri = viewIndices(m)[viewIx];
+  return result && ri !== undefined ? result.rows[ri] : undefined;
+}
+
+export function isActive(f: FilterRow): boolean {
+  return f.col !== "" && (f.op === "empty" || f.op === "notEmpty" || f.value !== "");
+}
+
+/** 列名 → 类型(表浏览才有)。 */
+export function columnTypes(m: TabModel): Record<string, string> {
+  const d = m.detail();
+  const out: Record<string, string> = {};
+  if (d) for (const c of d.columns) out[c.name] = c.dataType;
+  return out;
+}
+
+export function pkCol(m: TabModel): string | null {
+  return m.detail()?.columns.find((c) => c.isPk)?.name ?? null;
+}
+
+export function pkIndex(m: TabModel): number | null {
+  const pk = pkCol(m);
+  const ix = pk ? (m.result()?.columns.indexOf(pk) ?? -1) : -1;
+  return ix >= 0 ? ix : null;
+}
+
+export const dirtyKey = (pk: string, col: string) => `${pk}\u0000${col}`;
+
+export function canPrev(m: TabModel) {
+  return m.browseTable() !== null && m.page() > 0;
+}
+
+export function canNext(m: TabModel) {
+  return m.browseTable() !== null && (m.result()?.rows.length ?? 0) === PAGE_SIZE;
+}
+
+export function hasStaged(m: TabModel) {
+  return Object.keys(m.dirty()).length > 0 || m.deletes().length > 0;
+}
+
+// ------------------------------------------------------------ 编辑器文本
+
+/** 编辑器选区文本(无选区为空串)。 */
+export function selectionText(m: TabModel): string {
+  const text = m.sql();
+  const r = primaryRange(text, m.selections());
+  return r ? text.slice(r[0], r[1]) : "";
+}
+
+/** 替换编辑器全文(保留撤销)。 */
+export function setSql(m: TabModel, text: string) {
+  m.sql.set(text);
+}
+
+/** 运行时取:有选区跑选区,否则跑光标所在的那条语句(Redis 为光标所在行,Mongo 为全文)。 */
+export function sqlToRun(m: TabModel): string {
+  if (m.kind !== "query") return m.browseSql;
+  const sel = selectionText(m);
+  if (sel.trim()) return sel.trim();
+  const text = m.sql();
+  const caret = Math.min(caretOf(text, m.selections()), text.length);
+  if (m.dbKind === "redis") {
+    const start = text.lastIndexOf("\n", caret - 1) + 1;
+    const nl = text.indexOf("\n", caret);
+    return text.slice(start, nl < 0 ? text.length : nl).trim();
+  }
+  if (m.dbKind === "mongo") return text.trim();
+  return sqlText.currentStatement(text, caret);
+}
+
+// ------------------------------------------------------------ 结果
+
+function setResult(m: TabModel, r: QueryResult) {
+  batch(() => {
+    m.result.set(r);
+    m.selectedRow.set(null);
+  });
+}
+
+function connName(m: TabModel) {
+  return conns.get(m.connId)?.name ?? "";
+}
+
+/** 执行成功才记历史(失败 / EXPLAIN / 翻页都不记)。 */
+function record(m: TabModel, sql: string, elapsed: number, rowCount: number | null, affected: number | null) {
+  recordHistory({
+    sql,
+    connId: m.connId,
+    kind: m.dbKind,
+    connName: connName(m),
+    executedAt: Date.now(),
+    elapsedMs: elapsed,
+    rowCount,
+    affected,
+  });
+}
+
+/** 执行一条 SQL;成功走 `onOk`,失败把错误挂到结果区。 */
+async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elapsed: number) => void) {
+  const token = ++m.token;
+  // 一次性标记:只作用于紧接着的这一次执行
+  const readOnly = m.readOnlyNext;
+  m.readOnlyNext = false;
+  m.running.set(true);
+  const started = Date.now();
+  try {
+    const r = readOnly
+      ? await db.queryReadOnly(m.dbKind, m.connId, sql, maxRows())
+      : await db.query(m.dbKind, m.connId, sql, maxRows());
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(null);
+      onOk(r, Date.now() - started);
+    });
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+      m.result.set(null);
+      m.selectedRow.set(null);
+    });
+  }
+}
+
+function resetFilter(m: TabModel) {
+  batch(() => {
+    m.drafts.set([]);
+    m.applied.set([]);
+    m.conj.set("and");
+    m.appliedConj.set("and");
+    m.filterOpen.set(false);
+  });
+}
+
+/** 运行编辑器里的 SQL(或 Redis 命令)。`override` 用于「插入并运行」「再次执行历史」。 */
+export function run(m: TabModel, override?: string, skipHistory = false, skipRisk = false) {
+  const sql = override ?? sqlToRun(m);
+  if (!sql.trim()) {
+    m.err.set(m.dbKind === "redis" ? t("tab.empty_command") : t("tab.empty_sql"));
+    return;
+  }
+  if (m.dbKind === "mongo") {
+    // TODO(Mongo):mongo::run_mongo(解析脚本、执行、文档视图)由 Mongo 子任务接入
+    toast.info(t("tab.mongo_todo"));
+    return;
+  }
+  if (!skipRisk) {
+    const findings = m.dbKind === "redis" ? sqlText.analyzeRedis(sql) : sqlText.analyze(sql);
+    if (findings.length > 0) {
+      // 转为由用户在确认框里明确决定:不再沿用免确认的只读标记,
+      // 也避免取消后标记残留到下一次手动执行
+      m.readOnlyNext = false;
+      const conn = conns.get(m.connId);
+      const database = conn ? (conn.kind === "sqlite" ? (conn.filePath ?? "") : conn.database) : "";
+      m.risk.set({
+        findings,
+        targetLabel: conn?.name ?? "",
+        database: database ? database : null,
+        relational: supportsSql(m.dbKind),
+        onConfirm: () => run(m, sql, skipHistory, true),
+      });
+      return;
+    }
+  }
+  if (m.dbKind === "redis") {
+    void runRedis(m, sql, skipHistory);
+    return;
+  }
+  const query = sqlText.isQuery(sql);
+  void spawnQuery(m, sql, (r, elapsed) => {
+    m.browseTable.set(null);
+    m.page.set(0);
+    m.resultIsQuery.set(query);
+    m.sort.set(null);
+    resetFilter(m);
+    m.elapsedMs.set(elapsed);
+    setResult(m, r);
+    // 非查询语句可能改变表结构:刷新表列表
+    if (!query && conns.tables(m.connId)) void refreshTables(m.connId);
+    if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null));
+  });
+}
+
+async function runRedis(m: TabModel, cmd: string, skipHistory: boolean) {
+  const token = ++m.token;
+  m.running.set(true);
+  const started = Date.now();
+  try {
+    const reply = await db.redisExec(m.connId, cmd);
+    if (token !== m.token) return;
+    const elapsed = Date.now() - started;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(null);
+      m.elapsedMs.set(elapsed);
+      m.resultIsQuery.set(true);
+      setResult(m, {
+        columns: [t("tab.redis_result_column")],
+        rows: reply === "" ? [] : reply.split("\n").map((l) => [l]),
+        affected: null,
+      });
+    });
+    if (!skipHistory) record(m, cmd, elapsed, null, null);
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+      m.result.set(null);
+    });
+  }
+}
+
+/** EXPLAIN 当前/选中的 SQL(纯 EXPLAIN 不执行查询)。 */
+export function explain(m: TabModel) {
+  if (!supportsSql(m.dbKind) || m.kind !== "query") return;
+  const sql = sqlToRun(m);
+  if (!sql.trim()) {
+    m.err.set(t("tab.empty_sql"));
+    return;
+  }
+  void spawnQuery(m, `EXPLAIN ${sql}`, (r, elapsed) => {
+    m.browseTable.set(null);
+    m.page.set(0);
+    m.resultIsQuery.set(true);
+    m.sort.set(null);
+    resetFilter(m);
+    m.elapsedMs.set(elapsed);
+    setResult(m, r);
+  });
+}
+
+/** 格式化整篇 SQL。 */
+export function beautify(m: TabModel) {
+  if (!supportsSql(m.dbKind) || m.kind !== "query") return;
+  const source = m.sql();
+  const formatted = sqlText.format(source);
+  if (formatted !== source) m.sql.set(formatted);
+}
+
+/** 跳页(仅表浏览)。 */
+export function gotoPage(m: TabModel, page: number) {
+  const table = m.browseTable();
+  if (!table || !supportsSql(m.dbKind)) return;
+  const sort = m.sort();
+  const sql = sqlText.pageSql(table, page, PAGE_SIZE, m.dbKind, sort?.col ?? null, sort?.desc);
+  m.browseSql = sql;
+  void spawnQuery(m, sql, (r, elapsed) => {
+    m.page.set(page);
+    m.resultIsQuery.set(true);
+    m.elapsedMs.set(elapsed);
+    setResult(m, r);
+  });
+}
+
+/** 点击表头:浏览表时循环 倒序 → 升序 → 无 并重查第一页;其余结果做客户端排序(升 ↔ 降)。 */
+export function cycleSort(m: TabModel, col: string) {
+  if (m.mongo) {
+    // TODO(Mongo):mongo_cycle_sort(服务端排序)
+    return;
+  }
+  const cur = m.sort();
+  if (m.browseTable()) {
+    const next: SortState | null =
+      cur?.col === col ? (cur.desc ? { col, desc: false } : null) : { col, desc: true };
+    m.sort.set(next);
+    gotoPage(m, 0);
+    return;
+  }
+  const result = m.result();
+  if (!result) return;
+  const ci = result.columns.indexOf(col);
+  if (ci < 0) return;
+  const desc = cur?.col === col && !cur.desc;
+  const order = grid.sortOrder(result.rows, ci, desc);
+  batch(() => {
+    m.sort.set({ col, desc });
+    setResult(m, { columns: result.columns, rows: order.map((i) => result.rows[i]), affected: result.affected });
+  });
+}
+
+/** 刷新当前 tab:表 tab 重拉结构与当前页;查询 tab 只重跑查询类语句(写语句不隐式重放)。 */
+export function refresh(m: TabModel) {
+  if (m.kind === "query") {
+    const sql = sqlToRun(m);
+    if (!sql.trim()) toast.info(t("tab.refreshed_tables"));
+    else if (supportsSql(m.dbKind) && !sqlText.isQuery(sql)) toast.info(t("tab.refresh_skip_write"));
+    else {
+      toast.info(t("tab.rerunning"));
+      run(m);
+    }
+    return;
+  }
+  if (m.mongo?.coll) {
+    // TODO(Mongo):mongo_refresh
+    return;
+  }
+  const table = m.table;
+  if (!table) return;
+  if (m.dbKind === "redis") {
+    void refreshRedisKey(m, table);
+    return;
+  }
+  if (!supportsSql(m.dbKind)) return;
+  void refreshTable(m, table);
+}
+
+async function refreshRedisKey(m: TabModel, key: string) {
+  const token = ++m.token;
+  m.running.set(true);
+  try {
+    const [kv, detail] = await redisKey(m.connId, key);
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(null);
+      m.redisDetail.set(detail);
+      m.resultIsQuery.set(true);
+      setResult(m, { columns: kv.columns, rows: kv.rows, affected: null });
+    });
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+    });
+  }
+}
+
+async function refreshTable(m: TabModel, table: string) {
+  const sort = m.sort();
+  const sql = sqlText.pageSql(table, m.page(), PAGE_SIZE, m.dbKind, sort?.col ?? null, sort?.desc);
+  m.browseSql = sql;
+  const token = ++m.token;
+  m.running.set(true);
+  const started = Date.now();
+  try {
+    const r = await db.query(m.dbKind, m.connId, sql, maxRows());
+    const detail = await db.tableDetail(m.dbKind, m.connId, table);
+    if (token !== m.token) return;
+    const elapsed = Date.now() - started;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(null);
+      m.detail.set(detail);
+      m.resultIsQuery.set(true);
+      m.elapsedMs.set(elapsed);
+      setResult(m, r);
+    });
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+    });
+  }
+}
+
+// ------------------------------------------------------------ 编辑与删除
+
+function pkOfView(m: TabModel, viewIx: number): string | null {
+  const pi = pkIndex(m);
+  if (pi === null) return null;
+  const row = viewRow(m, viewIx);
+  return row ? (row[pi] ?? "") : null;
+}
+
+/** 暂存单元格修改(视图行 + 列)。 */
+export function stageEdit(m: TabModel, viewIx: number, colIx: number, newValue: string) {
+  const pk = pkCol(m);
+  const table = m.table;
+  const result = m.result();
+  if (!pk || !table || !result) return;
+  const pkValue = pkOfView(m, viewIx);
+  if (pkValue === null) return;
+  const column = result.columns[colIx];
+  if (column === undefined) return;
+  m.dirty.update((d) => ({ ...d, [dirtyKey(pkValue, column)]: { table, pkCol: pk, pkValue, column, newValue } }));
+}
+
+/** 右键「删除行 / 撤销删除」:暂存/取消暂存该行的删除。 */
+export function toggleDelete(m: TabModel, viewIx: number) {
+  const pk = pkOfView(m, viewIx);
+  if (pk === null || pkCol(m) === null) return;
+  m.deletes.update((l) => (l.includes(pk) ? l.filter((d) => d !== pk) : [...l, pk]));
+}
+
+/** ⌘S:一个事务里提交暂存的编辑与删除,成功后清空暂存并重查当前页。 */
+export async function commit(m: TabModel) {
+  const table = m.table;
+  if (!table) return;
+  const edits = Object.values(m.dirty());
+  const pk = pkCol(m);
+  const deletes: RowDelete[] = pk ? m.deletes().map((v) => ({ table, pkCol: pk, pkValue: v })) : [];
+  if (edits.length === 0 && deletes.length === 0) return;
+  const token = ++m.token;
+  m.running.set(true);
+  try {
+    await db.commitEdits(m.dbKind, m.connId, edits, deletes);
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.dirty.set({});
+      m.deletes.set([]);
+    });
+    if (deletes.length > 0) toast.success(t("tab.deleted_rows", { n: deletes.length }));
+    refresh(m);
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+    });
+  }
+}
+
+// ------------------------------------------------------------ 行操作
+
+/** 双击 / 右键「编辑 | 查看」:弹出单元格全文。 */
+export function openCell(m: TabModel, viewIx: number, colIx: number) {
+  const result = m.result();
+  const row = viewRow(m, viewIx);
+  if (!result || !row) return;
+  const column = result.columns[colIx] ?? "";
+  m.cell.set({
+    viewIx,
+    colIx,
+    column,
+    dataType: columnTypes(m)[column] ?? null,
+    value: row[colIx] ?? null,
+    editable: pkCol(m) !== null && m.table !== null,
+  });
+}
+
+/** 右键「查看详情」:选中该行并打开右栏行详情。 */
+export function openRowDetail(m: TabModel, viewIx: number) {
+  m.selectedRow.set(viewIx);
+  setDetailOpen(true);
+}
+
+/** 复制结果某一行的 INSERT(真实值)。 */
+export async function copyInsertRow(m: TabModel, viewIx: number, write: (text: string) => Promise<void>) {
+  const result = m.result();
+  const row = viewRow(m, viewIx);
+  if (!result || !row || !supportsSql(m.dbKind)) return;
+  const table = m.table ?? "table";
+  await write(grid.buildInsertRow(table, result.columns, row, m.dbKind));
+  toast.success(t("tab.copied"));
+}
+
+export function clearSelection(m: TabModel) {
+  m.selectedRow.set(null);
+}
+
+/** 导出用的表名:真实表名优先,查询 tab 从 SQL 文本里猜。 */
+export function exportName(m: TabModel): string {
+  return m.table ?? sqlText.guessTableName(m.sql()) ?? "export";
+}
+
+/** 当前视图行(导出)。 */
+export function viewRows(m: TabModel): (string | null)[][] {
+  const result = m.result();
+  if (!result) return [];
+  return viewIndices(m).map((i) => result.rows[i]);
+}
+
+// ------------------------------------------------------------ 筛选
+
+function newDraft(m: TabModel, col: string): FilterRow {
+  m.filterSeq += 1;
+  return { id: m.filterSeq, col, op: "contains", value: "" };
+}
+
+export function toggleFilter(m: TabModel) {
+  const result = m.result();
+  if (!result) return;
+  batch(() => {
+    if (m.filterOpen()) {
+      m.filterOpen.set(false);
+      m.applied.set([]);
+    } else {
+      m.filterOpen.set(true);
+      if (m.drafts().length === 0) m.drafts.set([newDraft(m, result.columns[0] ?? "")]);
+    }
+    m.selectedRow.set(null);
+  });
+}
+
+export function filterAdd(m: TabModel) {
+  const col = m.result()?.columns[0] ?? "";
+  m.drafts.update((l) => [...l, newDraft(m, col)]);
+}
+
+export function updateDraft(m: TabModel, id: number, patch: Partial<FilterRow>) {
+  m.drafts.update((l) => l.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+}
+
+export function removeDraft(m: TabModel, id: number) {
+  m.drafts.update((l) => l.filter((d) => d.id !== id));
+}
+
+/** 草稿与已应用是否不一致(决定「应用」按钮态)。 */
+export function filterDirty(m: TabModel): boolean {
+  return grid.filtersSignature(m.drafts(), m.conj()) !== grid.filtersSignature(m.applied(), m.appliedConj());
+}
+
+export function filterApply(m: TabModel) {
+  if (!filterDirty(m)) return;
+  batch(() => {
+    m.applied.set(m.drafts());
+    m.appliedConj.set(m.conj());
+    m.selectedRow.set(null);
+  });
+}
+
+/** 清除:草稿与已应用一并清空,并收起筛选条。 */
+export function filterClear(m: TabModel) {
+  batch(() => {
+    resetFilter(m);
+    m.selectedRow.set(null);
+  });
+}
+
+export function filterPreviewCount(m: TabModel): number {
+  const result = m.result();
+  if (!result) return 0;
+  const drafts = m.drafts();
+  if (!drafts.some(isActive)) return result.rows.length;
+  return grid.filterIndices(result.rows, result.columns, drafts, m.conj()).length;
+}
+
+// ------------------------------------------------------------ AI
+
+/** ⌘⇧A / 划词按钮:把选中的 SQL 作为引用发给 AI 助手。 */
+export function sendSelectionToAi(m: TabModel) {
+  const text = selectionText(m).trim();
+  if (!text) toast.error(t("tab.select_sql_for_ai"));
+  else sendToAi(text);
+}

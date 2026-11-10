@@ -95,3 +95,43 @@ export function errorText(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
 }
+
+// ==== tab ====
+
+import { Grid } from "datum/native";
+import type * as TabTypes from "./types";
+
+type GridCell = string | null;
+
+/** 结果网格与编辑器的纯计算(datum-core 的 grid / completion / sql::build)。 */
+export const grid = {
+  classifyCell: (value: GridCell, dataType: string | null) =>
+    Grid.classifyCell(value, dataType) as TabTypes.CellStyle,
+  colAlign: (dataType: string | null) => Grid.colAlign(dataType) as TabTypes.ColAlign,
+  columnWidths: (autos: number[], containerW: number, defaultW: number, flexible: boolean[]) =>
+    Grid.columnWidths(autos, containerW, defaultW, flexible),
+  sortOrder: (rows: GridCell[][], colIx: number, descending: boolean) => Grid.sortOrder(rows, colIx, descending),
+  filterIndices: (rows: GridCell[][], columns: string[], filters: TabTypes.FilterRow[], conj: TabTypes.Conj) =>
+    Grid.filterIndices(rows, columns, filters, conj),
+  filtersSignature: (filters: TabTypes.FilterRow[], conj: TabTypes.Conj) => Grid.filtersSignature(filters, conj),
+  toCsv: (columns: string[], rows: GridCell[][]) => Grid.toCsv(columns, rows),
+  toMarkdown: (columns: string[], rows: GridCell[][]) => Grid.toMarkdown(columns, rows),
+  buildInsertRow: (table: string, columns: string[], values: GridCell[], kind: DbKind) =>
+    Grid.buildInsertRow(table, columns, values, kind),
+  buildInsert: (table: string, columns: string[], kind: DbKind) => Grid.buildInsert(table, columns, kind),
+  completions: (
+    kind: DbKind,
+    text: string,
+    caret: number,
+    tables: string[],
+    columns: ColumnsByTable | null,
+    explicit: boolean,
+  ) => Grid.completions(kind, text, caret, tables, columns, explicit) as TabTypes.CompletionResult | null,
+  uppercaseKeywordBefore: (text: string, caret: number) =>
+    Grid.uppercaseKeywordBefore(text, caret) as { start: number; end: number; text: string } | null,
+};
+
+/** Redis:读取一个 key 的值(表格形态)与详情。 */
+export async function redisKey(id: string, key: string) {
+  return (await Db.redisGetKey(id, key)) as [TabTypes.RedisKeyValue, TabTypes.KeyDetail];
+}

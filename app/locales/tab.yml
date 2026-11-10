@@ -229,6 +229,10 @@ cell:
     zh-CN: "查看单元格"
     zh-TW: "檢視儲存格"
 tab:
+  mongo_todo:
+    en: "MongoDB queries and collection browsing are being ported"
+    zh-CN: "MongoDB 查询与集合浏览移植中"
+    zh-TW: "MongoDB 查詢與集合瀏覽移植中"
   editor_placeholder_mongo:
     en: "db.users.find({ age: { $gt: 18 } })"
     zh-CN: "db.users.find({ age: { $gt: 18 } })"
@@ -380,6 +384,10 @@ grid:
     zh-CN: "没有行"
     zh-TW: "沒有資料列"
 erd:
+  wip:
+    en: "The ER diagram is under development"
+    zh-CN: "ER 图开发中"
+    zh-TW: "ER 圖開發中"
   search_placeholder:
     en: "Search tables / columns / foreign keys…"
     zh-CN: "搜索表/字段/外键…"

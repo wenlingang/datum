@@ -9,6 +9,7 @@ mod conn;
 mod db;
 mod prefs;
 mod runtime;
+mod tab;
 mod text;
 
 use nsh_core::prelude::*;
@@ -17,6 +18,7 @@ pub use ai::Ai;
 pub use conn::Store;
 pub use db::Db;
 pub use prefs::Prefs;
+pub use tab::Grid;
 pub use text::Sql;
 
 /// Datum 的原生模块:界面通过 `datum/native` 导入。
@@ -28,5 +30,6 @@ fn native(registry: &mut Registry) {
         .module::<Db>()
         .module::<Prefs>()
         .module::<Sql>()
-        .module::<Ai>();
+        .module::<Ai>()
+        .module::<Grid>();
 }
