@@ -128,6 +128,24 @@ export const shell = {
   fileTimestamp: () => Shell.fileTimestamp(),
 };
 
+// ==== dialogs ====
+
+import { Dialogs as NativeDialogs } from "datum/native";
+import type { AiProtocolOption, MongoUriParts, SslMode } from "./types";
+
+export const dialogsNative = {
+  /** 系统打开文件框,返回绝对路径;取消为 null。 */
+  pickFile: (title: string, filterName: string | null, extensions: string[]) =>
+    NativeDialogs.pickFile(title, filterName, extensions),
+  /** 拆分 Mongo 连接串;不合法时抛出原因。 */
+  splitMongoUri: (raw: string) => NativeDialogs.splitMongoUri(raw) as MongoUriParts,
+  mongoWithDatabase: (sanitized: string, database: string) => NativeDialogs.mongoWithDatabase(sanitized, database),
+  redactMongoUri: (raw: string) => NativeDialogs.redactMongoUri(raw),
+  mongoFormPreview: (host: string, port: number, user: string, hasPassword: boolean, authSource: string, ssl: SslMode) =>
+    NativeDialogs.mongoFormPreview(host, port, user, hasPassword, authSource, ssl),
+  aiProtocols: () => NativeDialogs.aiProtocols() as AiProtocolOption[],
+};
+
 // ==== tab ====
 
 import { Grid } from "datum/native";

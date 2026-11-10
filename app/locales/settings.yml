@@ -2,6 +2,10 @@ _version: 2
 
 # 应用菜单(main.rs set_menus)
 menu:
+  edit:
+    en: Edit
+    zh-CN: 编辑
+    zh-TW: 編輯
   settings:
     en: Settings…
     zh-CN: 设置…
