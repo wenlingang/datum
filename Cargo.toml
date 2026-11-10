@@ -1,6 +1,8 @@
 [workspace]
 members = ["crates/core", "crates/app"]
 default-members = ["crates/app"]
+# nsh 应用(app/)与其原生模块(app/native)由 nsh CLI 单独构建
+exclude = ["app"]
 resolver = "2"
 
 [workspace.package]

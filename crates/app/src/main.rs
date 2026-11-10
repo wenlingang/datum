@@ -1,7 +1,7 @@
 //! Datum —— 简约现代的桌面数据库管理工具(GPUI Kit 版)。
 
 // 文案在 locales/*.yml(_version: 2,每个键下并列 en / zh-CN / zh-TW)。
-rust_i18n::i18n!("locales", fallback = "en");
+rust_i18n::i18n!("../../app/locales", fallback = "en");
 
 mod actions;
 mod assets;
