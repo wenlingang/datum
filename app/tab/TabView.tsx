@@ -1,5 +1,5 @@
 // 标签页主体:查询 tab(编辑器 + 工具条 / 状态行 + 结果,上下可拖动)、表浏览 tab(纯网格)、
-// ER 图与 Mongo 的占位。对应 GPUI 版 tab/mod.rs 的 Render。
+// ER 图占位;MongoDB 不支持,只显示一句提示。对应 GPUI 版 tab/mod.rs 的 Render。
 
 import { Text, View } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
@@ -65,8 +65,6 @@ function ModelView(props: { m: TabModel }) {
 export function TabBody(props: { tab: WorkTab }) {
   const m = modelOf(props.tab);
   if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;
-  // TODO(Mongo):集合 tab / Mongo 查询 tab(tab/mongo.rs、mongo_filter.rs、doc_view.rs)由 Mongo 子任务实现,
-  // 接入点是 TabModel.mongo 与 model.ts 里标了 TODO(Mongo) 的分支。
-  if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_todo")} />;
+  if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_unsupported")} />;
   return <ModelView m={m} />;
 }

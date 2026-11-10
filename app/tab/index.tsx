@@ -4,7 +4,7 @@ import { signal } from "nsh";
 import { t } from "nsh/i18n";
 import { activate, conns, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
-import { addTab, focusTab, newTabId, workspace, type WorkTab } from "../store/workspace";
+import { addTab, focusTab, newTabId, setResultToolsProvider, workspace, type WorkTab } from "../store/workspace";
 import { DetailPanelView } from "./DetailPanel";
 import {
   beautify,
@@ -12,12 +12,15 @@ import {
   commit,
   createModel,
   explain,
+  exportName,
+  isActive,
   modelOf,
   refresh,
   run,
   selectionText,
   sendSelectionToAi,
   toggleFilter,
+  viewRows,
 } from "./model";
 import { TabStatusView } from "./TabStatus";
 import { TabBody } from "./TabView";
@@ -57,8 +60,12 @@ function makeTab(kind: "table" | "query", connId: string, table: string | null, 
   };
 }
 
-/** 打开(或聚焦已打开的)表浏览 tab;Redis 为 key,Mongo 为集合。 */
+/** 打开(或聚焦已打开的)表浏览 tab;Redis 为 key。MongoDB 不支持:提示并返回 undefined。 */
 export function openTable(connId: string, table: string): WorkTab | undefined {
+  if (conns.get(connId)?.kind === "mongo") {
+    toast.info(t("tab.mongo_unsupported"));
+    return undefined;
+  }
   const existing = workspace
     .tabs()
     .find((x) => x.kind === "table" && x.connId === connId && x.table === table);
@@ -88,7 +95,11 @@ export function newQueryTab(sql?: string): WorkTab | undefined {
     return undefined;
   }
   const n = workspace.tabs().filter((x) => x.kind === "query" && x.connId === conn.id).length;
-  const base = conn.kind === "mongo" ? "Mongo Query" : "SQL Query";
+  if (conn.kind === "mongo") {
+    toast.info(t("tab.mongo_unsupported"));
+    return undefined;
+  }
+  const base = "SQL Query";
   const tab = makeTab("query", conn.id, null, n === 0 ? base : `${base} ${n + 1}`);
   if (!tab) return undefined;
   addTab(tab);
@@ -99,9 +110,9 @@ export function newQueryTab(sql?: string): WorkTab | undefined {
 
 /** 集合右键「插入文档」:打开集合 tab 并弹出新增文档编辑器。 */
 export function insertDocument(connId: string, coll: string) {
-  openTable(connId, coll);
-  // TODO(Mongo):open_doc_editor(None) —— 文档编辑器(dialogs/doc_editor.rs)由 Mongo 子任务实现
-  toast.info(t("tab.mongo_todo"));
+  void connId;
+  void coll;
+  toast.info(t("tab.mongo_unsupported"));
 }
 
 /** 打开 ER 图 tab(画布 TODO)。 */
@@ -154,11 +165,27 @@ export function activeSelectionText(): string {
   return m ? selectionText(m) : "";
 }
 
-/** 外壳打开详情栏时调用:清掉遗留的行选中,默认展示表详情(GPUI 版 toggle_detail)。 */
-export function clearTabSelection() {
+/** 外壳打开详情栏 / 「查看表详情」时调用:清掉当前 tab 遗留的行选中,让右栏展示表详情
+ *  (GPUI 版 toggle_detail 里的 clear_selection)。 */
+export function clearRowSelection() {
   const m = modelOf(workspace.activeTab());
   if (m) clearSelection(m);
 }
+
+// 标签条右侧「已筛选 n / 过滤 / 导出」靠这里取当前结果的信息
+setResultToolsProvider((tab) => {
+  const m = modelOf(tab);
+  if (!m || !m.result()) return null;
+  return {
+    filterCount: m.applied().filter(isActive).length,
+    filterOpen: m.filterOpen(),
+    exportData: () => {
+      const result = m.result();
+      const rows = viewRows(m);
+      return result && rows.length > 0 ? { table: exportName(m), columns: result.columns, rows } : null;
+    },
+  };
+});
 
 /** 快捷键/菜单命令转给当前 tab:运行、格式化、解释、历史、过滤、提交编辑、刷新。 */
 export type TabCommand = "run" | "format" | "explain" | "history" | "filter" | "commit" | "refresh" | "sendToAi";

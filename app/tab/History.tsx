@@ -101,6 +101,7 @@ export function HistoryPanel(props: { m: TabModel }) {
                     value={e().sql}
                     readOnly
                     lineNumbers={false}
+                    folding={false}
                     softWrap
                     language={e().kind === "redis" ? "text" : "sql"}
                     fontSize={12}

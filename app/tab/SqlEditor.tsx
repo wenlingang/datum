@@ -117,9 +117,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
   const placeholder = () =>
     m.dbKind === "redis"
       ? t("tab.editor_placeholder_redis")
-      : m.dbKind === "mongo"
-        ? t("tab.editor_placeholder_mongo")
-        : t("tab.editor_placeholder_sql");
+      : t("tab.editor_placeholder_sql");
 
   return (
     <View class="relative min-h-0 flex-1 bg-editor">
@@ -130,7 +128,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
         testID="sql-editor"
         class="flex-1 bg-editor"
         value={m.sql()}
-        language={m.dbKind === "redis" ? "text" : m.dbKind === "mongo" ? "javascript" : "sql"}
+        language={m.dbKind === "redis" ? "text" : "sql"}
         placeholder={placeholder()}
         autoFocus={props.autoFocus}
         lineNumbers

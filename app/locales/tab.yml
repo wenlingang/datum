@@ -229,10 +229,10 @@ cell:
     zh-CN: "查看单元格"
     zh-TW: "檢視儲存格"
 tab:
-  mongo_todo:
-    en: "MongoDB queries and collection browsing are being ported"
-    zh-CN: "MongoDB 查询与集合浏览移植中"
-    zh-TW: "MongoDB 查詢與集合瀏覽移植中"
+  mongo_unsupported:
+    en: "MongoDB is not supported yet"
+    zh-CN: "暂不支持 MongoDB"
+    zh-TW: "暫不支援 MongoDB"
   editor_placeholder_mongo:
     en: "db.users.find({ age: { $gt: 18 } })"
     zh-CN: "db.users.find({ age: { $gt: 18 } })"

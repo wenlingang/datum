@@ -32,6 +32,7 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
                 value={f().sql}
                 readOnly
                 lineNumbers={false}
+                folding={false}
                 softWrap
                 activeLine={false}
                 language={g.relational ? "sql" : "text"}

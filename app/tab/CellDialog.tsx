@@ -71,6 +71,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
           }}
           readOnly={!c.editable}
           lineNumbers={false}
+          folding={false}
           softWrap
           fontSize={13}
           classes={{ selection: "bg-text-selection", caret: "bg-caret", activeLine: "bg-editor-active-line" }}

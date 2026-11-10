@@ -66,7 +66,7 @@ export function Results(props: { m: TabModel }) {
   const m = props.m;
   const body = () => bodyOf(m);
   const limited = () =>
-    m.browseTable() === null && m.resultIsQuery() && !m.mongo && (m.result()?.rows.length ?? 0) >= maxRows();
+    m.browseTable() === null && m.resultIsQuery() && (m.result()?.rows.length ?? 0) >= maxRows();
   return (
     <View class="min-h-0 flex-1 bg-background">
       <If when={body() === "error"}>

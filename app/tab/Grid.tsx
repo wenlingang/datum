@@ -100,37 +100,32 @@ function GridCell(props: { m: TabModel; row: number; col: number }) {
   const isNull = () => value() === null;
   const text = () => {
     const v = value();
-    // Mongo:字段缺失 ≠ null,显示为空白
-    if (v === null) return m.mongo ? "" : "NULL";
+    if (v === null) return "NULL";
     // 多行值在网格里压成一行(双击看全文)
     return (m.result()?.columns.length ?? 0) === 1 ? v : v.replace(/[\r\n]/g, " ");
   };
+  // 根元素直接是 Text(DataTable 的自定义格子里,View 包一层在真实平台上不显示文字);
+  // 行高撑满格子,暂存态的底色才铺满整格
   return (
-    <View
-      class="flex-1 self-stretch flex-row items-center overflow-hidden px-3"
+    <Text
+      class={`self-stretch px-3 line-clamp-1 ${isNull() ? `${FS.xs} font-semibold` : FS.sm}`}
+      style={{ lineHeight: 36 }}
       classList={{
-        "justify-end": align() === "right",
-        "justify-center": align() === "center",
-        "bg-deleted opacity-55": deleted(),
+        "text-right": align() === "right",
+        "text-center": align() === "center",
+        "text-cell-strong": style().tier === "strong",
+        "text-cell": style().tier === "normal",
+        "text-cell-dim": style().tier === "dim",
+        "text-cell-hash": style().tier === "hash",
+        "text-cell-null": style().tier === "null",
+        "text-negative": style().tier === "negative",
+        "font-mono": style().mono,
+        "bg-deleted opacity-55 line-through": deleted(),
         "bg-dirty border border-primary": dirty(),
       }}
     >
-      <Text
-        class={`line-clamp-1 ${isNull() ? `${FS.xs} font-semibold` : FS.sm}`}
-        classList={{
-          "text-cell-strong": style().tier === "strong",
-          "text-cell": style().tier === "normal",
-          "text-cell-dim": style().tier === "dim",
-          "text-cell-hash": style().tier === "hash",
-          "text-cell-null": style().tier === "null",
-          "text-negative": style().tier === "negative",
-          "font-mono": style().mono,
-          "line-through": deleted(),
-        }}
-      >
-        {text()}
-      </Text>
-    </View>
+      {text()}
+    </Text>
   );
 }
 
@@ -174,11 +169,6 @@ function HeaderCell(props: { m: TabModel; col: number }) {
 }
 
 function showRowMenu(m: TabModel, row: number, col: number, at: { x: number; y: number }) {
-  if (m.mongo?.coll) {
-    // TODO(Mongo):编辑文档 / 查看详情 / 删除文档
-    void NativeMenu.popup([{ label: t("grid.view_detail"), onSelect: () => openRowDetail(m, row) }], at);
-    return;
-  }
   const editable = pkIndex(m) !== null;
   const deletable = editable && m.table !== null;
   const pi = pkIndex(m);

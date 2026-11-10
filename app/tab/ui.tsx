@@ -1,14 +1,10 @@
-// tab/ 自用的 Datum 外观小件(颜色只用主题 token)。通用的在 ui/kit.tsx。
+// tab/ 自用的 Datum 外观小件(颜色只用主题 token)。通用的在 ui/kit.tsx、ui/menu.tsx。
 
 import { Text } from "nsh";
-import { Button, Menu, MenuItem } from "nsh/base";
+import { Button } from "nsh/base";
 import { Icon } from "../ui/kit";
+import { DropMenu, MItem } from "../ui/menu";
 import { FS } from "../ui/text";
-
-/** 下拉菜单弹层的统一外观。 */
-export const MENU_POPUP = "min-w-[140px] rounded-(--radius-lg) border border-border bg-popover p-1 shadow-lg";
-export const MENU_ITEM =
-  "flex-row items-center rounded-(--radius) px-2 py-1.5 hover:bg-list-hover focus:bg-list-hover";
 
 /** 带下拉箭头的描边选择按钮 + 菜单(筛选条的列 / 操作符)。 */
 export function SelectMenu<T extends string>(props: {
@@ -19,11 +15,9 @@ export function SelectMenu<T extends string>(props: {
   testID?: string;
 }) {
   return (
-    <Menu
+    <DropMenu
       placement="bottom"
       align="start"
-      offset={4}
-      popupClass={`${MENU_POPUP} max-h-[320px]`}
       trigger={
         <Button
           testID={props.testID}
@@ -36,12 +30,8 @@ export function SelectMenu<T extends string>(props: {
       }
     >
       <Each of={props.options} key={(o) => o.value}>
-        {(o) => (
-          <MenuItem class={MENU_ITEM} onSelect={() => props.onSelect(o().value)}>
-            <Text class={`${FS.sm} text-popover-foreground`}>{o().label}</Text>
-          </MenuItem>
-        )}
+        {(o) => <MItem label={o().label} onSelect={() => props.onSelect(o().value)} />}
       </Each>
-    </Menu>
+    </DropMenu>
   );
 }

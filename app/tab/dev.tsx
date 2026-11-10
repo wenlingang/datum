@@ -1,6 +1,7 @@
 // 临时开发入口:不经外壳,直接挂 TabView + DetailPanel + TabStatus,验证查询/表浏览标签页。
-// 用法(只连临时目录里的库):DATUM_CONFIG_DIR=<临时目录> nsh run tab/dev.tsx
-// 可选:DATUM_DEV_CONN=<连接 id>、DATUM_DEV_THEME=light|dark、DATUM_DEV_VIEW=table|query。
+// 用法(只连临时目录里的库):DATUM_CONFIG_DIR=<临时目录> nsh run TabDev.tsx --port <端口>
+// (nsh 以入口所在目录为应用目录,入口须在 app/ 下,故由 app/TabDev.tsx 引入本文件;tab/tab.test.tsx 也用它。)
+// 明暗由配置目录的 ui_prefs.json 决定。下面的 DATUM_DEV_* 只在 JS 能读到宿主环境变量时生效(macOS 开发宿主读不到)。
 
 import { keymap, mount, setColorScheme, Text, View } from "nsh";
 import { Button } from "nsh/base";

@@ -64,18 +64,11 @@ export interface CellDialogState {
   editable: boolean;
 }
 
-/** Mongo 的接入点:集合 tab / 查询 tab 的额外状态(文档文本、`_id`、过滤栏、分页…)。
- *  由 Mongo 子任务实现;非 Mongo 连接恒为 null。 */
-export interface MongoTabState {
-  /** 集合名(集合 tab);查询 tab 为 null */
-  coll: string | null;
-}
-
 export interface TabModel {
   readonly kind: "table" | "query";
   readonly connId: string;
   readonly dbKind: DbKind;
-  /** 表浏览的表名(Redis 为 key 名,Mongo 为集合名) */
+  /** 表浏览的表名(Redis 为 key 名) */
   readonly table: string | null;
 
   /** 编辑器全文(查询 tab) */
@@ -124,8 +117,6 @@ export interface TabModel {
   /** 结果区实测宽度(列宽铺满用) */
   readonly gridWidth: Signal<number>;
 
-  /** Mongo 接入点 */
-  mongo: MongoTabState | null;
 
   /** 递增:只有最新一次异步执行的结果生效 */
   token: number;
@@ -168,7 +159,6 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     risk: signal<RiskGate | null>(null),
     cell: signal<CellDialogState | null>(null),
     gridWidth: signal(0),
-    mongo: dbKind === "mongo" ? { coll: kind === "table" ? table : null } : null,
     token: 0,
     filterSeq: 0,
     viewCache: null,
@@ -255,7 +245,7 @@ export function setSql(m: TabModel, text: string) {
   m.sql.set(text);
 }
 
-/** 运行时取:有选区跑选区,否则跑光标所在的那条语句(Redis 为光标所在行,Mongo 为全文)。 */
+/** 运行时取:有选区跑选区,否则跑光标所在的那条语句(Redis 为光标所在行)。 */
 export function sqlToRun(m: TabModel): string {
   if (m.kind !== "query") return m.browseSql;
   const sel = selectionText(m);
@@ -267,7 +257,6 @@ export function sqlToRun(m: TabModel): string {
     const nl = text.indexOf("\n", caret);
     return text.slice(start, nl < 0 ? text.length : nl).trim();
   }
-  if (m.dbKind === "mongo") return text.trim();
   return sqlText.currentStatement(text, caret);
 }
 
@@ -345,8 +334,7 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   if (m.dbKind === "mongo") {
-    // TODO(Mongo):mongo::run_mongo(解析脚本、执行、文档视图)由 Mongo 子任务接入
-    toast.info(t("tab.mongo_todo"));
+    toast.info(t("tab.mongo_unsupported"));
     return;
   }
   if (!skipRisk) {
@@ -460,10 +448,6 @@ export function gotoPage(m: TabModel, page: number) {
 
 /** 点击表头:浏览表时循环 倒序 → 升序 → 无 并重查第一页;其余结果做客户端排序(升 ↔ 降)。 */
 export function cycleSort(m: TabModel, col: string) {
-  if (m.mongo) {
-    // TODO(Mongo):mongo_cycle_sort(服务端排序)
-    return;
-  }
   const cur = m.sort();
   if (m.browseTable()) {
     const next: SortState | null =
@@ -494,10 +478,6 @@ export function refresh(m: TabModel) {
       toast.info(t("tab.rerunning"));
       run(m);
     }
-    return;
-  }
-  if (m.mongo?.coll) {
-    // TODO(Mongo):mongo_refresh
     return;
   }
   const table = m.table;

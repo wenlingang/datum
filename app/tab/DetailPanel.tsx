@@ -25,11 +25,7 @@ function RowDetail(props: { m: TabModel; row: number }) {
   const columns = () => m.result()?.columns ?? [];
   const values = () => viewRow(m, props.row) ?? [];
   const types = () => columnTypes(m);
-  // Mongo:该文档没有的字段不列出(缺失 ≠ null)
-  const fields = () =>
-    columns()
-      .map((c, i) => ({ c, v: values()[i] ?? null }))
-      .filter((f) => !m.mongo || f.v !== null);
+  const fields = () => columns().map((c, i) => ({ c, v: values()[i] ?? null }));
   return (
     <View class="flex-1">
       <Header>{t("detail.row_detail")}</Header>

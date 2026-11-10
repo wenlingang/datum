@@ -23,15 +23,18 @@ test("运行查询:显示行数、网格与历史", async () => {
   await app.waitUntil(() => app.texts().includes("Coffee 133"), { timeout: 15000 });
   expect(hasText(app, "Executed successfully")).toBe(true);
   expect(app.shows("id:result-grid")).toBe(true);
-  // 列头是自定义表头
-  expect(app.shows("id:th:revenue_usd")).toBe(true);
+  // 点自定义表头做客户端排序(升序):收入最低的排到最前
+  const firstCoffee = () => app.texts().find((x) => x.startsWith("Coffee "));
+  expect(firstCoffee()).toBe("Coffee 133");
+  await app.press("text:revenue_usd");
+  await app.waitUntil(() => firstCoffee() !== "Coffee 133", { timeout: 5000 });
   // 成功执行进历史
   await app.press("id:history");
   await app.waitUntil(() => hasText(app, "-- Top products by revenue"), { timeout: 5000 });
 });
 
 async function replaceSql(app: App, sql: string) {
-  await app.press("id:sql-editor");
+  await app.press("text:-- Top products by revenue");
   await app.keyboard.press("mod+a");
   await app.type("id:sql-editor", sql);
 }
