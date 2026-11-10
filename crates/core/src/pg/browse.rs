@@ -1,8 +1,8 @@
 use crate::error::AppResult;
 use crate::pg::client::PgPool;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColumnInfo {
     pub name: String,
@@ -13,7 +13,7 @@ pub struct ColumnInfo {
     pub is_pk: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexInfo {
     pub name: String,
@@ -22,7 +22,7 @@ pub struct IndexInfo {
     pub is_unique: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableDetail {
     pub columns: Vec<ColumnInfo>,
     pub indexes: Vec<IndexInfo>,
