@@ -229,6 +229,10 @@ cell:
     zh-CN: "查看单元格"
     zh-TW: "檢視儲存格"
 tab:
+  mongo_unsupported:
+    en: "MongoDB is not supported yet"
+    zh-CN: "暂不支持 MongoDB"
+    zh-TW: "暫不支援 MongoDB"
   editor_placeholder_mongo:
     en: "db.users.find({ age: { $gt: 18 } })"
     zh-CN: "db.users.find({ age: { $gt: 18 } })"
@@ -380,6 +384,10 @@ grid:
     zh-CN: "没有行"
     zh-TW: "沒有資料列"
 erd:
+  wip:
+    en: "The ER diagram is under development"
+    zh-CN: "ER 图开发中"
+    zh-TW: "ER 圖開發中"
   search_placeholder:
     en: "Search tables / columns / foreign keys…"
     zh-CN: "搜索表/字段/外键…"

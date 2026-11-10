@@ -209,3 +209,85 @@ export interface AiProtocolOption {
   id: Protocol;
   label: string;
 }
+
+// ==== tab ====
+
+/** Redis key 的值:统一成 列 + 行 的表格形态。 */
+export interface RedisKeyValue {
+  key: string;
+  keyType: string;
+  columns: string[];
+  rows: string[][];
+}
+
+/** Redis key 详情。`ttl`:-1 永不过期,-2 不存在。 */
+export interface KeyDetail {
+  key: string;
+  keyType: string;
+  ttl: number;
+  size: number;
+}
+
+/** 单元格的灰阶档位(Datum 灰阶三档 + 单一语义色)。 */
+export type CellTier = "strong" | "normal" | "dim" | "hash" | "null" | "negative";
+
+export interface CellStyle {
+  tier: CellTier;
+  mono: boolean;
+}
+
+export type ColAlign = "left" | "right" | "center";
+
+export type FilterOp =
+  | "contains"
+  | "eq"
+  | "ne"
+  | "starts"
+  | "ends"
+  | "gt"
+  | "lt"
+  | "gte"
+  | "lte"
+  | "empty"
+  | "notEmpty";
+
+export const FILTER_OPS: FilterOp[] = [
+  "contains",
+  "eq",
+  "ne",
+  "starts",
+  "ends",
+  "gt",
+  "lt",
+  "gte",
+  "lte",
+  "empty",
+  "notEmpty",
+];
+
+/** 条件之间的连接词(全局统一)。 */
+export type Conj = "and" | "or";
+
+/** 一条筛选条件。`col` 为空串表示尚未选择列。 */
+export interface FilterRow {
+  id: number;
+  col: string;
+  op: FilterOp;
+  value: string;
+}
+
+/** 编辑器补全的一项。 */
+export interface CompletionItem {
+  label: string;
+  detail: string;
+  /** LSP 的 CompletionItemKind 名(keyword / class / field / snippet / function / constant) */
+  kind: string;
+  insert: string;
+}
+
+/** 编辑器补全:替换范围为 UTF-16 偏移。 */
+export interface CompletionResult {
+  start: number;
+  end: number;
+  items: CompletionItem[];
+}
