@@ -74,7 +74,7 @@ function applicationMenu(): MenuItem[] {
     },
     // 编辑:输入框与编辑器的剪切 / 复制 / 粘贴等由系统角色提供(GPUI 版由控件自己处理)
     {
-      label: "Edit",
+      label: t("menu.edit"),
       submenu: [
         { role: "undo" },
         { role: "redo" },

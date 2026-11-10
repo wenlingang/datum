@@ -4,7 +4,7 @@
 // 字号:GPUI 版以「正文字号」为基准(text-sm = 字号),整套尺度随之缩放。这里用主题 token
 // 表达:--fs-xs / --fs-sm / --fs-base / --fs-lg,组件用 ui/text.ts 里的 FS.* 类名引用它们。
 
-import { setColorScheme, setTheme, signal } from "nsh";
+import { localeSettings, setColorScheme, setTheme, signal, untracked } from "nsh";
 import { setLocale } from "nsh/i18n";
 import baseTheme from "../theme.json";
 import { prefsStore } from "../lib/native";
@@ -104,10 +104,7 @@ export function apply() {
   prefsStore.setCoreLocale(mapLocale(tag ?? systemLocaleTag()));
 }
 
+/** 系统首选语言(用户偏好列表的第一项)。 */
 function systemLocaleTag(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().locale;
-  } catch {
-    return "en";
-  }
+  return untracked(() => localeSettings().languages[0]) ?? "en";
 }
