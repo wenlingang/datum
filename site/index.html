@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Datum</title>
-<meta name="description" content="A native desktop database client for PostgreSQL, MySQL, SQLite, Redis and MongoDB on macOS. Free and open source.">
+<meta name="description" content="A native desktop database client for PostgreSQL, MySQL, SQLite and Redis on macOS, Windows and Linux. Free and open source.">
 <meta property="og:title" content="Datum">
-<meta property="og:description" content="A native desktop database client for PostgreSQL, MySQL, SQLite, Redis and MongoDB.">
+<meta property="og:description" content="A native desktop database client for PostgreSQL, MySQL, SQLite and Redis.">
 <meta property="og:image" content="https://wenlingang.github.io/datum/screenshots/table.png">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -285,11 +285,11 @@ document.documentElement.classList.add("js");
     <div>
       <h1 lang="en">Your databases, one quiet window.</h1>
       <h1 lang="zh-CN">所有数据库，一个安静的窗口。</h1>
-      <p class="lede" lang="en">Datum is a native Mac client for PostgreSQL, MySQL, SQLite, Redis and MongoDB. Write SQL with completion that knows your schema, browse and edit tables, and see how everything connects.</p>
-      <p class="lede" lang="zh-CN">Datum 是一款原生 Mac 数据库客户端，支持 PostgreSQL、MySQL、SQLite、Redis 与 MongoDB。补全懂你的表结构，浏览、编辑表格，一眼看清表之间的关系。</p>
+      <p class="lede" lang="en">Datum is a native desktop client for PostgreSQL, MySQL, SQLite and Redis, on macOS, Windows and Linux. Write SQL with completion that knows your schema, browse and edit tables, and keep local, staging and prod apart.</p>
+      <p class="lede" lang="zh-CN">Datum 是一款原生桌面数据库客户端，支持 PostgreSQL、MySQL、SQLite 与 Redis，可在 macOS、Windows、Linux 上使用。补全懂你的表结构，浏览、编辑表格，local、staging、prod 分得清清楚楚。</p>
       <div class="actions">
         <a class="btn" href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg"><span lang="en">Download for Mac</span><span lang="zh-CN">下载 Mac 版</span></a>
-        <span class="req"><span id="ver"><span lang="en">Free and open source</span><span lang="zh-CN">免费开源</span></span>, <span lang="en">macOS 10.15 or later</span><span lang="zh-CN">macOS 10.15 及以上</span></span>
+        <span class="req"><span lang="en">Also for</span><span lang="zh-CN">也有</span> <a href="https://github.com/wenlingang/datum/releases/latest/download/Datum-setup.exe">Windows</a> <span lang="en">and</span><span lang="zh-CN">与</span> <a href="https://github.com/wenlingang/datum/releases/latest">Linux</a>. <span id="ver"><span lang="en">Free and open source</span><span lang="zh-CN">免费开源</span></span></span>
       </div>
     </div>
 
@@ -311,16 +311,15 @@ document.documentElement.classList.add("js");
           </tr>
         </thead>
         <tbody>
-          <tr><td class="n">1</td><td>MongoDB</td><td class="mono">mongosh</td><td class="wide"><span lang="en">aggregate, BSON-safe edits</span><span lang="zh-CN">聚合、BSON 类型不丢</span></td></tr>
-          <tr><td class="n">2</td><td>MySQL</td><td class="mono">SQL</td><td class="wide">ER, Explain, TLS</td></tr>
-          <tr><td class="n">3</td><td>PostgreSQL</td><td class="mono">SQL</td><td class="wide">ER, Explain, TLS</td></tr>
-          <tr><td class="n">4</td><td>Redis</td><td class="mono"><span lang="en">commands</span><span lang="zh-CN">命令</span></td><td class="wide"><span lang="en">TTL, typed values</span><span lang="zh-CN">TTL、按类型展示</span></td></tr>
-          <tr><td class="n">5</td><td>SQLite</td><td class="mono">SQL</td><td class="null wide">NULL</td></tr>
+          <tr><td class="n">1</td><td>MySQL</td><td class="mono">SQL</td><td class="wide">Explain, TLS</td></tr>
+          <tr><td class="n">2</td><td>PostgreSQL</td><td class="mono">SQL</td><td class="wide">Explain, TLS</td></tr>
+          <tr><td class="n">3</td><td>Redis</td><td class="mono"><span lang="en">commands</span><span lang="zh-CN">命令</span></td><td class="wide"><span lang="en">TTL, typed values</span><span lang="zh-CN">TTL、按类型展示</span></td></tr>
+          <tr><td class="n">4</td><td>SQLite</td><td class="mono">SQL</td><td class="null wide">NULL</td></tr>
         </tbody>
       </table>
       <div class="status">
         <span><span class="dot" style="display:inline-block;margin-right:6px"></span><span lang="en">Connected</span><span lang="zh-CN">已连接</span></span>
-        <span class="took"><b>5</b> <span lang="en">rows</span><span lang="zh-CN">行</span>, <span lang="en">in</span><span lang="zh-CN">耗时</span> <span class="mono">12 ms</span></span>
+        <span class="took"><b>4</b> <span lang="en">rows</span><span lang="zh-CN">行</span>, <span lang="en">in</span><span lang="zh-CN">耗时</span> <span class="mono">12 ms</span></span>
       </div>
     </div>
   </div>
@@ -357,25 +356,13 @@ document.documentElement.classList.add("js");
           <h2 lang="zh-CN">一眼看清表之间的关系。</h2>
           <p lang="en">The ER diagram reads real foreign keys and infers the ones you only expressed by naming a column <code>customer_id</code>.</p>
           <p lang="zh-CN">ER 图既读取真实外键，也能从 <code>customer_id</code> 这样的列名推断出逻辑关系。</p>
-          <p class="muted" lang="en">Drag, zoom, search, and export it as a PNG.</p>
-          <p class="muted" lang="zh-CN">可拖拽、缩放、搜索，并导出为 PNG。</p>
+          <p class="muted" lang="en">Drag, zoom, search, and export it as a PNG. Not in the current version yet: it is still being ported to the new UI.</p>
+          <p class="muted" lang="zh-CN">可拖拽、缩放、搜索，并导出为 PNG。当前版本暂未提供，正在移植到新界面。</p>
         </div>
         <img class="shot" src="screenshots/er-diagram.png" width="1600" height="1025" loading="lazy" alt="ER diagram of a sample shop schema">
       </div>
 
       <div class="scene flip">
-        <div>
-          <h2 lang="en">MongoDB, the way you already query it.</h2>
-          <h2 lang="zh-CN">用你熟悉的方式查 MongoDB。</h2>
-          <p lang="en">Page through a collection with Filter, Sort and Projection, switch between a table and JSON, and edit whole documents without types quietly changing.</p>
-          <p lang="zh-CN">用 Filter、Sort、Projection 翻阅集合，在表格和 JSON 之间切换，编辑整篇文档时类型不会悄悄改变。</p>
-          <p class="muted" lang="en">The query tab speaks a mongosh subset: <code>find</code>, <code>aggregate</code>, <code>updateMany</code> and friends.</p>
-          <p class="muted" lang="zh-CN">查询页支持 mongosh 子集：<code>find</code>、<code>aggregate</code>、<code>updateMany</code> 等。</p>
-        </div>
-        <img class="shot" src="screenshots/mongo-collection.png" width="1600" height="1025" loading="lazy" alt="A MongoDB collection filtered and sorted, with the document details panel">
-      </div>
-
-      <div class="scene">
         <div>
           <h2 lang="en">Hard to shoot yourself in the foot.</h2>
           <h2 lang="zh-CN">不容易误操作。</h2>
@@ -384,8 +371,8 @@ document.documentElement.classList.add("js");
           </div>
           <p lang="en">Every connection carries its environment's color. <code>DROP</code>, <code>TRUNCATE</code>, or a <code>DELETE</code> without <code>WHERE</code> waits for you to confirm, and read-only connections are enforced by the database itself.</p>
           <p lang="zh-CN">每个连接都带着所属环境的颜色。<code>DROP</code>、<code>TRUNCATE</code>、不带 <code>WHERE</code> 的 <code>DELETE</code> 都要你确认后才执行，只读连接由数据库本身强制保证。</p>
-          <p class="muted" lang="en">Passwords for staging and prod live in the macOS Keychain.</p>
-          <p class="muted" lang="zh-CN">staging 与 prod 的密码存放在 macOS 钥匙串里。</p>
+          <p class="muted" lang="en">Passwords for staging and prod live in the system keychain: Keychain on macOS, Credential Manager on Windows, Secret Service on Linux.</p>
+          <p class="muted" lang="zh-CN">staging 与 prod 的密码存放在系统钥匙串里：macOS 钥匙串、Windows 凭据管理器、Linux Secret Service。</p>
         </div>
         <div class="pair">
           <img class="shot" src="screenshots/new-connection.png" width="1000" height="864" loading="lazy" alt="The new connection dialog">
@@ -409,8 +396,8 @@ document.documentElement.classList.add("js");
         <div>
           <h3 lang="en">Native, light and dark</h3>
           <h3 lang="zh-CN">原生，浅色深色都好看</h3>
-          <p lang="en">Built in Rust on GPUI Kit, with no WebView. English, Simplified and Traditional Chinese, following your system.</p>
-          <p lang="zh-CN">基于 GPUI Kit 用 Rust 原生实现，没有 WebView。支持英文、简体中文、繁体中文，默认跟随系统。</p>
+          <p lang="en">Drawn with each platform's own UI through nsh (AppKit, Win32, GTK 4), with a Rust data layer and no WebView. English, Simplified and Traditional Chinese, following your system.</p>
+          <p lang="zh-CN">通过 nsh 用各平台自己的界面绘制（AppKit、Win32、GTK 4），数据层是 Rust，没有 WebView。支持英文、简体中文、繁体中文，默认跟随系统。</p>
         </div>
       </div>
     </div>
@@ -420,13 +407,23 @@ document.documentElement.classList.add("js");
     <div class="wrap">
       <h2 lang="en">Install</h2>
       <h2 lang="zh-CN">安装</h2>
-      <p class="muted" lang="en">Universal build for Apple Silicon and Intel Macs.</p>
-      <p class="muted" lang="zh-CN">通用包，Apple Silicon 与 Intel 芯片的 Mac 都能用。</p>
+      <p class="muted" lang="en">For macOS 14 or later, Windows 10 (1809) or later / Windows 11, and Linux with GTK 4.14 or later (x86_64).</p>
+      <p class="muted" lang="zh-CN">支持 macOS 14 及以上、Windows 10（1809）及以上 / Windows 11，以及带 GTK 4.14 及以上的 Linux（x86_64）。</p>
       <ol class="steps">
         <li>
           <div>
-            <p lang="en"><a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">Download Datum.dmg</a>, open it and drag Datum into Applications. Don't run it from inside the dmg.</p>
-            <p lang="zh-CN"><a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">下载 Datum.dmg</a>，打开后把 Datum 拖进「应用程序」。不要直接在 dmg 里运行。</p>
+            <p lang="en">Download for your system:</p>
+            <p lang="zh-CN">按你的系统下载：</p>
+            <ul lang="en">
+              <li>Mac: <a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">Datum.dmg</a> (Apple silicon; Intel Macs take the <code>x86_64</code> dmg from <a href="https://github.com/wenlingang/datum/releases/latest">Releases</a>). Open it and drag Datum into Applications. Don't run it from inside the dmg.</li>
+              <li>Windows: <a href="https://github.com/wenlingang/datum/releases/latest/download/Datum-setup.exe">Datum-setup.exe</a>, then run the installer.</li>
+              <li>Linux: the <code>linux-x86_64.tar.gz</code> from <a href="https://github.com/wenlingang/datum/releases/latest">Releases</a>. Unpack it and run <code>Datum/Datum</code>.</li>
+            </ul>
+            <ul lang="zh-CN">
+              <li>Mac：<a href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg">Datum.dmg</a>（Apple 芯片；Intel 芯片的 Mac 请到 <a href="https://github.com/wenlingang/datum/releases/latest">Releases</a> 下载 <code>x86_64</code> 的 dmg）。打开后把 Datum 拖进「应用程序」。不要直接在 dmg 里运行。</li>
+              <li>Windows：<a href="https://github.com/wenlingang/datum/releases/latest/download/Datum-setup.exe">Datum-setup.exe</a>，下载后运行安装器。</li>
+              <li>Linux：到 <a href="https://github.com/wenlingang/datum/releases/latest">Releases</a> 下载 <code>linux-x86_64.tar.gz</code>，解压后运行 <code>Datum/Datum</code>。</li>
+            </ul>
           </div>
         </li>
         <li>
@@ -441,12 +438,14 @@ document.documentElement.classList.add("js");
               <li>打开「系统设置 › 隐私与安全性」，在页面底部点<strong>仍要打开</strong></li>
               <li>或在打开 dmg 之前执行 <code>xattr -d com.apple.quarantine ~/Downloads/Datum.dmg</code></li>
             </ul>
+            <p lang="en">The Windows installer isn't code-signed either. If SmartScreen stops it, click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+            <p lang="zh-CN">Windows 安装器同样没有代码签名。如果被 SmartScreen 拦下，点<strong>更多信息</strong>，再点<strong>仍要运行</strong>。</p>
           </div>
         </li>
         <li>
           <div>
-            <p lang="en">Add a connection and start querying. Later versions install themselves from Settings › About.</p>
-            <p lang="zh-CN">新建一个连接就能开始查询。之后的新版本可以在「设置 › 关于」里一键安装。</p>
+            <p lang="en">Add a connection and start querying. Later versions install themselves from Settings › About &amp; Updates. Coming from 0.0.1? That version can't update itself to this one, so download it once by hand.</p>
+            <p lang="zh-CN">新建一个连接就能开始查询。之后的新版本可以在「设置 › 关于与更新」里一键安装。0.0.1 无法自动更新到新版，需要手动下载一次。</p>
           </div>
         </li>
       </ol>
@@ -456,8 +455,8 @@ document.documentElement.classList.add("js");
 
 <footer>
   <div class="wrap">
-    <span lang="en">Built with <a href="https://github.com/longbridge/gpui-kit">GPUI Kit</a>. Screenshots use a made-up coffee roastery database.</span>
-    <span lang="zh-CN">基于 <a href="https://github.com/longbridge/gpui-kit">GPUI Kit</a> 构建。截图使用的是虚构的咖啡烘焙店数据库。</span>
+    <span lang="en">Built with <a href="https://nsh.dev">nsh</a>. Screenshots use a made-up coffee roastery database.</span>
+    <span lang="zh-CN">基于 <a href="https://nsh.dev">nsh</a> 构建。截图使用的是虚构的咖啡烘焙店数据库。</span>
     <span><a href="https://github.com/wenlingang/datum">Source</a> &nbsp; <a href="https://github.com/wenlingang/datum/releases">Releases</a></span>
   </div>
 </footer>
