@@ -29,7 +29,3 @@ tokio-postgres-rustls = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1"
-
-[features]
-# 允许用环境变量 DATUM_UPDATE_MANIFEST_URL 覆盖更新清单地址(仅测试用,正式包不开启)
-update-override = []

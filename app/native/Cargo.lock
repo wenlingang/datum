@@ -1004,7 +1004,7 @@ checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
 name = "datum-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2852,6 +2852,7 @@ dependencies = [
 [[package]]
 name = "nsh-base"
 version = "0.4.0"
+source = "git+https://github.com/longbridge/nsh?rev=88c0eee6a5f594d907f8b44efde4ad537b7ce46f#88c0eee6a5f594d907f8b44efde4ad537b7ce46f"
 dependencies = [
  "chrono",
  "html5ever",
@@ -2875,6 +2876,7 @@ dependencies = [
 [[package]]
 name = "nsh-core"
 version = "0.4.0"
+source = "git+https://github.com/longbridge/nsh?rev=88c0eee6a5f594d907f8b44efde4ad537b7ce46f#88c0eee6a5f594d907f8b44efde4ad537b7ce46f"
 dependencies = [
  "cap-std",
  "crc32fast",
@@ -2908,6 +2910,7 @@ dependencies = [
 [[package]]
 name = "nsh-macros"
 version = "0.4.0"
+source = "git+https://github.com/longbridge/nsh?rev=88c0eee6a5f594d907f8b44efde4ad537b7ce46f#88c0eee6a5f594d907f8b44efde4ad537b7ce46f"
 dependencies = [
  "imagesize",
  "proc-macro2",
@@ -2920,6 +2923,7 @@ dependencies = [
 [[package]]
 name = "nsh-updater"
 version = "0.4.0"
+source = "git+https://github.com/longbridge/nsh?rev=88c0eee6a5f594d907f8b44efde4ad537b7ce46f#88c0eee6a5f594d907f8b44efde4ad537b7ce46f"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",

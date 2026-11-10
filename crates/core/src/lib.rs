@@ -22,6 +22,5 @@ pub mod service;
 pub mod sql;
 pub mod sqlite;
 pub mod tls;
-pub mod update;
 
 pub use commands::AppState;

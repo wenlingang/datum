@@ -45,8 +45,13 @@ app/                  nsh 应用(混合模式:"rust": "native",无 "root",入口
 - **快捷键**:`keymap.bind("mod+enter", …)`(nsh),与 GPUI 版 `actions.rs` 的键位一致。
 - **验证循环**:`app/` 下 `nsh check` → `nsh build`(warn 都要看)→ `nsh test` → `nsh run` 看实际效果。
 
-## 工具链
+## 工具链与发版
 
-- nsh 的 crate 用本地源码 `~/github/nsh`(路径依赖);全局 CLI 已从该源码 `cargo install` 到最新
-  (`nsh 0.4.0 (88c0eee)`),与宿主同源。crates.io 上的 0.4.0 缺 `nsh-platform-tui`,不能用。
-- 待办:发版前改成 git 依赖或 crates.io 版本,并补三平台的打包、签名与自动更新(`nsh/updater`)。
+- nsh 的 crate 用 GitHub 仓库的固定提交(`app/native/Cargo.toml` 里的 `rev`);nsh CLI 必须与之同源,
+  CI 用 `script/install-nsh.sh` 按该 rev 安装。升级 nsh:改 rev → 重装 CLI → `nsh check`/测试。
+- 版本号唯一来源:`app/nsh.json` 的 `"version"`。标签 `v<版本>` 触发 `.github/workflows/release.yml`:
+  测试 → macOS(aarch64、x86_64)/ Windows / Linux 打包 → macOS 用 "Datum Release" 证书重签并出 dmg
+  (`script/sign-macos.sh`)→ `nsh update-manifest` 用 `UPDATE_SIGNING_KEY` 签 `latest.json` → 建 Release。
+- 自动更新:`nsh/updater`,`nsh.json` 的 `updater` 指向 GitHub 仓库并带公钥(私钥在仓库外,
+  `~/datum-update-key/update.secret`)。不兼容 v0.0.1 的旧更新器(用户决定直接切换,v0.0.1 需手动下载新版)。
+- 测试:`app/testing/run-tests.sh`(在临时配置目录里分块跑)。
