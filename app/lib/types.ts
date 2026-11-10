@@ -200,3 +200,21 @@ export interface ProviderPreset {
   protocol: Protocol;
   baseUrl: string;
 }
+
+// ==== dialogs ====
+
+/** Mongo 连接串拆分结果(core `mongo::uri::split_uri`)。 */
+export interface MongoUriParts {
+  /** 不含密码与库名的连接串 */
+  sanitized: string;
+  user: string;
+  /** null:串里没写密码 */
+  password: string | null;
+  hosts: string;
+  database: string;
+}
+
+export interface AiProtocolOption {
+  id: Protocol;
+  label: string;
+}
