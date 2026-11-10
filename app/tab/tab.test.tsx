@@ -11,7 +11,7 @@ const OPTS = { platform: "macos" as const, width: 1200, height: 800, locale: "en
 const hasText = (app: App, prefix: string) => app.texts().some((s) => s.startsWith(prefix));
 
 async function start(): Promise<App> {
-  const app = await open("../TabDev.tsx", OPTS);
+  const app = await open("./testing/Harness.tsx", OPTS);
   await app.waitFor("id:tab:SQL Query", { timeout: 15000 });
   return app;
 }

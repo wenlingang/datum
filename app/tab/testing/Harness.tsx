@@ -5,13 +5,13 @@
 
 import { keymap, mount, setColorScheme, Text, View } from "nsh";
 import { Button } from "nsh/base";
-import { activate, conns, loadTables, reloadConnections } from "../store/conns";
-import { apply as applyPrefs } from "../store/prefs";
-import { dismissToast, toasts } from "../store/toast";
-import { focusTab, setDetailOpen, toggleDetail, workspace } from "../store/workspace";
-import { DbIcon, Dot, Icon, IconButton } from "../ui/kit";
-import { FS } from "../ui/text";
-import { DetailPanel, modelOf, newQueryTab, openErd, openTable, runTabCommand, TabStatus, TabView } from "./index";
+import { activate, conns, loadTables, reloadConnections } from "../../store/conns";
+import { apply as applyPrefs } from "../../store/prefs";
+import { dismissToast, toasts } from "../../store/toast";
+import { focusTab, setDetailOpen, toggleDetail, workspace } from "../../store/workspace";
+import { DbIcon, Dot, Icon, IconButton } from "../../ui/kit";
+import { FS } from "../../ui/text";
+import { DetailPanel, modelOf, newQueryTab, openErd, openTable, runTabCommand, TabStatus, TabView } from "../index";
 
 applyPrefs();
 reloadConnections();
