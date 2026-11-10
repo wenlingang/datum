@@ -11,6 +11,6 @@
     "title": "Datum",
     "defaultSize": { "width": 1200, "height": 800 },
     "minSize": { "width": 900, "height": 600 },
-    "titleBar": { "style": "hidden", "height": 40 }
+    "titleBar": { "style": "hidden", "height": 46 }
   }
 }

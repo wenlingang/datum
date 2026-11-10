@@ -1,6 +1,8 @@
-// Datum 入口:应用偏好、挂载工作区。页面逻辑在 workspace/、tab/、dialogs/、chat/ 里。
+// Datum 入口:应用偏好、挂载工作区与对话框宿主。页面逻辑在 workspace/、tab/、dialogs/、chat/ 里;
+// 应用菜单与快捷键由 workspace/commands.ts 在工作区挂载时安装。
 
 import { mount, Text, View } from "nsh";
+import { DialogHost } from "./dialogs";
 import { reloadConnections } from "./store/conns";
 import { apply as applyPrefs } from "./store/prefs";
 import { dismissToast, toasts } from "./store/toast";
@@ -36,6 +38,7 @@ function App() {
   return (
     <View class={`flex-1 bg-background ${FS.sm}`}>
       <Workspace />
+      <DialogHost />
       <Toasts />
     </View>
   );

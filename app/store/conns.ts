@@ -130,6 +130,25 @@ export async function disconnect(id: string) {
   forget(id);
 }
 
+/** 同实例(类型 / 主机 / 端口 / 用户相同)下指向 `database` 的其他连接。 */
+export function siblings(conn: Connection, database: string): Connection[] {
+  return connections().filter(
+    (x) =>
+      x.id !== conn.id &&
+      x.kind === conn.kind &&
+      x.host === conn.host &&
+      x.port === conn.port &&
+      x.user === conn.user &&
+      x.database === database,
+  );
+}
+
+/** 从缓存的库列表里去掉一个库(DROP DATABASE 之后)。 */
+export function forgetDatabase(id: string, database: string) {
+  const list = databases()[id];
+  if (list) setKey(databases, id, list.filter((d) => d !== database));
+}
+
 /** 刷新对象列表(表结构变更后)。 */
 export async function refreshTables(id: string) {
   setKey(tables, id, undefined);
