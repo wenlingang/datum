@@ -54,7 +54,7 @@ Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給�
 
 - **macOS** 14 以上:`Datum-<版本>-macos-aarch64.dmg`(Apple 晶片)或 `Datum-<版本>-macos-x86_64.dmg`(Intel),將 Datum 拖進「應用程式」。
 - **Windows** 10 1809 以上 / Windows 11:執行 `Datum-setup.exe`,或解壓縮 `Datum-<版本>-windows-x86_64.zip`。
-- **Linux**(x86_64,GTK 4.14 以上):解壓縮 `Datum-<版本>-linux-x86_64.tar.gz`,執行 `Datum/Datum`。目錄中還有 `.desktop` 檔案與圖示,想放進啟動器時可以使用。
+- **Linux**(x86_64,GTK 4.14 以上與 WebKitGTK 6.0):解壓縮 `Datum-<版本>-linux-x86_64.tar.gz`,執行 `Datum/Datum`。目錄中還有 `.desktop` 檔案與圖示,想放進啟動器時可以使用。
 
 Datum 目前尚未經過 Apple 公證,第一次開啟會被系統阻擋,任選一種方式放行(只需一次,之後的 App 內更新不受影響):
 

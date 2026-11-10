@@ -54,7 +54,7 @@ Download from [Releases](https://github.com/wenlingang/datum/releases):
 
 - **macOS** 14 or later: `Datum-<version>-macos-aarch64.dmg` (Apple Silicon) or `Datum-<version>-macos-x86_64.dmg` (Intel), then drag Datum into Applications.
 - **Windows** 10 1809 or later / Windows 11: run `Datum-setup.exe`, or unzip `Datum-<version>-windows-x86_64.zip`.
-- **Linux** (x86_64, GTK 4.14 or later): unpack `Datum-<version>-linux-x86_64.tar.gz` and run `Datum/Datum`. The folder also has a `.desktop` entry and the icon, should you want it in your launcher.
+- **Linux** (x86_64, GTK 4.14 or later and WebKitGTK 6.0): unpack `Datum-<version>-linux-x86_64.tar.gz` and run `Datum/Datum`. The folder also has a `.desktop` entry and the icon, should you want it in your launcher.
 
 Datum is not notarized by Apple yet, so macOS blocks it on first launch. Allow it once using either method (in-app updates are not affected afterwards):
 
