@@ -14,7 +14,7 @@ if (!/^\/(private\/)?(tmp|var\/folders)\//.test(CONFIG)) {
   throw new Error(`refusing to run against ${CONFIG}: set DATUM_CONFIG_DIR to a temporary directory`);
 }
 
-const start = () => open("../DialogsDev.tsx", { platform: "macos", width: 1200, height: 800 });
+const start = () => open("./testing/Harness.tsx", { platform: "macos", width: 1200, height: 800 });
 
 // 测试里 fs 受沙箱限制,经原生模块读落盘文件
 async function readJson(name: string): Promise<any> {
@@ -55,11 +55,6 @@ describe("connection form", () => {
     await app.press("label:SSL");
     await app.press("text:Require");
     await app.waitFor("text:rediss://root:••••@127.0.0.1:6379/0");
-    // Mongo 表单模式:core 拼的连接串,密码遮住
-    await app.press("label:Type");
-    await app.press("text:MongoDB");
-    await app.type("id:conn-user", "admin");
-    await app.waitFor("text:/^mongodb:\\/\\/admin:••••@127\\.0\\.0\\.1:27017\\/\\?directConnection=true&authSource=admin/");
     app.dispose();
   });
 
@@ -82,18 +77,6 @@ describe("connection form", () => {
     expect(conn?.kind).toBe("sqlite");
     expect(conn?.filePath).toBe(SQLITE);
     await app.waitFor(`text:/active: ${conn.id}/`);
-    app.dispose();
-  });
-
-  test("Mongo connection-string mode rejects an invalid string", async () => {
-    const app = await start();
-    await app.press("id:dev-new-conn");
-    await app.press("label:Type");
-    await app.press("text:MongoDB");
-    await app.press("text:Connection string");
-    await app.type("id:conn-name", "mongo-uri");
-    await app.press("id:conn-save");
-    await app.waitFor("text:/^Invalid connection string/");
     app.dispose();
   });
 });

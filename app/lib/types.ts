@@ -5,7 +5,9 @@ export type DbKind = "pg" | "mysql" | "redis" | "sqlite" | "mongo";
 export type Env = "local" | "staging" | "prod";
 export type SslMode = "disable" | "prefer" | "require" | "verifyFull";
 
-export const DB_KINDS: DbKind[] = ["pg", "mysql", "sqlite", "redis", "mongo"];
+/** nsh 版支持的连接类型(不含 MongoDB:已存的 Mongo 连接保留在配置里,但界面不显示)。 */
+export const DB_KINDS: DbKind[] = ["pg", "mysql", "sqlite", "redis"];
+export const isSupportedKind = (k: DbKind) => DB_KINDS.includes(k);
 export const ENVS: Env[] = ["local", "staging", "prod"];
 export const SSL_MODES: SslMode[] = ["disable", "prefer", "require", "verifyFull"];
 
@@ -202,17 +204,6 @@ export interface ProviderPreset {
 }
 
 // ==== dialogs ====
-
-/** Mongo 连接串拆分结果(core `mongo::uri::split_uri`)。 */
-export interface MongoUriParts {
-  /** 不含密码与库名的连接串 */
-  sanitized: string;
-  user: string;
-  /** null:串里没写密码 */
-  password: string | null;
-  hosts: string;
-  database: string;
-}
 
 export interface AiProtocolOption {
   id: Protocol;

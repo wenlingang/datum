@@ -1,8 +1,7 @@
-// 新建/编辑连接:类型、名称、环境、主机端口、用户密码、数据库(SQLite 为文件;Mongo 可用连接串),
+// 新建/编辑连接:类型、名称、环境、主机端口、用户密码、数据库(SQLite 为文件),
 // 带连接串预览与真实连通性测试。对应 GPUI 版 dialogs/connection_form.rs。
 
 import { cleanup, signal, Text, View } from "nsh";
-import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { dialogsNative, errorText, store } from "../lib/native";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSL_MODES } from "../lib/types";
@@ -57,8 +56,6 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
   const d = () => draft();
   const set = (patch: Partial<ConnDraft>) => draft.update((v) => ({ ...v, ...patch }));
   const sqlite = () => d().kind === "sqlite";
-  const mongo = () => d().kind === "mongo";
-  const uriMode = () => mongo() && d().uriMode;
   const preview = () => {
     try {
       return previewString(d());
@@ -234,46 +231,9 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
             onChange={(env) => set({ env })}
           />
         </Field>
-        <If when={mongo()}>
-          <Field label={t("conn_form.mode")} class="">
-            <Segmented
-              testID="conn-mode"
-              options={[
-                { value: "form", label: t("conn_form.mode_form") },
-                { value: "uri", label: t("conn_form.mode_uri") },
-              ]}
-              value={d().uriMode ? "uri" : "form"}
-              onChange={(m) => {
-                set({ uriMode: m === "uri" });
-                error.set(null);
-              }}
-            />
-          </Field>
-        </If>
       </If>
 
-      <If when={uriMode()}>
-        <Field label={t("conn_form.uri")} class="">
-          <View class="overflow-hidden rounded-(--radius) border border-border bg-background" style={{ height: 84 }}>
-            <Editor
-              testID="conn-uri"
-              class="flex-1"
-              value={d().uri}
-              onChange={({ value }) => set({ uri: value })}
-              language="text"
-              lineNumbers={false}
-              softWrap
-              activeLine={false}
-              indentGuides={false}
-              scrollBeyondLastLine={false}
-              placeholder="mongodb+srv://user:password@cluster0.example.mongodb.net/app"
-            />
-          </View>
-        </Field>
-        <Text class={`${FS.xs} text-fg-faint`}>{t("conn_form.uri_hint")}</Text>
-      </If>
-
-      <If when={!sqlite() && !uriMode()}>
+      <If when={!sqlite()}>
         <View class="flex-row gap-4">
           <Field label={t("conn_form.host")}>
             <TextField testID="conn-host" value={d().host} placeholder="127.0.0.1" onChange={({ value }) => set({ host: value })} />
@@ -310,11 +270,6 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
               onChange={({ value }) => set({ database: value })}
             />
           </Field>
-          <If when={mongo()}>
-            <Field label={t("conn_form.auth_source")} class="shrink-0" style={{ width: 150 }}>
-              <TextField testID="conn-auth" value={d().authSource} placeholder="admin" onChange={({ value }) => set({ authSource: value })} />
-            </Field>
-          </If>
           <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
             <Dropdown
               testID="conn-ssl"

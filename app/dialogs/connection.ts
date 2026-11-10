@@ -2,7 +2,6 @@
 // 对应 GPUI 版 dialogs/connection_form.rs 里不涉及界面的部分。
 
 import { t } from "nsh/i18n";
-import { dialogsNative } from "../lib/native";
 import { type Connection, type DbKind, type Env, KIND_SCHEME, type SslMode } from "../lib/types";
 
 /** 表单草稿:输入框里的原文(端口也是文本)。 */
@@ -17,10 +16,6 @@ export interface ConnDraft {
   password: string;
   database: string;
   filePath: string;
-  /** 仅 Mongo:true = 连接串模式 */
-  uriMode: boolean;
-  uri: string;
-  authSource: string;
 }
 
 /** 新建时的初始值(PostgreSQL 本地库)。 */
@@ -36,9 +31,6 @@ export function emptyDraft(): ConnDraft {
     password: "",
     database: "postgres",
     filePath: "",
-    uriMode: false,
-    uri: "",
-    authSource: "",
   };
 }
 
@@ -60,10 +52,6 @@ export function draftFrom(conn: Connection | undefined, database?: string): Conn
     password: "",
     database: db,
     filePath: conn.filePath ?? "",
-    uriMode: conn.uri != null,
-    // 存下来的连接串不含库名:回填时放回去,否则原样保存会清空默认库
-    uri: conn.uri != null ? dialogsNative.mongoWithDatabase(conn.uri, db) : "",
-    authSource: conn.authSource ?? "",
   };
 }
 
@@ -75,17 +63,14 @@ export function withKind(d: ConnDraft, kind: DbKind): ConnDraft {
       ? ["6379", d.user, "0"]
       : kind === "mysql"
         ? ["3306", "root", ""]
-        : kind === "mongo"
-          ? ["27017", "", ""]
-          : ["5432", "postgres", "postgres"];
+        : ["5432", "postgres", "postgres"];
   return { ...d, kind, port, user, database };
 }
 
-/** 草稿 → 连接(表单模式;连接串模式见 connectionAndPassword)。 */
+/** 草稿 → 连接。 */
 export function buildConnection(d: ConnDraft, id: string): Connection {
   const sqlite = d.kind === "sqlite";
   const port = Number.parseInt(d.port.trim(), 10);
-  const authSource = d.authSource.trim();
   return {
     id,
     name: d.name.trim(),
@@ -99,40 +84,17 @@ export function buildConnection(d: ConnDraft, id: string): Connection {
     filePath: sqlite ? d.filePath.trim() : null,
     sslMode: d.ssl,
     uri: null,
-    authSource: d.kind === "mongo" && !d.uriMode && authSource ? authSource : null,
+    authSource: null,
   };
 }
 
-/**
- * 表单当前对应的 (连接, 密码)。密码 null 表示编辑时沿用已存的。
- * 连接串模式下从串里拆出密码与库名;串不合法时抛出给用户看的错误。
- */
+/** 表单当前对应的 (连接, 密码)。密码 null 表示编辑时沿用已存的。 */
 export function connectionAndPassword(
   d: ConnDraft,
   id: string,
   editing: boolean,
 ): { conn: Connection; password: string | null } {
   const conn = buildConnection(d, id);
-  if (d.kind === "mongo" && d.uriMode) {
-    let parts;
-    try {
-      parts = dialogsNative.splitMongoUri(d.uri);
-    } catch (e) {
-      throw new Error(t("conn_form.uri_invalid", { error: e instanceof Error ? e.message : String(e) }));
-    }
-    return {
-      conn: {
-        ...conn,
-        uri: parts.sanitized,
-        host: parts.hosts,
-        port: 0,
-        user: parts.user,
-        database: parts.database,
-        sslMode: "prefer",
-      },
-      password: parts.password ?? (editing ? null : ""),
-    };
-  }
   // 编辑时密码留空 = 不修改;新建时留空 = 无密码
   return { conn, password: editing && d.password === "" ? null : d.password };
 }
@@ -155,18 +117,6 @@ const SSL_QUERY: Record<SslMode, string> = {
 
 /** 连接串预览(密码以圆点掩码)。 */
 export function previewString(d: ConnDraft): string {
-  if (d.kind === "mongo") {
-    if (d.uriMode) return dialogsNative.redactMongoUri(d.uri);
-    const port = Number.parseInt(d.port.trim(), 10);
-    return dialogsNative.mongoFormPreview(
-      or(d.host, "127.0.0.1").trim(),
-      Number.isInteger(port) && port > 0 && port <= 65535 ? port : 27017,
-      d.user.trim(),
-      d.password !== "",
-      d.authSource.trim(),
-      d.ssl,
-    );
-  }
   if (d.kind === "sqlite") return `sqlite://${d.filePath === "" ? t("conn_form.file_preview") : d.filePath}`;
   const host = or(d.host, "127.0.0.1");
   const user = or(d.user, "postgres");

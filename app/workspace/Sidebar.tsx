@@ -9,7 +9,7 @@ import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { insertDocument, newQueryTab, openTable } from "../tab";
+import { openTable } from "../tab";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
 import { CtxMenu, DropMenu, MItem, MSep } from "../ui/menu";
@@ -83,15 +83,6 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
   if (kind === "redis") {
     return <MItem label={t("sidebar.copy_key_name")} onSelect={() => void copyText(table)} />;
   }
-  if (kind === "mongo") {
-    return (
-      <>
-        <MItem label={t("sidebar.mongo_new_query")} onSelect={() => mongoNewQuery(connId, table)} />
-        <MItem label={t("sidebar.mongo_insert_doc")} onSelect={() => insertDocument(connId, table)} />
-        <MItem label={t("sidebar.mongo_copy_collection")} onSelect={() => void copyText(table)} />
-      </>
-    );
-  }
   return (
     <>
       <MItem label={t("sidebar.view_table_detail")} onSelect={() => showTableDetail(connId, table)} />
@@ -103,13 +94,6 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
       ))}
     </>
   );
-}
-
-/** 集合右键「新建查询」:新开查询 tab 并预填 `db.<集合>.find({})`。 */
-function mongoNewQuery(connId: string, coll: string) {
-  activate(connId);
-  const ref = /^(?!\d)[\p{L}\p{N}_$]+$/u.test(coll) ? `db.${coll}` : `db.getCollection(${JSON.stringify(coll)})`;
-  newQueryTab(`${ref}.find({})`);
 }
 
 /** 库列表右键:编辑连接 / 导出 / DROP(Redis 库是固定编号,仅编辑)。 */
