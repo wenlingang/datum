@@ -95,3 +95,18 @@ export function errorText(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
 }
+
+// ==== chat ====
+
+export const chat = {
+  /** 拼 AI 对话的 system prompt(知识库在原生侧读取,语言跟随界面)。 */
+  systemPrompt: (ctx: PromptContext) => Ai.systemPrompt(ctx),
+  /** 用户消息里提到的已存在表名,最多 10 张。 */
+  mentionedTables: (text: string, tables: string[]) => Ai.mentionedTables(text, tables),
+  /** 把 assistant 回复切成文本段与 SQL 段(流式中未闭合的代码块同样识别)。 */
+  segments: (content: string) => Ai.segments(content) as ReplySegment[],
+  /** 常用服务商预设。 */
+  presets: () => Ai.presets() as ProviderPreset[],
+};
+
+import type { PromptContext, ProviderPreset, ReplySegment } from "./types";

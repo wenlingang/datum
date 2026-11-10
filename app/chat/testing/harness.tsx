@@ -1,0 +1,36 @@
+// 测试/开发入口的外框:左侧占位、右侧 AI 面板,装上假的依赖后挂载。
+
+import { mount, Text, View } from "nsh";
+import { dismissToast, toasts } from "../../store/toast";
+import { FS } from "../../ui/text";
+import { ChatPanel } from "../index";
+import { type FakeOptions, installFakes } from "../fixtures";
+
+function Toasts() {
+  return (
+    <View class="absolute bottom-4 left-4 w-72 gap-2" style={{ pointerEvents: "box-none" }}>
+      <Each of={toasts()} key={(t) => t.id}>
+        {(item) => (
+          <View onPress={() => dismissToast(item().id)} class="rounded-(--radius) border border-border bg-popover px-3 py-2">
+            <Text class={`${FS.sm} text-popover-foreground`}>{item().text}</Text>
+          </View>
+        )}
+      </Each>
+    </View>
+  );
+}
+
+export function mountChat(options: FakeOptions = {}, before?: () => void) {
+  const record = installFakes(options);
+  before?.();
+  mount(() => (
+    <View class="flex-1 flex-row bg-background">
+      <View class="flex-1" />
+      <View class="w-[380px]">
+        <ChatPanel />
+      </View>
+      <Toasts />
+    </View>
+  ));
+  return record;
+}
