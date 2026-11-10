@@ -1036,6 +1036,7 @@ name = "datum-native"
 version = "0.1.0"
 dependencies = [
  "datum-core",
+ "dirs",
  "nsh-base",
  "nsh-core",
  "rust-i18n",

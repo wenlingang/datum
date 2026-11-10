@@ -110,3 +110,20 @@ export const chat = {
 };
 
 import type { PromptContext, ProviderPreset, ReplySegment } from "./types";
+
+// ==== shell ====
+// 工作区外壳:保存对话框写文件、导出格式渲染。
+
+import { Shell } from "datum/native";
+
+export type ExportFormat = "csv" | "sql" | "markdown";
+
+export const shell = {
+  /** 系统保存对话框(默认下载目录)写入文本;返回写入的路径,取消为 null。 */
+  saveText: (fileName: string, text: string) => Shell.saveText(fileName, text),
+  /** 结果行 → 导出文本(CSV / Markdown / 每行一条 INSERT)。 */
+  renderExport: (format: ExportFormat, table: string, columns: string[], rows: (string | null)[][], kind: DbKind) =>
+    Shell.renderExport(format, table, columns, rows, kind),
+  /** 文件名友好的时间戳 `YYYYMMDD_HHmmss`。 */
+  fileTimestamp: () => Shell.fileTimestamp(),
+};
