@@ -1,0 +1,274 @@
+// AI 回复里的 SQL 卡片:可编辑(还原/格式化)、直接执行(结果回灌 AI)、编辑器运行、复制;
+// 破坏性语句标红并在执行前确认。对应 GPUI 版 chat/sql_card.rs。
+
+import { Text, View } from "nsh";
+import { Dialog, Editor } from "nsh/base";
+import { t } from "nsh/i18n";
+import { sql as sqlNative } from "../lib/native";
+import type { DbKind } from "../lib/types";
+import { toast } from "../store/toast";
+import { Btn, DbIcon, Icon } from "../ui/kit";
+import { FS } from "../ui/text";
+import { executeSql, runInEditor } from "./actions";
+import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmRequest, updateCard } from "./cards";
+import { chatDeps } from "./deps";
+
+/** 卡片内容高度自适应,超过约 14 行后内部滚动。 */
+const MAX_LINES = 14;
+
+/** Datum 外观的 SQL 编辑器(卡片与确认框共用)。 */
+function SqlEditor(props: {
+  value: string;
+  readOnly?: boolean;
+  maxRows: number;
+  onChange?: (value: string) => void;
+  testID?: string;
+}) {
+  return (
+    <Editor
+      testID={props.testID}
+      value={props.value}
+      onChange={({ value }) => props.onChange?.(value)}
+      readOnly={props.readOnly}
+      language="sql"
+      lineNumbers
+      softWrap
+      folding={false}
+      indentGuides={false}
+      scrollBeyondLastLine={false}
+      minRows={1}
+      maxRows={props.maxRows}
+      lineHeight={20}
+      class="bg-editor"
+      classes={{
+        gutter: "bg-editor",
+        lineNumber: "text-editor-line-number",
+        activeLineNumber: "text-editor-active-line-number",
+        activeLine: "bg-editor-active-line",
+        content: "py-[7px]",
+        selection: "bg-text-selection",
+        caret: "bg-caret",
+      }}
+    />
+  );
+}
+
+function summaryOf(statements: number) {
+  return statements > 1
+    ? `${t("sql_card.ai_generated")} · ${t("sql_card.n_statements", { count: statements })}`
+    : t("sql_card.ai_generated");
+}
+
+export function SqlCard(props: {
+  cardKey: string;
+  /** AI 生成的原文(流式期间持续增长) */
+  sql: string;
+  streaming: boolean;
+  kind: DbKind;
+  /** 目标连接标签,用于确认框 */
+  target: string;
+}) {
+  const state = () => cardState(props.cardKey);
+  // 流式期间跟随增量;结束后用户的编辑不再被覆盖
+  const value = () => (props.streaming ? props.sql : (state().value ?? props.sql));
+  const dirty = () => value() !== props.sql;
+  const statements = () => sqlNative.statements(value()).length;
+  const destructive = () => sqlNative.analyze(value()).length > 0;
+  const run = () => state().run;
+
+  const request = (insert: boolean) => {
+    const v = value();
+    askConfirm({
+      cardKey: props.cardKey,
+      sql: v,
+      insert,
+      target: props.target,
+      statements: sqlNative.statements(v).length,
+      destructive: sqlNative.analyze(v).length > 0,
+    });
+  };
+  const clickInsert = () => {
+    const v = value();
+    if (sqlNative.isReadOnly(v)) runInEditor(v, false);
+    else request(true);
+  };
+
+  return (
+    <View testID={`sql-card-${props.cardKey}`} class="overflow-hidden rounded-(--radius-lg) border border-ai bg-ai-tint">
+      <View class="flex-row items-center gap-1.5 border-b border-border px-2 py-1">
+        <Icon name="sparkles" size={12} color="ai" />
+        <DbIcon kind={props.kind} size={13} />
+        <Text class={`${FS.xs} font-bold text-ai`}>{summaryOf(statements())}</Text>
+        <If when={dirty()}>
+          <View class="flex-row items-center gap-1">
+            <Icon name="pencil" size={12} color="data" />
+            <Text class={`${FS.xs} text-data`}>{t("sql_card.edited")}</Text>
+          </View>
+        </If>
+        <View class="flex-1" />
+        <If when={dirty()}>
+          <Btn
+            small
+            variant="ghost"
+            icon="rotate-ccw"
+            label={t("sql_card.revert")}
+            tooltip={t("sql_card.revert_tooltip")}
+            onPress={() => updateCard(props.cardKey, { value: undefined })}
+          />
+        </If>
+        <If when={!props.streaming}>
+          <Btn
+            small
+            variant="ghost"
+            icon="text-align-start"
+            label={t("sql_card.format")}
+            tooltip={t("sql_card.format_tooltip")}
+            onPress={() => updateCard(props.cardKey, { value: sqlNative.format(value()) })}
+          />
+        </If>
+      </View>
+      <View class="bg-editor">
+        <SqlEditor
+          testID={`sql-editor-${props.cardKey}`}
+          value={value()}
+          readOnly={props.streaming}
+          maxRows={MAX_LINES}
+          onChange={(v) => {
+            if (!props.streaming && v !== value()) updateCard(props.cardKey, { value: v });
+          }}
+        />
+      </View>
+      <View class="flex-row items-center gap-1.5 border-t border-border px-2 py-1.5">
+        <Btn
+          small
+          testID={`sql-run-${props.cardKey}`}
+          variant={destructive() ? "danger" : "primary"}
+          icon="play"
+          label={
+            run().kind === "running"
+              ? t("sql_card.running")
+              : run().kind === "done"
+                ? t("sql_card.executed")
+                : t("sql_card.run")
+          }
+          tooltip={destructive() ? t("sql_card.run_tooltip_destructive") : t("sql_card.run_tooltip")}
+          disabled={run().kind === "done" || run().kind === "running" || props.streaming}
+          onPress={() => request(false)}
+        />
+        <Btn
+          small
+          variant="ghost"
+          icon="square-play"
+          label={t("sql_card.run_in_editor")}
+          tooltip={t("sql_card.run_in_editor_tooltip")}
+          disabled={props.streaming}
+          onPress={clickInsert}
+        />
+        <Btn
+          small
+          variant="ghost"
+          icon="copy"
+          label={t("sql_card.copy")}
+          onPress={() => {
+            chatDeps.copy(value());
+            toast.success(t("sql_card.copied"));
+          }}
+        />
+        <If when={destructive() && run().kind === "idle"}>
+          <View class="flex-1" />
+          <View class="flex-row items-center gap-1">
+            <Icon name="triangle-alert" size={12} color="negative" />
+            <Text class={`${FS.xs} text-negative`}>{t("sql_card.destructive")}</Text>
+          </View>
+        </If>
+      </View>
+      <CardResult run={run()} />
+    </View>
+  );
+}
+
+function CardResult(props: { run: ReturnType<typeof cardState>["run"] }) {
+  const done = () => (props.run.kind === "done" ? props.run.summary : null);
+  const failed = () => (props.run.kind === "failed" ? props.run.error : null);
+  return (
+    <>
+      <If when={done()}>
+        {(summary) => (
+          <View class="flex-row items-center gap-1.5 border-t border-border px-2.5 py-1.5">
+            <Icon name="check" size={12} color="data" />
+            <Text class={`${FS.xs} flex-1 text-data`}>{summary()}</Text>
+          </View>
+        )}
+      </If>
+      <If when={failed()}>
+        {(error) => (
+          <View class="border-t border-border px-2.5 py-1.5">
+            <Text class={`${FS.xs} font-mono text-negative`}>{error()}</Text>
+          </View>
+        )}
+      </If>
+    </>
+  );
+}
+
+async function confirmed(req: ConfirmRequest) {
+  closeConfirm();
+  if (req.insert) {
+    runInEditor(req.sql, true);
+    return;
+  }
+  updateCard(req.cardKey, { run: { kind: "running" } });
+  const { ok, summary } = await executeSql(req.sql);
+  updateCard(req.cardKey, { run: ok ? { kind: "done", summary } : { kind: "failed", error: summary } });
+}
+
+/** 执行前的确认框:目标连接、语句全文(只读)、破坏性警告。挂在面板上。 */
+export function SqlConfirmDialog() {
+  return (
+    <If when={confirmRequest()}>
+      {(req) => {
+        const what = () =>
+          req().statements > 1 ? t("sql_card.n_statements", { count: req().statements }) : t("sql_card.statement");
+        return (
+          <Dialog
+            testID="sql-confirm"
+            open
+            animation="fade"
+            onOpenChange={({ open }) => {
+              if (!open) closeConfirm();
+            }}
+            class="m-auto w-[560px] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+            backdropClass="bg-overlay"
+          >
+            <Text class={`${FS.base} font-bold text-popover-foreground`}>
+              {req().insert ? t("sql_card.run_in_editor") : t("sql_card.run_sql")}
+            </Text>
+            <Text class={`${FS.sm} text-popover-foreground`}>
+              {req().insert
+                ? t("sql_card.confirm_body_insert", { target: req().target, what: what() })
+                : t("sql_card.confirm_body", { target: req().target, what: what() })}
+            </Text>
+            <View class="overflow-hidden rounded-(--radius) border border-border bg-editor">
+              <SqlEditor value={req().sql} readOnly maxRows={16} />
+            </View>
+            <If when={req().destructive}>
+              <View class="flex-row items-center gap-1.5">
+                <Icon name="triangle-alert" size={14} color="destructive" />
+                <Text class={`${FS.xs} flex-1 font-bold text-destructive`}>{t("sql_card.destructive_warning")}</Text>
+              </View>
+            </If>
+            <View class="flex-row justify-end gap-2 pt-1">
+              <Btn label={t("sql_card.cancel")} variant="outline" onPress={closeConfirm} testID="sql-confirm-cancel" />
+              <Btn
+                testID="sql-confirm-ok"
+                label={req().insert ? t("sql_card.confirm_run_in_editor") : t("sql_card.confirm_run")}
+                variant={req().destructive ? "danger" : "primary"}
+                onPress={() => void confirmed(req())}
+              />
+            </View>
+          </Dialog>
+        );
+      }}
+    </If>
+  );
+}

@@ -2,10 +2,10 @@
 //! 每方言一条 SQL,一次拉取整个连接,避免逐表 N+1。
 
 use crate::sql::Dialect;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColumnBrief {
     pub name: String,

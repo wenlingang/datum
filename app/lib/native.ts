@@ -96,6 +96,38 @@ export function errorText(e: unknown): string {
   return String(e);
 }
 
+// ==== chat ====
+
+export const chat = {
+  /** 拼 AI 对话的 system prompt(知识库在原生侧读取,语言跟随界面)。 */
+  systemPrompt: (ctx: PromptContext) => Ai.systemPrompt(ctx),
+  /** 用户消息里提到的已存在表名,最多 10 张。 */
+  mentionedTables: (text: string, tables: string[]) => Ai.mentionedTables(text, tables),
+  /** 把 assistant 回复切成文本段与 SQL 段(流式中未闭合的代码块同样识别)。 */
+  segments: (content: string) => Ai.segments(content) as ReplySegment[],
+  /** 常用服务商预设。 */
+  presets: () => Ai.presets() as ProviderPreset[],
+};
+
+import type { PromptContext, ProviderPreset, ReplySegment } from "./types";
+
+// ==== shell ====
+// 工作区外壳:保存对话框写文件、导出格式渲染。
+
+import { Shell } from "datum/native";
+
+export type ExportFormat = "csv" | "sql" | "markdown";
+
+export const shell = {
+  /** 系统保存对话框(默认下载目录)写入文本;返回写入的路径,取消为 null。 */
+  saveText: (fileName: string, text: string) => Shell.saveText(fileName, text),
+  /** 结果行 → 导出文本(CSV / Markdown / 每行一条 INSERT)。 */
+  renderExport: (format: ExportFormat, table: string, columns: string[], rows: (string | null)[][], kind: DbKind) =>
+    Shell.renderExport(format, table, columns, rows, kind),
+  /** 文件名友好的时间戳 `YYYYMMDD_HHmmss`。 */
+  fileTimestamp: () => Shell.fileTimestamp(),
+};
+
 // ==== tab ====
 
 import { Grid } from "datum/native";

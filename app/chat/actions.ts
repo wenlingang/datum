@@ -1,0 +1,210 @@
+// AI 面板的动作:会话 key、绑定连接、发送(按需拉表结构后拼 system prompt)、
+// SQL 卡片的直接执行(结果以隐藏消息回灌对话)与「编辑器运行」。对应 GPUI 版 chat/mod.rs 的逻辑部分。
+
+import { signal } from "nsh";
+import { t } from "nsh/i18n";
+import { chat as chatNative, errorText, sql as sqlNative } from "../lib/native";
+import { type Connection, supportsSql, type TableDetail } from "../lib/types";
+import {
+  aiStore,
+  appendMessage,
+  bindConvo,
+  type BoundConn,
+  clearConvo,
+  sendMessage,
+  setPendingRef,
+} from "../store/ai";
+import { toast } from "../store/toast";
+import { setAiOpen } from "../store/workspace";
+import { clearCards } from "./cards";
+import { chatDeps } from "./deps";
+
+/** 按需拉取过的表结构(key = connId:table),对话期间复用;清空对话时丢弃。 */
+const details = new Map<string, TableDetail>();
+/** 发送前在拉表结构:此时不允许再发。 */
+const preparing = signal(false);
+
+/** 「连接名 / 库名」;SQLite 显示文件名。 */
+export function connLabel(c: Connection): string {
+  let db: string;
+  if (c.kind === "sqlite") {
+    const name = (c.filePath ?? "").split(/[\\/]/).pop();
+    db = name || "—";
+  } else {
+    db = c.database || "—";
+  }
+  return `${c.name} / ${db}`;
+}
+
+/** 会话 key:按连接分会话。切表、开新查询 tab 都不打断当前对话。 */
+export function convoKey(): string | null {
+  const c = chatDeps.headConn();
+  return c ? `conn:${c.id}` : null;
+}
+
+/** SQL 的目标连接:会话已绑定的连接,否则当前的关系库连接。 */
+export function target(): BoundConn | null {
+  const key = convoKey();
+  if (!key) return null;
+  const bound = aiStore.convo(key)?.bound;
+  if (bound) return bound;
+  const conn = chatDeps.headConn();
+  if (!conn || !supportsSql(conn.kind)) return null;
+  return { connId: conn.id, kind: conn.kind, label: connLabel(conn) };
+}
+
+export function canSend(): boolean {
+  return aiStore.ready() && target() !== null && aiStore.streamingKey() === null && !preparing() && convoKey() !== null;
+}
+
+/** 消息正文:输入文本 + 引用的 SQL。 */
+export function composeText(typed: string, quoted: string | null): string {
+  if (quoted === null) return typed;
+  return `${typed ? `${typed}\n\n` : ""}${t("chat.quoted_sql")}\n\`\`\`sql\n${quoted}\n\`\`\``;
+}
+
+/**
+ * 发送:输入框文本(或快捷动作文本)+ 引用 SQL。schema 上下文按需拉取后再发。
+ * 返回是否已受理(受理后调用方清空输入框)。
+ */
+export function sendText(typed: string): boolean {
+  const text = typed.trim();
+  const pending = aiStore.pendingRef();
+  if ((!text && pending === null) || !canSend()) return false;
+  const key = convoKey();
+  const to = target();
+  if (!key || !to) return false;
+  const finalText = composeText(text, pending);
+  if (!aiStore.convo(key)?.bound) bindConvo(key, to);
+  setPendingRef(null);
+  preparing.set(true);
+  void prepareAndSend(key, to, finalText).finally(() => preparing.set(false));
+  return true;
+}
+
+async function prepareAndSend(key: string, to: BoundConn, text: string) {
+  let tables: string[] = [];
+  try {
+    tables = await chatDeps.tables(to.connId);
+  } catch {
+    tables = [];
+  }
+  const current = chatDeps.currentTable();
+  const wanted = chatNative.mentionedTables(text, tables);
+  if (current && current.connId === to.connId && !wanted.includes(current.table)) wanted.unshift(current.table);
+  for (const name of wanted) {
+    const k = `${to.connId}:${name}`;
+    if (details.has(k)) continue;
+    try {
+      details.set(k, await chatDeps.tableDetail(to.kind, to.connId, name));
+    } catch {
+      // 拉不到的表结构跳过,不影响对话
+    }
+  }
+  const prefix = `${to.connId}:`;
+  const own: Record<string, TableDetail> = {};
+  for (const [k, d] of details) if (k.startsWith(prefix)) own[k.slice(prefix.length)] = d;
+  let prompt: string;
+  try {
+    prompt = chatDeps.systemPrompt({
+      kind: to.kind,
+      database: to.label,
+      tables,
+      details: own,
+      columns: chatDeps.columns(to.connId),
+    });
+  } catch (e) {
+    toast.error(errorText(e));
+    return;
+  }
+  await sendMessage(key, prompt, text);
+}
+
+/** 清空当前会话(连同表结构缓存与卡片状态)。 */
+export function clearConversation() {
+  const key = convoKey();
+  if (key) clearConvo(key);
+  details.clear();
+  clearCards();
+}
+
+/** 引用编辑器当前选区。 */
+export function quoteSelection() {
+  const text = chatDeps.activeSelectionText().trim();
+  if (!text) {
+    toast.error(t("workspace.quote_select_first"));
+    return;
+  }
+  sendToAiPanel(text);
+}
+
+/** 把一段 SQL 作为引用并打开 AI 面板。 */
+export function sendToAiPanel(text: string) {
+  setPendingRef(text);
+  setAiOpen(true);
+}
+
+function truncateSql(s: string): string {
+  const chars = Array.from(s);
+  return chars.length > 200 ? `${chars.slice(0, 200).join("")}…` : s;
+}
+
+/**
+ * SQL 卡片的执行入口:在会话绑定的连接上预切分逐条执行,任一条失败即中止;
+ * 结果以隐藏消息回灌对话。整段只读时走只读会话。返回 (是否成功, 摘要)。
+ */
+export async function executeSql(sql: string): Promise<{ ok: boolean; summary: string }> {
+  const key = convoKey();
+  const bound = key ? aiStore.convo(key)?.bound : null;
+  if (!key || !bound) return { ok: false, summary: t("chat.not_bound") };
+  const stmts = sqlNative.statements(sql);
+  const readOnly = sqlNative.isReadOnly(sql);
+  const multi = stmts.length > 1;
+  const parts: string[] = [];
+  let ok = true;
+  for (let i = 0; i < stmts.length; i++) {
+    const stmt = stmts[i];
+    const label = multi ? t("chat.stmt_n", { n: i + 1 }) : "";
+    try {
+      const r = readOnly
+        ? await chatDeps.queryReadOnly(bound.kind, bound.connId, stmt)
+        : await chatDeps.query(bound.kind, bound.connId, stmt);
+      const brief = sqlNative.isQuery(stmt)
+        ? t("chat.returned_rows", { count: r.rows.length })
+        : `${t("chat.succeeded")}${r.affected ? t("chat.affected_rows", { count: r.affected }) : ""}`;
+      parts.push(label ? t("chat.labeled", { label, brief }) : brief);
+    } catch (e) {
+      parts.push(t("chat.failed", { label: label || t("chat.execution"), error: errorText(e) }));
+      ok = false;
+      break;
+    }
+  }
+  const summary = parts.join(" · ");
+  appendMessage(
+    key,
+    "user",
+    `${t("chat.executed_tag")} ${truncateSql(sql)}\n${t("chat.result_label")}${ok ? "✓" : "✗"} ${summary}`,
+    true,
+  );
+  const lower = sql.toLowerCase();
+  if (ok && (lower.includes("create") || lower.includes("drop") || lower.includes("alter"))) {
+    chatDeps.refreshTables(bound.connId);
+  }
+  return { ok, summary };
+}
+
+/** 「编辑器运行」:只在会话绑定的连接上执行。`confirmed` 为卡片已做过破坏性确认。 */
+export function runInEditor(sql: string, confirmed: boolean) {
+  const key = convoKey();
+  const bound = key ? aiStore.convo(key)?.bound : null;
+  if (!bound) {
+    toast.error(t("chat.not_bound"));
+    return;
+  }
+  chatDeps.insertAndRun(sql, bound.connId, confirmed);
+}
+
+/** 「让 AI 修复」:上一条执行失败后,请 AI 修正。 */
+export function askFix() {
+  sendText(t("chat.fix_prompt"));
+}

@@ -9,6 +9,7 @@ mod conn;
 mod db;
 mod prefs;
 mod runtime;
+mod shell;
 mod tab;
 mod text;
 
@@ -18,6 +19,7 @@ pub use ai::Ai;
 pub use conn::Store;
 pub use db::Db;
 pub use prefs::Prefs;
+pub use shell::Shell;
 pub use tab::Grid;
 pub use text::Sql;
 
@@ -31,5 +33,6 @@ fn native(registry: &mut Registry) {
         .module::<Prefs>()
         .module::<Sql>()
         .module::<Ai>()
+        .module::<Shell>()
         .module::<Grid>();
 }

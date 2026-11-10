@@ -172,6 +172,35 @@ export type ChatEvent =
   | { type: "done"; full: string }
   | { type: "error"; message: string };
 
+// ==== chat ====
+
+/** AI 回复的一段:普通文本(Markdown)或 SQL 代码块。 */
+export interface ReplySegment {
+  kind: "text" | "sql";
+  text: string;
+}
+
+/** 拼 system prompt 的上下文(`chat.systemPrompt`)。 */
+export interface PromptContext {
+  kind: DbKind;
+  /** 对话绑定的连接标签(「连接名 / 库名」) */
+  database: string;
+  tables: string[];
+  /** 已按需加载的表结构(当前浏览的表 + 用户消息里命中的表) */
+  details?: Record<string, TableDetail>;
+  /** 全库表→列速览 */
+  columns?: ColumnsByTable | null;
+}
+
+/** 服务商预设(设置页新建服务商时预填)。 */
+export interface ProviderPreset {
+  name: string;
+  /** 按当前语言的展示名 */
+  displayName: string;
+  protocol: Protocol;
+  baseUrl: string;
+}
+
 // ==== tab ====
 
 /** Redis key 的值:统一成 列 + 行 的表格形态。 */
