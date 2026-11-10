@@ -8,7 +8,8 @@
 ## 目标 / 非目标
 
 - **目标**:外观与功能和 GPUI 版(`crates/app`,v0.0.1)保持一致,直接替换,不双轨维护。
-- **非目标**:新视觉、新功能。
+- **非目标**:新视觉、新功能;**MongoDB**(用户 2026-11-10 决定 nsh 版只做 SQLite / MySQL / PostgreSQL / Redis。
+  core 的 mongo 代码保留;已存的 Mongo 连接留在配置里,界面不显示)。
 - **暂缓(TODO)**:ER 图画布(GPUI 版 `crates/app/src/erd/`)。nsh 没有现成的节点/连线画布,先留占位 tab,
   后续用 nsh 的 `Canvas` 或 Rust 组件实现。
 
