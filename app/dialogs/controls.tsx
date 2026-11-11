@@ -1,8 +1,9 @@
 // 对话框共用的样式控件:外框、字段标签、分段选择、下拉选择、掩码输入、复选框、开关、操作菜单。
 // 都套在 nsh/base 的行为组件上,颜色只用主题 token。
 
-import { signal, Text, View, type JSX } from "nsh";
-import { Button, Checkbox, Dialog, Select, Switch, type InputProps } from "nsh/base";
+import { EditorKeys } from "datum/native";
+import { batch, Overlay, Scroll, signal, Text, View, type JSX, type ViewRef } from "nsh";
+import { Button, Checkbox, Dialog, Input, Select, Switch, type InputProps } from "nsh/base";
 import { t } from "nsh/i18n";
 import { color as tokenColor, Icon, IconButton, SectionLabel, TextField, tip, type IconName } from "../ui/kit";
 import { DropMenu, MItem, MSep } from "../ui/menu";
@@ -293,5 +294,153 @@ export function LoadingBtn(props: {
         {props.label}
       </Text>
     </Button>
+  );
+}
+
+/** 带候选的输入框(可搜索的下拉输入):聚焦或点击时展开候选,打开时先列出全部,
+ *  开始输入后按输入过滤;↑/↓ 移动高亮,回车或点击选中,Esc 收起;仍可输入列表外的值。
+ *  候选由调用方在 `onOpen` 里加载,`state` 告诉它加载中 / 失败 / 已就绪。 */
+export function SuggestField(props: {
+  value: string;
+  onChange: (value: string) => void;
+  /** 展开时调用:由调用方按需(参数变了才)重新加载候选 */
+  onOpen?: () => void;
+  items: string[];
+  state: "idle" | "loading" | "ok" | "error";
+  error?: string | null;
+  loadingText: string;
+  emptyText: string;
+  placeholder?: string;
+  testID?: string;
+  /** 右侧展开按钮的无障碍名称 */
+  toggleLabel?: string;
+}) {
+  const open = signal(false);
+  const focused = signal(false);
+  /** 输入框的宽度:候选列表与它等宽 */
+  const width = signal(240);
+  let anchor: ViewRef | undefined;
+  /** null:展开后还没输入,列出全部;否则按它过滤 */
+  const filter = signal<string | null>(null);
+  const highlight = signal(0);
+  const shown = () => {
+    const f = filter()?.trim().toLowerCase();
+    return f ? props.items.filter((x) => x.toLowerCase().includes(f)) : props.items;
+  };
+  const show = () => {
+    if (open()) return;
+    batch(() => {
+      filter.set(null);
+      highlight.set(Math.max(0, props.items.indexOf(props.value)));
+      open.set(true);
+    });
+    props.onOpen?.();
+  };
+  /** 选中 / Esc 收起后的一小段时间里,光标移动不算「点进输入框」 */
+  let quietUntil = 0;
+  const close = () => {
+    quietUntil = Date.now() + 250;
+    open.set(false);
+  };
+  const choose = (v: string) => {
+    props.onChange(v);
+    close();
+  };
+  const onKey = (k: string) => {
+    if (k === "escape") return close();
+    if (!open()) return show();
+    const n = shown().length;
+    if (n === 0) return;
+    highlight.update((i) => (k === "down" ? (i + 1) % n : (i - 1 + n) % n));
+  };
+  return (
+    <View class="relative" ref={anchor} onLayout={({ bounds }) => width.set(bounds.size.width)}>
+      <EditorKeys keys={["down", "up", "escape"]} active={focused()} onKey={({ keystroke }) => onKey(keystroke)} />
+      <Input
+        testID={props.testID}
+        value={props.value}
+        placeholder={props.placeholder}
+        submitBehavior="submit"
+        onFocus={() => {
+          focused.set(true);
+          show();
+        }}
+        onBlur={() => {
+          focused.set(false);
+          // 点候选时输入框先失焦:稍等,让点击先选中
+          setTimeout(() => {
+            if (!focused()) open.set(false);
+          }, 150);
+        }}
+        // 已聚焦时再点输入框:光标移动 → 重新展开
+        onCaretMove={() => {
+          if (focused() && !open() && Date.now() > quietUntil) show();
+        }}
+        onChange={({ value }) => {
+          batch(() => {
+            props.onChange(value);
+            filter.set(value);
+            highlight.set(0);
+            open.set(true);
+          });
+        }}
+        onSubmit={() => {
+          const pick = open() ? shown()[highlight()] : undefined;
+          if (pick !== undefined) choose(pick);
+          else close();
+        }}
+        class={`h-8 rounded-(--radius) border border-input bg-background pl-2.5 pr-8 ${FS.sm} text-foreground placeholder:text-fg-faint focus:border-ring`}
+      />
+      <View class="absolute bottom-0 right-1 top-0 justify-center">
+        <Button
+          testID={props.testID ? `${props.testID}-toggle` : undefined}
+          accessibilityLabel={props.toggleLabel}
+          onPress={() => (open() ? close() : show())}
+          class="rounded-(--radius) p-1 hover:bg-list-hover"
+        >
+          <Icon name="chevrons-up-down" size={13} color="fg-faint" />
+        </Button>
+      </View>
+      <If when={open()}>
+        <Overlay
+          anchor={anchor}
+          placement="bottom"
+          align="start"
+          offset={4}
+          margin={8}
+          onPressOutside={close}
+          onCancel={close}
+          testID={props.testID ? `${props.testID}-list` : undefined}
+          class="rounded-(--radius-lg) border border-border bg-popover p-1 shadow-lg"
+          style={{ width: width() }}
+        >
+          <Scroll style={{ maxHeight: 240 }}>
+            <If when={props.state === "loading"}>
+              <Text class={`${FS.sm} px-2 py-1.5 text-muted-foreground`}>{props.loadingText}</Text>
+            </If>
+            <If when={props.state === "error"}>
+              <Text class={`${FS.xs} px-2 py-1.5 text-negative`}>{props.error ?? ""}</Text>
+            </If>
+            <If when={props.state === "ok" && shown().length === 0}>
+              <Text class={`${FS.sm} px-2 py-1.5 text-muted-foreground`}>{props.emptyText}</Text>
+            </If>
+            <Each of={shown()}>
+              {(name, i) => (
+                <View
+                  onPress={() => choose(name())}
+                  class="h-7 flex-row items-center rounded-(--radius) px-2 hover:bg-accent"
+                  classList={{ "bg-accent": i() === highlight() }}
+                >
+                  <Text class={`${FS.sm} flex-1 text-popover-foreground line-clamp-1`}>{name()}</Text>
+                  <If when={name() === props.value}>
+                    <Icon name="check" size={13} color="data" />
+                  </If>
+                </View>
+              )}
+            </Each>
+          </Scroll>
+        </Overlay>
+      </If>
+    </View>
   );
 }
