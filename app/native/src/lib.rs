@@ -7,6 +7,7 @@
 mod ai;
 mod conn;
 mod db;
+mod keys;
 mod dialogs;
 mod prefs;
 mod runtime;
@@ -19,6 +20,7 @@ use nsh_core::prelude::*;
 pub use ai::Ai;
 pub use conn::Store;
 pub use db::Db;
+pub use keys::EditorKeys;
 pub use dialogs::Dialogs;
 pub use prefs::Prefs;
 pub use shell::Shell;
@@ -30,6 +32,7 @@ pub use text::Sql;
 fn native(registry: &mut Registry) {
     runtime::init();
     registry
+        .register::<EditorKeys>()
         .module::<Store>()
         .module::<Db>()
         .module::<Prefs>()

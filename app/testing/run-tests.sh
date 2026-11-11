@@ -43,6 +43,7 @@ if [ "$ONLY" = all ] || [ "$ONLY" = tab ]; then
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
   printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
   run tab "$D" tab/tab.test.tsx
+  run tab-keys "$D" tab/keys.test.tsx
 fi
 
 if [ "$ONLY" = all ] || [ "$ONLY" = dialogs ]; then
