@@ -6,7 +6,7 @@ resolver = "2"
 
 [workspace.package]
 # 发版版本号的唯一来源是 app/nsh.json 的 "version";这里只是 core 的 crate 版本
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 publish = false
 
