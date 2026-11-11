@@ -296,6 +296,25 @@ pub async fn test_connection(
     .await
 }
 
+/// 用表单当前参数(不保存)列出实例下的库:新建/编辑连接时下拉选库。
+/// Redis 固定 0–15;SQLite 没有库的概念,返回空。
+pub async fn probe_databases(
+    conn: &crate::core::connection::Connection,
+    password: &str,
+) -> AppResult<Vec<String>> {
+    match conn.kind {
+        DbKind::Pg => {
+            pg::client::probe_databases(&conn.host, conn.port, &conn.user, password, &conn.database, conn.ssl_mode)
+                .await
+        }
+        DbKind::Mysql => {
+            my::client::probe_databases(&conn.host, conn.port, &conn.user, password, conn.ssl_mode).await
+        }
+        DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
+        DbKind::Sqlite | DbKind::Mongo => Ok(vec![]),
+    }
+}
+
 pub async fn mongo_find_page(
     state: &AppState,
     id: &str,

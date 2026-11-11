@@ -14,15 +14,20 @@ export function DropMenu(props: {
   placement?: Placement;
   align?: Align;
   testID?: string;
+  /** 打开 / 关闭(打开时再去加载菜单内容) */
+  onOpenChange?: (open: boolean) => void;
+  /** 弹层额外的类(如限制高度) */
+  popupClass?: string;
 }) {
   return (
     <Menu
       trigger={props.trigger}
+      onOpenChange={(e) => props.onOpenChange?.(e.open)}
       placement={props.placement}
       align={props.align}
       offset={4}
       testID={props.testID}
-      popupClass={POPUP}
+      popupClass={`${POPUP} ${props.popupClass ?? ""}`}
     >
       {props.children}
     </Menu>

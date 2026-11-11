@@ -1,16 +1,16 @@
 // 新建/编辑连接:类型、名称、环境、主机端口、用户密码、数据库(SQLite 为文件),
 // 带连接串预览与真实连通性测试。对应 GPUI 版 dialogs/connection_form.rs。
 
-import { cleanup, signal, Text, View } from "nsh";
+import { cleanup, Clipboard, Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
-import { dialogsNative, errorText, store } from "../lib/native";
+import { dialogsNative, errorText, probeDatabases, store } from "../lib/native";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSL_MODES } from "../lib/types";
 import { activate, loadTables, saveConnection } from "../store/conns";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, envLabel, envToken, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, type ConnDraft } from "./connection";
-import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented } from "./controls";
+import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField } from "./controls";
 
 const TEST_TIMEOUT_SECS = 10;
 
@@ -168,12 +168,60 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
         return t("conn_form.test_failed");
     }
   };
+  /** 测试失败的完整报错(在底部按钮上方整段显示,不截断) */
+  const testError = () => {
+    const s = test();
+    return s.kind === "failed" ? s.error : null;
+  };
+  const copyTestError = async () => {
+    const e = testError();
+    if (!e) return;
+    await Clipboard.writeText(e);
+    toast.success(t("chat.copied"));
+  };
   const testNote = () => {
     const s = test();
     if (s.kind === "success") return { text: t("conn_form.test_success_note", { ms: s.ms }), color: "text-data" };
-    if (s.kind === "failed") return { text: s.error, color: "text-negative" };
     return null;
   };
+
+  /** 数据库下拉:打开时用表单当前参数临时连一次实例,列出库名 */
+  const dbList = signal<{ state: "idle" | "loading" | "ok" | "error"; items: string[]; error?: string }>({
+    state: "idle",
+    items: [],
+  });
+  let dbAttempt = 0;
+  let dbKey = "";
+  async function loadDatabases() {
+    const cur = d();
+    // 库名本身不参与:输入库名时不必重新连;其余参数变了才重新拉
+    const key = JSON.stringify([cur.kind, cur.host, cur.port, cur.user, cur.password, cur.ssl]);
+    if (key === dbKey && (dbList().state === "ok" || dbList().state === "loading")) return;
+    dbKey = key;
+    const mine = ++dbAttempt;
+    let conn: Connection;
+    let password: string | null;
+    try {
+      ({ conn, password } = connectionAndPassword(d(), props.id, props.editing));
+    } catch (e) {
+      dbList.set({ state: "error", items: [], error: errorText(e) });
+      return;
+    }
+    if (password == null) {
+      try {
+        password = store.savedPassword(props.id);
+      } catch {
+        password = "";
+      }
+    }
+    dbList.set({ state: "loading", items: [] });
+    try {
+      const items = await probeDatabases(conn, password ?? "");
+      if (mine === dbAttempt) dbList.set({ state: "ok", items });
+    } catch (e) {
+      if (mine === dbAttempt) dbList.set({ state: "error", items: [], error: errorText(e) });
+    }
+  }
 
   return (
     <View class="gap-4">
@@ -263,11 +311,18 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
         </View>
         <View class="flex-row gap-4">
           <Field label={t("conn_form.database")}>
-            <TextField
+            <SuggestField
               testID="conn-database"
               value={d().database}
               placeholder="postgres"
-              onChange={({ value }) => set({ database: value })}
+              onChange={(database) => set({ database })}
+              onOpen={() => void loadDatabases()}
+              items={dbList().items}
+              state={dbList().state}
+              error={dbList().error}
+              loadingText={t("conn_form.db_loading")}
+              emptyText={t("conn_form.db_none")}
+              toggleLabel={t("conn_form.db_pick")}
             />
           </Field>
           <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
@@ -298,6 +353,21 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
           <Text testID="conn-error" class={`${FS.xs} text-negative`}>
             {e()}
           </Text>
+        )}
+      </If>
+
+      <If when={testError()}>
+        {(e) => (
+          <View
+            testID="conn-test-error"
+            class="flex-row items-start gap-2 rounded-(--radius) border border-destructive/30 bg-destructive/5 py-2 pl-3 pr-1"
+          >
+            <Icon name="circle-alert" size={14} color="negative" class="mt-0.5" />
+            <Scroll class="min-w-0 flex-1" style={{ maxHeight: 132 }}>
+              <Text class={`${FS.xs} ${MONO} text-negative`}>{e()}</Text>
+            </Scroll>
+            <IconButton icon="copy" size={13} tooltip={t("chat.copy")} onPress={() => void copyTestError()} />
+          </View>
         )}
       </If>
 

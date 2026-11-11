@@ -179,3 +179,7 @@ export const grid = {
 export async function redisKey(id: string, key: string) {
   return (await Db.redisGetKey(id, key)) as [TabTypes.RedisKeyValue, TabTypes.KeyDetail];
 }
+
+/** 用表单当前参数(不保存)列出实例下的库(新建/编辑连接时下拉选库)。 */
+export const probeDatabases = async (conn: import("./types").Connection, password: string) =>
+  (await NativeDialogs.probeDatabases(conn, password)) as string[];

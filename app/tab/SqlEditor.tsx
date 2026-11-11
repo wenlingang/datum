@@ -3,7 +3,8 @@
 //
 // 补全的计算在 datum_core::completion(经 lib/native 的 grid.completions);这里只转成编辑器的补全项。
 
-import { cleanup, effect, keymap, signal, Text, View } from "nsh";
+import { signal, Text, View } from "nsh";
+import { EditorKeys } from "datum/native";
 import { Button, Editor, type EditorCompletionItem, type EditorCompletionKind, type EditorCompletionRequest } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
@@ -12,7 +13,7 @@ import { supportsSql } from "../lib/types";
 import { conns } from "../store/conns";
 import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
-import { beautify, explain, run, selectionText, sendSelectionToAi, type TabModel } from "./model";
+import { beautify, commit, explain, run, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
 import { primaryRange, rangeOf } from "./textpos";
 
 const BOUNDARY = /[\s,;()]/;
@@ -37,11 +38,17 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
   const cols = conns.columns(m.connId) ?? null;
   const tables = conns.tables(m.connId) ?? [];
   const result = grid.completions(m.dbKind, text, req.offset, tables, cols, req.trigger === "invoked");
+  // 一律标为 incomplete:编辑器每敲一个字都重新来问。否则它只在本地过滤首次的答案——
+  // 空格触发时的空答案会一直空下去,首次算出的替换范围也会过时(接受时只替换最初那一小段,
+  // 「fro」变成「FROMrom」)。core 的补全是纯本地计算,重新问的代价很小。
   if (!result) {
-    editor.presentCompletions(req.id, []);
+    editor.presentCompletions(req.id, [], true);
     return;
   }
-  const range = rangeOf(text, result.start, result.end);
+  // 替换范围与编辑器的查询一致(通常如此)时不传 range:接受时替换「查询起点 → 光标」;
+  // 不一致时(如带引号的标识符)才传 core 算出的范围
+  const sameAsQuery = result.start === req.queryStart && result.end === req.offset;
+  const range = sameAsQuery ? null : rangeOf(text, result.start, result.end);
   const items: EditorCompletionItem[] = result.items.map((item, i) => ({
     label: item.label,
     kind: item.kind as EditorCompletionKind,
@@ -51,7 +58,7 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
     sortText: String(i).padStart(5, "0"),
     range,
   }));
-  editor.presentCompletions(req.id, items);
+  editor.presentCompletions(req.id, items, true);
 }
 
 function showEditorMenu(m: TabModel, at: { x: number; y: number }) {
@@ -79,21 +86,28 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
   const chip = signal<{ x: number; y: number } | null>(null);
   let chipSeq = 0;
 
-  // 编辑器内的快捷键:压过 Editor 自带的 mod+enter / cmd+e 等绑定。
-  // 编辑器聚焦时才绑(比它在聚焦时绑定的更新,故优先)。
-  effect(() => {
-    if (!m.editorFocused()) return;
-    const off = keymap.bind(
-      {
-        "mod+enter": () => run(m),
-        "mod+shift+f": () => beautify(m),
-        "mod+e": () => explain(m),
-        "mod+shift+a": () => sendSelectionToAi(m),
-      },
-      { when: "always" },
-    );
-    cleanup(off);
-  });
+  // 编辑器内的快捷键:压过 Editor 自带的 mod+enter(下方插入新行)/ cmd+e 等键位。
+  // 必须用原生组件 EditorKeys 绑:TSX 的 keymap.bind 永远排在 Rust 组件的绑定之前,赢不了 Editor。
+  // ⌘Y / ⌘F / ⌘S 平时由外壳全局绑定;Windows / Linux 上 Editor 占用 ctrl+y / ctrl+f 等,聚焦时一并接管。
+  const EDITOR_KEYS = ["mod+enter", "mod+shift+f", "mod+e", "mod+shift+a", "mod+y", "mod+f", "mod+s"];
+  const onEditorKey = (keystroke: string) => {
+    switch (keystroke) {
+      case "mod+enter":
+        return run(m);
+      case "mod+shift+f":
+        return beautify(m);
+      case "mod+e":
+        return explain(m);
+      case "mod+shift+a":
+        return sendSelectionToAi(m);
+      case "mod+y":
+        return m.historyOpen.update((v) => !v);
+      case "mod+f":
+        return toggleFilter(m);
+      case "mod+s":
+        return void commit(m);
+    }
+  };
 
   const onSelection = async () => {
     const seq = ++chipSeq;
@@ -121,6 +135,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
 
   return (
     <View class="relative min-h-0 flex-1 bg-editor">
+      <EditorKeys keys={EDITOR_KEYS} active={m.editorFocused()} onKey={({ keystroke }) => void onEditorKey(keystroke)} />
       <Editor
         ref={(r) => {
           m.editor = r;

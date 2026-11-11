@@ -115,6 +115,64 @@ pub async fn test_connect(
     Ok(())
 }
 
+/// 用给定参数临时连接实例,列出可连接的非模板库(新建连接表单里选库用,不缓存)。
+/// 先连 `db`(表单里填的库);它为空或连不上时依次退回 `postgres`、`template1`。
+pub async fn probe_databases(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+    db: &str,
+    ssl: SslMode,
+) -> AppResult<Vec<String>> {
+    let mut candidates: Vec<&str> = Vec::new();
+    if !db.trim().is_empty() {
+        candidates.push(db.trim());
+    }
+    for fallback in ["postgres", "template1"] {
+        if !candidates.contains(&fallback) {
+            candidates.push(fallback);
+        }
+    }
+    let mut last_err = None;
+    for name in candidates {
+        let mut cfg = Config::new();
+        cfg.host(host).port(port).user(user).password(pass).dbname(name);
+        apply_ssl_mode(&mut cfg, ssl);
+        match cfg.connect(tls_connector(ssl)).await {
+            Ok((client, connection)) => {
+                let task = tokio::spawn(async move {
+                    let _ = connection.await;
+                });
+                let rows = client
+                    .simple_query(
+                        "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname",
+                    )
+                    .await
+                    .map_err(|e| {
+                        AppError::new(ErrorKind::Query, t!("core.err.connect_failed", db = "PostgreSQL"))
+                            .with_detail(describe(&e))
+                    });
+                drop(client);
+                task.abort();
+                return Ok(rows?
+                    .into_iter()
+                    .filter_map(|m| match m {
+                        SimpleQueryMessage::Row(r) => r.get(0).map(str::to_string),
+                        _ => None,
+                    })
+                    .collect());
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(AppError::new(
+        ErrorKind::Connection,
+        t!("core.err.connect_failed", db = "PostgreSQL"),
+    )
+    .with_detail(last_err.map(|e| describe(&e)).unwrap_or_default()))
+}
+
 impl PgPool {
     /// 用 Config 建立连接并缓存到 id。
     /// 用 Config(显式 setter)而非手拼连接串:空密码或含特殊字符的库名都能正确处理,
