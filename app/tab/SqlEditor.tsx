@@ -38,11 +38,17 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
   const cols = conns.columns(m.connId) ?? null;
   const tables = conns.tables(m.connId) ?? [];
   const result = grid.completions(m.dbKind, text, req.offset, tables, cols, req.trigger === "invoked");
+  // 一律标为 incomplete:编辑器每敲一个字都重新来问。否则它只在本地过滤首次的答案——
+  // 空格触发时的空答案会一直空下去,首次算出的替换范围也会过时(接受时只替换最初那一小段,
+  // 「fro」变成「FROMrom」)。core 的补全是纯本地计算,重新问的代价很小。
   if (!result) {
-    editor.presentCompletions(req.id, []);
+    editor.presentCompletions(req.id, [], true);
     return;
   }
-  const range = rangeOf(text, result.start, result.end);
+  // 替换范围与编辑器的查询一致(通常如此)时不传 range:接受时替换「查询起点 → 光标」;
+  // 不一致时(如带引号的标识符)才传 core 算出的范围
+  const sameAsQuery = result.start === req.queryStart && result.end === req.offset;
+  const range = sameAsQuery ? null : rangeOf(text, result.start, result.end);
   const items: EditorCompletionItem[] = result.items.map((item, i) => ({
     label: item.label,
     kind: item.kind as EditorCompletionKind,
@@ -52,7 +58,7 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
     sortText: String(i).padStart(5, "0"),
     range,
   }));
-  editor.presentCompletions(req.id, items);
+  editor.presentCompletions(req.id, items, true);
 }
 
 function showEditorMenu(m: TabModel, at: { x: number; y: number }) {
