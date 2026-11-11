@@ -5,13 +5,15 @@
 # 不必每次都从源码编译 nsh(约 20 分钟)。
 name: CI
 
+# 推到 main 时只在 nsh 版本变化(app/native/Cargo.toml)或安装方式变化时跑,用来预热缓存;
+# 平时可在 Actions 页面手动触发;PR 照常跑核心测试。
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "site/**"
-      - "docs/**"
-      - "**/*.md"
+    paths:
+      - "app/native/Cargo.toml"
+      - ".github/actions/setup-nsh/**"
+      - "script/install-nsh.sh"
   pull_request:
   workflow_dispatch:
 
