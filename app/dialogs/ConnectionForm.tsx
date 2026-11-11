@@ -1,7 +1,7 @@
 // 新建/编辑连接:类型、名称、环境、主机端口、用户密码、数据库(SQLite 为文件),
 // 带连接串预览与真实连通性测试。对应 GPUI 版 dialogs/connection_form.rs。
 
-import { cleanup, signal, Text, View } from "nsh";
+import { cleanup, Clipboard, Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { dialogsNative, errorText, store } from "../lib/native";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSL_MODES } from "../lib/types";
@@ -168,10 +168,20 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
         return t("conn_form.test_failed");
     }
   };
+  /** 测试失败的完整报错(在底部按钮上方整段显示,不截断) */
+  const testError = () => {
+    const s = test();
+    return s.kind === "failed" ? s.error : null;
+  };
+  const copyTestError = async () => {
+    const e = testError();
+    if (!e) return;
+    await Clipboard.writeText(e);
+    toast.success(t("chat.copied"));
+  };
   const testNote = () => {
     const s = test();
     if (s.kind === "success") return { text: t("conn_form.test_success_note", { ms: s.ms }), color: "text-data" };
-    if (s.kind === "failed") return { text: s.error, color: "text-negative" };
     return null;
   };
 
@@ -298,6 +308,21 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
           <Text testID="conn-error" class={`${FS.xs} text-negative`}>
             {e()}
           </Text>
+        )}
+      </If>
+
+      <If when={testError()}>
+        {(e) => (
+          <View
+            testID="conn-test-error"
+            class="flex-row items-start gap-2 rounded-(--radius) border border-destructive/30 bg-destructive/5 py-2 pl-3 pr-1"
+          >
+            <Icon name="circle-alert" size={14} color="negative" class="mt-0.5" />
+            <Scroll class="min-w-0 flex-1" style={{ maxHeight: 132 }}>
+              <Text class={`${FS.xs} ${MONO} text-negative`}>{e()}</Text>
+            </Scroll>
+            <IconButton icon="copy" size={13} tooltip={t("chat.copy")} onPress={() => void copyTestError()} />
+          </View>
         )}
       </If>
 

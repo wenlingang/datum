@@ -79,6 +79,19 @@ describe("connection form", () => {
     await app.waitFor(`text:/active: ${conn.id}/`);
     app.dispose();
   });
+  test("连接测试失败时完整显示报错", async () => {
+    const app = await start();
+    await app.press("id:dev-new-conn");
+    await app.clear("id:conn-port");
+    await app.type("id:conn-port", "1");
+    await app.press("id:conn-test");
+    await app.waitFor("id:conn-test-error", { timeout: 15_000 });
+    // 报错整段出现在提示框里,不再被截断成一行
+    const full = app.texts().find((x) => x.startsWith("Failed to connect to PostgreSQL"));
+    expect(full).toBeTruthy();
+    expect(full!.endsWith("…")).toBe(false);
+    app.dispose();
+  });
 });
 
 describe("settings", () => {
