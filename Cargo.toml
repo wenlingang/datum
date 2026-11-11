@@ -1,26 +1,16 @@
 [workspace]
-members = ["crates/core", "crates/app"]
-default-members = ["crates/app"]
+members = ["crates/core"]
+# nsh 应用(app/)与其原生模块(app/native)由 nsh CLI 单独构建
+exclude = ["app"]
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1"
+# 发版版本号的唯一来源是 app/nsh.json 的 "version";这里只是 core 的 crate 版本
+version = "0.1.0"
 edition = "2024"
 publish = false
 
 [workspace.dependencies]
-datum-core = { path = "crates/core" }
-gpui-kit = { version = "0.8.1", features = ["tree-sitter-sql", "tree-sitter-javascript"] }
-anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "process", "io-util", "time"] }
-
-[profile.release]
-lto = "thin"
-strip = true
-codegen-units = 4
-
-# debug 构建里依赖(GPUI、驱动)也做优化:GPUI 未优化时渲染明显卡顿,而这些依赖很少改动
-[profile.dev.package."*"]
-opt-level = 2

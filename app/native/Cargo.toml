@@ -1,0 +1,20 @@
+[package]
+name = "datum-native"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Datum 的原生模块:把 datum-core 暴露给 TSX 界面(datum/native)"
+
+# 独立构建:nsh 为本 crate 生成的宿主有自己的 workspace
+[workspace]
+
+[dependencies]
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "88c0eee6a5f594d907f8b44efde4ad537b7ce46f" }
+nsh-base = { git = "https://github.com/longbridge/nsh", rev = "88c0eee6a5f594d907f8b44efde4ad537b7ce46f" }
+datum-core = { path = "../../crates/core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+rust-i18n = "4"
+uuid = { version = "1", features = ["v4"] }
+dirs = "5"

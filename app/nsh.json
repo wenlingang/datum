@@ -1,0 +1,29 @@
+{
+  "name": "Datum",
+  "id": "com.dbstudio.app",
+  "version": "0.1.0",
+  "build": 1,
+  "icon": "assets/app-icon.png",
+  "appearance": "system",
+  "rust": "native",
+  "theme": "theme.json",
+  "window": {
+    "title": "Datum",
+    "defaultSize": {
+      "width": 1200,
+      "height": 800
+    },
+    "minSize": {
+      "width": 900,
+      "height": 600
+    },
+    "titleBar": {
+      "style": "hidden",
+      "height": 46
+    }
+  },
+  "updater": {
+    "github": "wenlingang/datum",
+    "publicKey": "WO6K6Cbc1FlaatP4yXW7Q+3XU+JBq+Vc9TsncNR8egw="
+  }
+}

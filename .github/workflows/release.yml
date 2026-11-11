@@ -1,16 +1,21 @@
-# 发版:推送 v* 附注标签(如 v0.0.1)后自动 校验版本 → 测试 → 构建 → 签名打包 → 建 Release。
+# 发版:推送 v* 附注标签(如 v0.1.0)后自动 校验版本 → 测试 → 三平台打包 → 签名更新清单 → 建 Release。
 #
-# 标签必须与 Cargo.toml 的 version 一致;附注标签(git tag -a)的说明会作为更新说明,
-# 显示在应用「关于与更新」里。带 `-` 的版本(如 v0.1.0-rc1)发为预发布,不会成为
-# releases/latest,已安装的应用不会更新到它。
-# Release 附件:Datum-<版本>.dmg(及 .sha256)、Datum.dmg(固定名,下载链接不过期)、
-# latest.json(应用通过 releases/latest/download/latest.json 检查更新)。
+# 标签必须与 app/nsh.json 的 "version" 一致;附注标签(git tag -a)的说明会作为更新说明,
+# 显示在应用「关于」里。带 `-` 的版本(如 v0.2.0-rc1)发为预发布,已安装的应用不会更新到它。
+#
+# Release 附件:
+#   Datum-<版本>-macos-aarch64.tar.gz / -x86_64.tar.gz   macOS 更新包(应用内更新下载它)
+#   Datum-<版本>-macos-aarch64.dmg / -x86_64.dmg         macOS 首次安装
+#   Datum.dmg                                              Apple 芯片 dmg 的固定名副本(介绍页下载链接不过期)
+#   Datum-<版本>-windows-x86_64.zip、Datum-setup.exe        Windows 更新包与安装器
+#   Datum-<版本>-linux-x86_64.tar.gz                        Linux
+#   latest.json、latest.json.sig                            应用内更新的清单与签名(nsh/updater)
 #
 # 手动运行(Actions › Release › Run workflow)只打包不发布,产物作为 artifact 供下载试装。
 #
-# 仓库 Settings → Secrets and variables → Actions(由 script/release-cert.sh 一次性生成):
-#   RELEASE_CERT_P12       自签名发版证书 "Datum Release" 的 .p12,base64 编码
-#   RELEASE_CERT_PASSWORD  该 .p12 的密码
+# 仓库 Settings → Secrets and variables → Actions:
+#   RELEASE_CERT_P12 / RELEASE_CERT_PASSWORD  macOS 自签名发版证书 "Datum Release"(script/release-cert.sh 生成)
+#   UPDATE_SIGNING_KEY                         更新清单签名私钥(nsh keygen 生成的 update.secret 的内容)
 name: Release
 
 on:
@@ -25,59 +30,132 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  release:
-    runs-on: macos-14
-    timeout-minutes: 90
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app/native
       - name: 校验标签与版本号一致
         if: startsWith(github.ref, 'refs/tags/')
         run: script/check-version.sh "$GITHUB_REF_NAME"
+      - run: script/install-nsh.sh
       - run: cargo test --workspace --locked
-      # 证书进入 runner 之前先把所有东西编译好:crates.io 的 build script 和过程宏
-      # 绝不能在发版私钥已解锁时运行。下面 package.sh 里的 cargo build 只是命中缓存。
-      - name: 构建(导入证书之前)
+      - name: 类型检查与构建
+        working-directory: app
         run: |
-          cargo build --release --locked -p datum --target aarch64-apple-darwin
-          cargo build --release --locked -p datum --target x86_64-apple-darwin
-      - name: 导入签名证书
+          nsh check
+          nsh build 2>&1 | tee "$RUNNER_TEMP/build.log"
+          ! grep -q '^warn' "$RUNNER_TEMP/build.log"
+      - name: 界面测试(临时配置目录)
+        run: app/testing/run-tests.sh
+
+  package:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: macos, arch: aarch64 }
+          - { os: macos-15-intel, target: macos, arch: x86_64 }
+          - { os: windows-2022, target: windows, arch: x86_64 }
+          - { os: ubuntu-24.04, target: linux, arch: x86_64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}-${{ matrix.arch }}
+          workspaces: app/native
+      - name: Linux 构建依赖(GTK 4、GStreamer、WebKitGTK,与 nsh 自己的 CI 一致)
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev build-essential pkg-config \
+            libgtk-4-dev libwebkitgtk-6.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+      - name: Windows 安装器工具(Inno Setup 6)
+        if: matrix.target == 'windows'
+        run: command -v iscc || [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ] || choco install innosetup -y --no-progress
+      - run: script/install-nsh.sh
+      # 证书进入 runner 之前先把所有东西编译好:build script 与过程宏绝不能在发版私钥已解锁时运行
+      - name: 打包
+        working-directory: app
+        run: nsh package --target ${{ matrix.target }}
+      - name: 导入 macOS 签名证书
+        if: matrix.target == 'macos'
         env:
           P12: ${{ secrets.RELEASE_CERT_P12 }}
           P12_PASSWORD: ${{ secrets.RELEASE_CERT_PASSWORD }}
         run: script/ci-import-cert.sh
-      - name: 打包
-        run: script/package.sh
-      - name: 上传试装产物
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+      - name: macOS 用发版证书重签并做 dmg
+        if: matrix.target == 'macos'
+        run: script/sign-macos.sh app/.nsh/out ${{ matrix.arch }}
+      - name: 收集产物
+        run: |
+          mkdir -p dist
+          cd app/.nsh/out
+          cp Datum-*.tar.gz Datum-*.zip Datum-*.dmg Datum-setup.exe ../../../dist/ 2>/dev/null || true
+          ls -la ../../../dist
+          [ -n "$(ls ../../../dist)" ]
+      - uses: actions/upload-artifact@v4
         with:
-          name: datum-dmg
-          path: target/release-dist/Datum-*.dmg*
-      - name: 创建 GitHub Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+          name: datum-${{ matrix.target }}-${{ matrix.arch }}
+          path: dist/*
+      - name: 删除临时钥匙串
+        if: always() && matrix.target == 'macos'
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true
+
+  release:
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/native
+      - run: script/install-nsh.sh
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 写更新清单并创建 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
+          set -euo pipefail
+          : "${UPDATE_SIGNING_KEY:?未设置 UPDATE_SIGNING_KEY secret}"
           version=$(script/app-version.sh)
-          dmg="target/release-dist/Datum-$version.dmg"
-          sha=$(cut -d' ' -f1 "$dmg.sha256")
-          script/release-notes.sh "$version" "$sha" > "$RUNNER_TEMP/notes.md"
-          # 附注标签的说明就是应用内更新对话框里显示的更新说明
+          # 附注标签的说明就是应用内显示的更新说明
           git fetch --force --depth=1 origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d' > "$RUNNER_TEMP/update-notes.txt"
-          script/update-manifest.sh "$version" "$sha" "$(stat -f %z "$dmg")" "$RUNNER_TEMP/update-notes.txt" > "$RUNNER_TEMP/latest.json"
-          # 预发布(vX.Y.Z-rc1)不能成为 releases/latest,所有已安装的应用都会更新到 latest
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d' > "$RUNNER_TEMP/notes.md"
+          key="$RUNNER_TEMP/update.secret"
+          umask 077
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key"
+          trap 'rm -f "$key"' EXIT
+          cd dist
+          nsh update-manifest Datum-*.tar.gz Datum-*.zip --entry ../app --notes "$RUNNER_TEMP/notes.md" --key "$key" --out .
+          cp "Datum-$version-macos-aarch64.dmg" Datum.dmg
+          shasum -a 256 Datum-* Datum.dmg > SHA256SUMS
           prerelease=()
           [[ $version == *-* ]] && prerelease=(--prerelease)
-          # 不带版本号的副本:releases/latest/download/Datum.dmg 是永不过期的下载链接
-          cp "$dmg" "$RUNNER_TEMP/Datum.dmg"
-          gh release create "$GITHUB_REF_NAME" "$dmg" "$dmg.sha256" "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/Datum.dmg" \
-            --title "Datum $version" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes "${prerelease[@]}"
-      - name: 删除临时钥匙串
-        if: always()
-        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" ./* \
+            --title "Datum $version" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes ${prerelease[@]+"${prerelease[@]}"}

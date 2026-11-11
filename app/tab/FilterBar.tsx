@@ -1,0 +1,121 @@
+// 结果区筛选条:条件之间用统一的连接词(且/或),编辑只改草稿,
+// 点「应用」或在值输入框回车才作用到结果。对应 GPUI 版 tab/filter.rs。
+
+import { Text, View } from "nsh";
+import { Button } from "nsh/base";
+import { t } from "nsh/i18n";
+import { FILTER_OPS, type FilterOp } from "../lib/types";
+import { Btn, IconButton, TextField } from "../ui/kit";
+import { FS } from "../ui/text";
+import {
+  filterAdd,
+  filterApply,
+  filterClear,
+  filterDirty,
+  filterPreviewCount,
+  removeDraft,
+  updateDraft,
+  type TabModel,
+} from "./model";
+import { SelectMenu } from "./ui";
+
+const OP_KEY: Record<FilterOp, string> = {
+  contains: "filter.op.contains",
+  eq: "filter.op.eq",
+  ne: "filter.op.ne",
+  starts: "filter.op.starts",
+  ends: "filter.op.ends",
+  gt: "filter.op.gt",
+  lt: "filter.op.lt",
+  gte: "filter.op.gte",
+  lte: "filter.op.lte",
+  empty: "filter.op.empty",
+  notEmpty: "filter.op.not_empty",
+};
+
+const needsValue = (op: FilterOp) => op !== "empty" && op !== "notEmpty";
+
+export function FilterBar(props: { m: TabModel }) {
+  const m = props.m;
+  const columns = () => m.result()?.columns ?? [];
+  const total = () => m.result()?.rows.length ?? 0;
+  const canClear = () => m.drafts().length > 0 || m.applied().length > 0;
+  return (
+    <View class="max-h-[220px] shrink-0 gap-2 border-b border-border bg-panel px-5 py-3">
+      <Each of={m.drafts()} key={(d) => d.id}>
+        {(d, i) => (
+          <View class="flex-row items-center gap-2">
+            <If
+              when={i() > 0}
+              else={<Text class={`${FS.xs} w-9 shrink-0 text-muted-foreground`}>{t("filter.where")}</Text>}
+            >
+              <Button
+                onPress={() => m.conj.update((c) => (c === "and" ? "or" : "and"))}
+                class="h-7 w-9 shrink-0 items-center justify-center rounded-(--radius) bg-selection"
+              >
+                <Text class={`${FS.xs} font-bold text-data`}>
+                  {m.conj() === "and" ? t("filter.and") : t("filter.or")}
+                </Text>
+              </Button>
+            </If>
+            <SelectMenu
+              testID={`filter-col:${d().id}`}
+              width={184}
+              label={d().col === "" ? t("filter.pick_column") : d().col}
+              options={columns().map((c) => ({ value: c, label: c }))}
+              onSelect={(col) => updateDraft(m, d().id, { col })}
+            />
+            <SelectMenu
+              testID={`filter-op:${d().id}`}
+              width={120}
+              label={t(OP_KEY[d().op])}
+              options={FILTER_OPS.map((op) => ({ value: op, label: t(OP_KEY[op]) }))}
+              onSelect={(op) => updateDraft(m, d().id, { op })}
+            />
+            <If
+              when={needsValue(d().op)}
+              else={
+                <Text class={`${FS.xs} min-w-0 flex-1 px-3 italic text-fg-faint`}>{t("filter.no_value_needed")}</Text>
+              }
+            >
+              <TextField
+                testID={`filter-value:${d().id}`}
+                class="h-7 min-w-0 flex-1"
+                placeholder={t("filter.value_placeholder")}
+                value={d().value}
+                onChange={({ value }) => updateDraft(m, d().id, { value })}
+                onSubmit={() => filterApply(m)}
+              />
+            </If>
+            <IconButton icon="x" size={13} tooltip={t("filter.remove_condition")} onPress={() => removeDraft(m, d().id)} />
+          </View>
+        )}
+      </Each>
+      <If when={m.drafts().length === 0}>
+        <Text class={`${FS.sm} py-2 text-fg-faint`}>{t("filter.empty")}</Text>
+      </If>
+      <View class="flex-row items-center justify-between">
+        <Btn small variant="ghost" icon="plus" label={t("filter.add_condition")} onPress={() => filterAdd(m)} />
+        <View class="flex-row items-center gap-3">
+          <View class="flex-row items-center gap-1">
+            <Text class={`${FS.xs} text-fg-faint`}>{t("filter.preview_match")}</Text>
+            <Text class={`${FS.xs} font-mono font-bold text-fg-soft`}>{String(filterPreviewCount(m))}</Text>
+            <Text class={`${FS.xs} text-fg-faint`}>{t("filter.of_total_rows", { total: total() })}</Text>
+          </View>
+          <If when={canClear()}>
+            <Btn small variant="ghost" label={t("filter.clear")} onPress={() => filterClear(m)} />
+          </If>
+          <Btn
+            small
+            testID="filter-apply"
+            icon="check"
+            variant={filterDirty(m) ? "primary" : "outline"}
+            disabled={!filterDirty(m)}
+            label={filterDirty(m) ? t("filter.apply") : t("filter.applied")}
+            onPress={() => filterApply(m)}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
