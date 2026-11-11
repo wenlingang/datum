@@ -1,5 +1,5 @@
 // 标签页主体:查询 tab(编辑器 + 工具条 / 状态行 + 结果,上下可拖动)、表浏览 tab(纯网格)、
-// ER 图占位;MongoDB 不支持,只显示一句提示。对应 GPUI 版 tab/mod.rs 的 Render。
+// MongoDB 不支持,只显示一句提示;ER 图 tab 交给 erd/ErdView。对应 GPUI 版 tab/mod.rs 的 Render。
 
 import { effect, Text, untracked, View } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
@@ -7,6 +7,8 @@ import { t } from "nsh/i18n";
 import type { WorkTab } from "../store/workspace";
 import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
+import { ErdView } from "../erd/ErdView";
+import { erdModelOf } from "../erd/model";
 import { CellDialog } from "./CellDialog";
 import { FilterBar } from "./FilterBar";
 import { conns, refreshTables } from "../store/conns";
@@ -117,6 +119,8 @@ function ModelView(props: { m: TabModel; tabId: string }) {
 }
 
 export function TabBody(props: { tab: WorkTab }) {
+  const erd = erdModelOf(props.tab.state);
+  if (erd) return <ErdView m={erd} />;
   const m = modelOf(props.tab);
   if (props.tab.kind === "redis") return <RedisInsight connId={props.tab.connId} />;
   if (props.tab.kind === "rlive") return <RedisLive connId={props.tab.connId} />;
@@ -126,7 +130,7 @@ export function TabBody(props: { tab: WorkTab }) {
   }
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
-  if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;
+  if (!m) return <Placeholder icon="network" text={t("erd.wip")} />;
   if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_unsupported")} />;
   return <ModelView m={m} tabId={props.tab.id} />;
 }

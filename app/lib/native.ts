@@ -1,7 +1,7 @@
 // datum/native 的类型化封装:原生导出返回 `unknown`(JSON),这里断言成 lib/types 的形状。
 // 界面代码只从这里调用原生模块,不直接 import "datum/native"。
 
-import { Ai, Db, Prefs as NativePrefs, Sql, Store } from "datum/native";
+import { Ai, Db, Erd, Prefs as NativePrefs, Sql, Store } from "datum/native";
 import type {
   AgentEvent,
   AlterAssessment,
@@ -12,6 +12,10 @@ import type {
   ColumnsByTable,
   Connection,
   DbKind,
+  ErdBuildOptions,
+  ErdGraph,
+  ErdSchema,
+  ForeignKey,
   HistoryEntry,
   KnowledgeDoc,
   Prefs,
@@ -29,7 +33,6 @@ import type {
   DiagResult,
   DiagSection,
   NlFilter,
-  ForeignKey,
   ValueContext,
   Plan,
   DiffReport,
@@ -43,6 +46,7 @@ import type {
   ImportProgress,
   ImportSource,
 } from "./types";
+import type { Rects } from "../erd/geom";
 
 export const store = {
   connections: () => Store.connections() as Connection[],
@@ -187,6 +191,16 @@ export const db = {
   diagRun: async (kind: DbKind, id: string, section: string) => (await Db.diagRun(kind, id, section)) as DiagResult,
   diagAct: (kind: DbKind, id: string, action: DiagAction, args: string[]) =>
     Db.diagAct(kind, id, action, args) as Promise<void>,
+};
+
+export const erd = {
+  schema: async (kind: DbKind, id: string) => (await Erd.schema(kind, id)) as ErdSchema,
+  build: (tables: string[], columns: ColumnsByTable, schema: ErdSchema, opts: ErdBuildOptions) =>
+    Erd.build(tables, columns, schema, opts) as ErdGraph,
+  layout: (graph: ErdGraph) => Erd.layout(graph) as Rects,
+  resolve: (rects: Rects, fixed: string | null) => Erd.resolve(rects, fixed) as Rects,
+  matchTables: (query: string, tables: string[], columns: ColumnsByTable, fks: ForeignKey[]) =>
+    Erd.matchTables(query, tables, columns, fks) as string[],
 };
 
 export const sql = {

@@ -48,7 +48,8 @@ async function boot() {
   const q = newQueryTab(
     "-- Top products by revenue\nSELECT p.name,\n       p.origin,\n       p.roast_level,\n       COUNT(o.id) AS orders,\n       SUM(o.quantity) AS bags_sold,\n       ROUND(SUM(o.quantity * p.price_cents) / 100.0, 2) AS revenue_usd\nFROM products p\nJOIN orders o ON o.product_id = p.id\nGROUP BY p.id\nORDER BY revenue_usd DESC;",
   );
-  if (view === "table") {
+  if (view === "erd") openErd(connId);
+  else if (view === "table") {
     const t = workspace.tabs().find((x) => x.kind === "table");
     if (t) focusTab(t);
   } else if (q) focusTab(q);

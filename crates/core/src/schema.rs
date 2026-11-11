@@ -69,7 +69,8 @@ pub struct ForeignKey {
 pub type PkByTable = BTreeMap<String, Vec<String>>;
 
 /// ER 图所需的整库关系数据。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ErdSchema {
     pub fks: Vec<ForeignKey>,
     pub pk_by_table: PkByTable,

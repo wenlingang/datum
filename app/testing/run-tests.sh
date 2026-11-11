@@ -17,7 +17,7 @@ trap 'rm -rf "$ROOT"' EXIT
 cd "$APP"
 ONLY=${1:-all}
 # core = 核心流程:不跑外壳界面(workspace)与 AI 面板(chat)
-want() { [ "$ONLY" = all ] || [ "$ONLY" = "$1" ] || { [ "$ONLY" = core ] && case $1 in rust|tab|dialogs) true;; *) false;; esac; }; }
+want() { [ "$ONLY" = all ] || [ "$ONLY" = "$1" ] || { [ "$ONLY" = core ] && case $1 in rust|tab|erd|dialogs) true;; *) false;; esac; }; }
 FAILED=0
 
 conn() { # id name file
@@ -67,6 +67,13 @@ if want tab; then
   run tab-nl "$D" tab/nl.test.tsx
   kill $MOCK 2>/dev/null; wait $MOCK 2>/dev/null || true
   grep -q 'Request: Kenya medium' "$D/requests.log" || { echo "nl filter: 请求里没有用户原话"; FAILED=1; }
+fi
+
+if want erd; then
+  D="$ROOT/erd"; mkdir -p "$D"
+  sqlite3 "$D/erd.db" "create table customers(id integer primary key, name text); create table orders(id integer primary key, customer_id int references customers(id), total real); create table order_items(id integer primary key, order_id int references orders(id), product_id int, qty int); create table products(id integer primary key, c2 text, c3 text, c4 text, c5 text, c6 text, c7 text, c8 text, c9 text, c10 text, c11 text, c12 text, c13 text, c14 text, c15_last text); create table notes(id integer primary key, body text);"
+  printf '[%s]\n' "$(conn c-erd erd "$D/erd.db")" > "$D/connections.json"
+  run erd "$D" erd/erd.test.tsx
 fi
 
 if want dialogs; then

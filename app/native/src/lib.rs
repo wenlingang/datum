@@ -7,6 +7,7 @@
 mod ai;
 mod conn;
 mod db;
+mod erd;
 mod keys;
 mod dialogs;
 mod prefs;
@@ -20,6 +21,7 @@ use nsh_core::prelude::*;
 pub use ai::Ai;
 pub use conn::Store;
 pub use db::Db;
+pub use erd::Erd;
 pub use keys::EditorKeys;
 pub use dialogs::Dialogs;
 pub use prefs::Prefs;
@@ -35,6 +37,7 @@ fn native(registry: &mut Registry) {
         .register::<EditorKeys>()
         .module::<Store>()
         .module::<Db>()
+        .module::<Erd>()
         .module::<Prefs>()
         .module::<Sql>()
         .module::<Ai>()

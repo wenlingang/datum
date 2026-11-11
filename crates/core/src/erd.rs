@@ -1,6 +1,7 @@
 //! ER 关系图:由表/列/外键构建节点与边,并做分层布局(纯函数,UI 只负责绘制)。
 
 use crate::schema::{ColumnsByTable, ErdSchema, ForeignKey};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// 整库模式下表数超过该值时节点默认折叠(只显示键列)。
@@ -17,7 +18,8 @@ pub const NODE_MAX_W: f32 = 320.;
 const LAYER_GAP: f32 = 70.;
 const NODE_GAP: f32 = 40.;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ErdColumn {
     pub name: String,
     pub data_type: String,
@@ -25,7 +27,8 @@ pub struct ErdColumn {
     pub is_fk: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ErdNode {
     pub table: String,
     /// 可见列(折叠时只含 PK/FK 列)
@@ -36,7 +39,8 @@ pub struct ErdNode {
     pub is_focus: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ErdEdge {
     /// 引用方表 + 约束名(复合外键合并为一条边)
     pub id: String,
@@ -47,7 +51,7 @@ pub struct ErdEdge {
     pub inferred: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ErdGraph {
     pub nodes: Vec<ErdNode>,
     pub edges: Vec<ErdEdge>,
@@ -280,7 +284,7 @@ pub fn estimate_node_size(n: &ErdNode) -> (f32, f32) {
     (width, height)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct NodeRect {
     pub x: f32,
     pub y: f32,
