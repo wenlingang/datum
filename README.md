@@ -19,9 +19,9 @@ Win32 / Direct2D on Windows, GTK 4 on Linux. The data layer is Rust (`crates/cor
 
 ![SQL editor with an aggregate query and its results](docs/screenshots/sql-editor.png)
 
-**See how everything connects.** The ER diagram picks up real foreign keys and infers the ones you only expressed through `xxx_id` naming. (Not in the current version yet: it is still being ported to the new UI.)
+**Ask in plain words.** The AI assistant sits next to your tabs and knows the tables of the current connection. Bring your own provider (OpenAI-compatible, Anthropic, Gemini); the SQL it writes runs only after you confirm it.
 
-![ER diagram of a sample shop schema](docs/screenshots/er-diagram.png)
+![The AI assistant panel next to a query tab](docs/screenshots/ai-assistant.png)
 
 **Hard to shoot yourself in the foot.** Connections are tagged local / staging / prod, and anything destructive waits for an explicit confirmation.
 
@@ -32,8 +32,6 @@ Win32 / Direct2D on Windows, GTK 4 on Linux. The data layer is Rust (`crates/cor
   </tr>
 </table>
 
-<sub>Screenshots use a made-up coffee roastery database and were taken on macOS with the earlier build (v0.0.1).</sub>
-
 ## Features
 
 - **Connections**: create / edit / delete / test connections with a live connection-string preview; SSL mode (disable / prefer / require / verify-full — for PG and MySQL, "prefer" falls back to plaintext when the server has no TLS); color-coded environments (local / staging / prod); credentials routed by environment — `local` stored in plain text on disk, `staging/prod` in the system keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service); switch databases from the sidebar (reuses the same instance or clones the connection), export / drop a database from its context menu
@@ -42,7 +40,7 @@ Win32 / Direct2D on Windows, GTK 4 on Linux. The data layer is Rust (`crates/cor
 - **Destructive statement review**: DROP / TRUNCATE / DELETE or UPDATE without WHERE, etc. require confirmation before running; Redis FLUSHALL / FLUSHDB are intercepted too; read-only execution is enforced by the database itself (PG `default_transaction_read_only`, MySQL `SESSION TRANSACTION READ ONLY`, SQLite `query_only`)
 - **Redis**: browse keys, type-aware value views, run any command (with command and key-name completion), key details (type / TTL / size)
 - **AI assistant**: multiple providers (OpenAI-compatible / Anthropic / Gemini, with presets for DeepSeek, Qwen, Kimi and more), switch models inside the panel; per-connection conversations; table schemas and knowledge-base documents injected automatically (ships with database development guidelines, replaceable); generated SQL is shown as cards you confirm before running or open in the editor
-- **ER diagram** (not available yet — opening it shows a placeholder while it is being ported): physical foreign keys plus logical ones inferred from `xxx_id` naming, layered layout, drag, zoom, search highlighting, schema view / engineering ER view, PNG export
+- **ER diagram**: not available yet (opening it shows a placeholder while it is being ported to the new UI)
 - **Import**: import from a .sql file or pasted text in a single transaction (rolls back entirely on failure and points to the failing statement)
 - **Interface**: English / 简体中文 / 繁體中文 (follows the system by default; AI prompts and the built-in guidelines switch with the language), light / dark / system theme, font and size settings, resizable panes, tabs, in-app updates
 

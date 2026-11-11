@@ -19,9 +19,9 @@ Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給�
 
 ![SQL 編輯器:彙總查詢及其結果](docs/screenshots/sql-editor.png)
 
-**資料表之間怎麼關聯,一眼看清。** 關聯圖既讀取真實外鍵,也會依 `xxx_id` 命名推斷沒建外鍵的關聯。(目前版本尚未提供,正在移植到新介面。)
+**用一句話描述你要的資料。** AI 助理就在分頁旁邊,認得目前連線的資料表。服務供應商自己設定(OpenAI 相容 / Anthropic / Gemini),它寫的 SQL 要你確認後才會執行。
 
-![範例商店資料庫的關聯圖](docs/screenshots/er-diagram.png)
+![查詢分頁旁的 AI 助理面板](docs/screenshots/ai-assistant.png)
 
 **不容易誤操作。** 連線依 local / staging / prod 標色,任何破壞性語句都要你明確確認後才會執行。
 
@@ -32,8 +32,6 @@ Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給�
   </tr>
 </table>
 
-<sub>截圖使用一個虛構的咖啡烘焙店資料庫,攝於 macOS 上的早期版本(v0.0.1)。</sub>
-
 ## 功能
 
 - **連線管理**:新增/編輯/刪除/測試連線,連線字串預覽;SSL 模式(關閉 / 優先 / 必須 / 驗證憑證,PG 與 MySQL 的「優先」在伺服器不支援時退回明文);依環境(local / staging / prod)著色;憑證依環境存放——`local` 明文存於本機、`staging/prod` 存於系統鑰匙圈(macOS 鑰匙圈 / Windows 認證管理員 / Linux Secret Service);側欄切換資料庫(同一執行個體共用或自動複製連線)、資料庫右鍵匯出/刪除
@@ -42,7 +40,7 @@ Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給�
 - **破壞性陳述式審查**:DROP / TRUNCATE / 無 WHERE 的 DELETE、UPDATE 等執行前統一確認;Redis 的 FLUSHALL / FLUSHDB 同樣攔截;唯讀執行由資料庫強制(PG `default_transaction_read_only`、MySQL `SESSION TRANSACTION READ ONLY`、SQLite `query_only`)
 - **Redis**:瀏覽 key、依型別顯示值、執行任意命令(命令與 key 名稱自動完成)、key 詳細資訊(型別 / TTL / 大小)
 - **AI 助理**:可設定多個服務供應商(OpenAI 相容 / Anthropic / Gemini,內建 DeepSeek、通義、Kimi 等預設),在面板內切換模型;依連線分開對話;自動帶入資料表結構與知識庫文件(內建資料庫開發規範,可替換);產生的 SQL 以卡片呈現,確認後執行或在編輯器中執行
-- **關聯圖**(尚未提供,開啟後是預留頁面,正在移植):實體外鍵 + 依 `xxx_id` 命名推斷的邏輯外鍵,分層配置、拖曳、縮放、搜尋醒目提示、表結構圖 / 工程 ER 圖切換、匯出 PNG
+- **關聯圖(ER 圖)**:尚未提供,開啟後是預留頁面,正在移植到新介面
 - **匯入**:從 .sql 檔案或貼上的內容以單一交易匯入(失敗整體復原並定位到第幾條)
 - **介面**:English / 简体中文 / 繁體中文(預設跟隨系統,AI 提示詞與內建規範隨語言切換)、淺色 / 深色 / 跟隨系統、字型與字級設定、可拖曳分欄、多分頁、App 內更新
 

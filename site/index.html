@@ -335,7 +335,7 @@ document.documentElement.classList.add("js");
           <p class="muted" lang="en">Results page on the server, so a big table opens as fast as a small one.</p>
           <p class="muted" lang="zh-CN">结果在服务端分页，大表和小表打开一样快。</p>
         </div>
-        <img class="shot" src="screenshots/sql-editor.png" width="1600" height="1025" loading="lazy" alt="The SQL editor with an aggregate query and its results">
+        <img class="shot" src="screenshots/sql-editor.png" width="1600" height="1024" loading="lazy" alt="The SQL editor with an aggregate query and its results">
       </div>
 
       <div class="scene flip">
@@ -347,19 +347,19 @@ document.documentElement.classList.add("js");
           <p class="muted" lang="en">Filter with AND / OR, open any cell in full with JSON formatted, and export to CSV, SQL or Markdown.</p>
           <p class="muted" lang="zh-CN">支持 AND / OR 筛选，单元格可展开查看完整内容并自动格式化 JSON，可导出 CSV、SQL、Markdown。</p>
         </div>
-        <img class="shot" src="screenshots/table.png" width="1600" height="1025" loading="lazy" alt="Browsing a table with the row details panel open">
+        <img class="shot" src="screenshots/table.png" width="1600" height="1024" loading="lazy" alt="Browsing a table with the row details panel open">
       </div>
 
       <div class="scene">
         <div>
-          <h2 lang="en">See how everything connects.</h2>
-          <h2 lang="zh-CN">一眼看清表之间的关系。</h2>
-          <p lang="en">The ER diagram reads real foreign keys and infers the ones you only expressed by naming a column <code>customer_id</code>.</p>
-          <p lang="zh-CN">ER 图既读取真实外键，也能从 <code>customer_id</code> 这样的列名推断出逻辑关系。</p>
-          <p class="muted" lang="en">Drag, zoom, search, and export it as a PNG. Not in the current version yet: it is still being ported to the new UI.</p>
-          <p class="muted" lang="zh-CN">可拖拽、缩放、搜索，并导出为 PNG。当前版本暂未提供，正在移植到新界面。</p>
+          <h2 lang="en">Ask in plain words.</h2>
+          <h2 lang="zh-CN">用一句话说出你要的数据。</h2>
+          <p lang="en">The AI assistant sits next to your tabs and sees the tables of the current connection. Describe what you need, and the SQL it writes shows up as a card you run or open in the editor.</p>
+          <p lang="zh-CN">AI 助手就在标签页旁边，能看到当前连接的表结构。说出你想要什么，它写的 SQL 以卡片呈现，由你决定执行还是放进编辑器。</p>
+          <p class="muted" lang="en">Bring your own provider: OpenAI-compatible, Anthropic or Gemini, with presets for DeepSeek, Qwen, Kimi and more. Nothing runs until you confirm it.</p>
+          <p class="muted" lang="zh-CN">服务商自己配：OpenAI 兼容、Anthropic、Gemini，内置 DeepSeek、通义、Kimi 等预设。不经你确认什么都不会执行。</p>
         </div>
-        <img class="shot" src="screenshots/er-diagram.png" width="1600" height="1025" loading="lazy" alt="ER diagram of a sample shop schema">
+        <img class="shot" src="screenshots/ai-assistant.png" width="1600" height="1024" loading="lazy" alt="The AI assistant panel next to a query tab">
       </div>
 
       <div class="scene flip">
@@ -375,17 +375,17 @@ document.documentElement.classList.add("js");
           <p class="muted" lang="zh-CN">staging 与 prod 的密码存放在系统钥匙串里：macOS 钥匙串、Windows 凭据管理器、Linux Secret Service。</p>
         </div>
         <div class="pair">
-          <img class="shot" src="screenshots/new-connection.png" width="1000" height="864" loading="lazy" alt="The new connection dialog">
-          <img class="shot" src="screenshots/destructive-review.png" width="1000" height="413" loading="lazy" alt="Review of a destructive statement before it runs">
+          <img class="shot" src="screenshots/new-connection.png" width="1214" height="1110" loading="lazy" alt="The new connection dialog">
+          <img class="shot" src="screenshots/destructive-review.png" width="1150" height="525" loading="lazy" alt="Review of a destructive statement before it runs">
         </div>
       </div>
 
       <div class="facts">
         <div>
-          <h3 lang="en">An assistant that knows your schema</h3>
-          <h3 lang="zh-CN">懂表结构的 AI 助手</h3>
-          <p lang="en">OpenAI-compatible, Anthropic and Gemini providers. It sees your table schemas, and the SQL it writes waits for you to run it.</p>
-          <p lang="zh-CN">支持 OpenAI 兼容、Anthropic、Gemini 等服务商。它能看到你的表结构，生成的 SQL 由你确认后再执行。</p>
+          <h3 lang="en">Imports that roll back cleanly</h3>
+          <h3 lang="zh-CN">导入失败整体回滚</h3>
+          <p lang="en">Import a .sql file or pasted text in a single transaction. If one statement fails, nothing is applied, and Datum points to the statement that broke.</p>
+          <p lang="zh-CN">从 .sql 文件或粘贴的内容导入，全部放在一个事务里。任何一条失败就整体回滚，并指出是第几条出的错。</p>
         </div>
         <div>
           <h3 lang="en">Redis without the guesswork</h3>
