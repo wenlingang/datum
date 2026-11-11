@@ -3,7 +3,8 @@
 
 import { cleanup, Clipboard, Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
-import { dialogsNative, errorText, store } from "../lib/native";
+import { dialogsNative, errorText, probeDatabases, store } from "../lib/native";
+import { DropMenu, MItem } from "../ui/menu";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSL_MODES } from "../lib/types";
 import { activate, loadTables, saveConnection } from "../store/conns";
 import { toast } from "../store/toast";
@@ -185,6 +186,38 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
     return null;
   };
 
+  /** 数据库下拉:打开时用表单当前参数临时连一次实例,列出库名 */
+  const dbList = signal<{ state: "idle" | "loading" | "ok" | "error"; items: string[]; error?: string }>({
+    state: "idle",
+    items: [],
+  });
+  let dbAttempt = 0;
+  async function loadDatabases() {
+    const mine = ++dbAttempt;
+    let conn: Connection;
+    let password: string | null;
+    try {
+      ({ conn, password } = connectionAndPassword(d(), props.id, props.editing));
+    } catch (e) {
+      dbList.set({ state: "error", items: [], error: errorText(e) });
+      return;
+    }
+    if (password == null) {
+      try {
+        password = store.savedPassword(props.id);
+      } catch {
+        password = "";
+      }
+    }
+    dbList.set({ state: "loading", items: [] });
+    try {
+      const items = await probeDatabases(conn, password ?? "");
+      if (mine === dbAttempt) dbList.set({ state: "ok", items });
+    } catch (e) {
+      if (mine === dbAttempt) dbList.set({ state: "error", items: [], error: errorText(e) });
+    }
+  }
+
   return (
     <View class="gap-4">
       <View class="flex-row gap-4">
@@ -273,12 +306,41 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
         </View>
         <View class="flex-row gap-4">
           <Field label={t("conn_form.database")}>
-            <TextField
-              testID="conn-database"
-              value={d().database}
-              placeholder="postgres"
-              onChange={({ value }) => set({ database: value })}
-            />
+            <View class="relative">
+              <TextField
+                testID="conn-database"
+                value={d().database}
+                placeholder="postgres"
+                class="pr-9"
+                onChange={({ value }) => set({ database: value })}
+              />
+              <View class="absolute bottom-0 right-1 top-0 justify-center">
+                <DropMenu
+                  testID="conn-db-menu"
+                  align="end"
+                  popupClass="max-h-72"
+                  onOpenChange={(open) => {
+                    if (open) void loadDatabases();
+                  }}
+                  trigger={<IconButton icon="chevrons-up-down" size={14} tooltip={t("conn_form.db_pick")} />}
+                >
+                  <Scroll class="max-h-64">
+                    <If when={dbList().state === "loading"}>
+                      <MItem label={t("conn_form.db_loading")} disabled />
+                    </If>
+                    <If when={dbList().state === "error"}>
+                      <Text class={`${FS.xs} max-w-80 px-2 py-1.5 text-negative`}>{dbList().error ?? ""}</Text>
+                    </If>
+                    <If when={dbList().state === "ok" && dbList().items.length === 0}>
+                      <MItem label={t("conn_form.db_none")} disabled />
+                    </If>
+                    <Each of={dbList().items}>
+                      {(name) => <MItem label={name()} onSelect={() => set({ database: name() })} />}
+                    </Each>
+                  </Scroll>
+                </DropMenu>
+              </View>
+            </View>
           </Field>
           <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
             <Dropdown

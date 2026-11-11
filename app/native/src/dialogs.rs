@@ -30,6 +30,15 @@ impl Dialogs {
             .map(|p| p.to_string_lossy().into_owned()))
     }
 
+    /// 用表单当前参数(不保存)列出实例下的库,新建/编辑连接时下拉选库。
+    pub async fn probe_databases(conn: JsonValue, password: String) -> Result<JsonValue, String> {
+        let conn: datum_core::core::connection::Connection = crate::runtime::from(conn, "connection")?;
+        crate::runtime::spawn(async move { datum_core::service::probe_databases(&conn, &password).await })
+            .await?
+            .map_err(crate::runtime::err)
+            .and_then(json)
+    }
+
     /// 协议的展示名(按当前 core 语言):`[{ id, label }]`,顺序即菜单顺序。
     pub fn ai_protocols() -> Result<JsonValue, String> {
         let list: Vec<JsonValue> = Protocol::ALL

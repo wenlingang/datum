@@ -423,6 +423,18 @@ settings:
 
 # 新建/编辑连接(dialogs/connection_form.rs)
 conn_form:
+  db_pick:
+    en: List databases on this server
+    zh-CN: 列出实例上的库
+    zh-TW: 列出執行個體上的資料庫
+  db_loading:
+    en: Loading databases…
+    zh-CN: 正在读取库列表…
+    zh-TW: 正在讀取資料庫清單…
+  db_none:
+    en: No databases found
+    zh-CN: 没有找到库
+    zh-TW: 沒有找到資料庫
   mode:
     en: Connect with
     zh-CN: 连接方式

@@ -79,6 +79,16 @@ describe("connection form", () => {
     await app.waitFor(`text:/active: ${conn.id}/`);
     app.dispose();
   });
+  test("数据库下拉:连不上时在菜单里显示原因", async () => {
+    const app = await start();
+    await app.press("id:dev-new-conn");
+    await app.clear("id:conn-port");
+    await app.type("id:conn-port", "1");
+    await app.press("label:List databases on this server");
+    await app.waitUntil(() => app.texts().some((x) => x.startsWith("Failed to connect to PostgreSQL")), { timeout: 15_000 });
+    app.dispose();
+  });
+
   test("连接测试失败时完整显示报错", async () => {
     const app = await start();
     await app.press("id:dev-new-conn");

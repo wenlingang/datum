@@ -145,6 +145,28 @@ pub async fn test_connect(
     Ok(())
 }
 
+/// 用给定参数临时连接实例(不指定库),列出库名(新建连接表单里选库用,不缓存)。
+pub async fn probe_databases(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+    ssl: SslMode,
+) -> AppResult<Vec<String>> {
+    let pool = open_pool(host, port, user, pass, "", ssl).await?;
+    let result = async {
+        let mut conn = pool.get_conn().await.map_err(connerr)?;
+        let names: Vec<String> = conn
+            .query("SHOW DATABASES")
+            .await
+            .map_err(|e| AppError::new(ErrorKind::Query, e.to_string()))?;
+        Ok(names)
+    }
+    .await;
+    pool.disconnect().await.ok();
+    result
+}
+
 impl MyPool {
     #[allow(clippy::too_many_arguments)]
     pub async fn connect(
