@@ -23,7 +23,9 @@ dmg="$out/Datum-$version-macos-$arch.dmg"
 
 # 发版证书不可替换:钥匙串里的 "Datum Release" 必须与已提交的指纹一致
 pin=$(tr -d '[:space:]' < "$root/script/release-cert.sha1")
-found=$(security find-certificate -c "$identity" -Z 2>/dev/null | awk '/SHA-1 hash:/ {print $3}' | head -1)
+# 先把整段输出收进变量再解析:管道里用 head 提前关闭会让上游收到 SIGPIPE,在 pipefail 下整个脚本静默退出
+certs=$(security find-certificate -c "$identity" -Z 2>/dev/null || true)
+found=$(printf '%s\n' "$certs" | awk '/SHA-1 hash:/ && !seen {print $3; seen=1}')
 if [[ -z $found ]]; then
   echo "❌ 钥匙串里找不到签名身份 \"$identity\"" >&2
   exit 1
@@ -35,7 +37,8 @@ fi
 
 codesign --force --deep --timestamp=none --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
-signed=$(codesign -dvvv "$app" 2>&1 | sed -n 's/^Authority=//p' | head -1)
+info=$(codesign -dvvv "$app" 2>&1)
+signed=$(printf '%s\n' "$info" | awk -F= '/^Authority=/ && !seen {print $2; seen=1}')
 [[ $signed == "$identity" ]] || { echo "❌ 签名身份是 \"$signed\",不是 \"$identity\"" >&2; exit 1; }
 
 # 更新包:与 nsh 写出的同名、同结构(顶层就是 Datum.app/)

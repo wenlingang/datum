@@ -81,9 +81,13 @@ jobs:
         with:
           key: ${{ matrix.target }}-${{ matrix.arch }}
           workspaces: app/native
-      - name: Linux 构建依赖(GTK 4)
+      - name: Linux 构建依赖(GTK 4、GStreamer、WebKitGTK,与 nsh 自己的 CI 一致)
         if: matrix.target == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev build-essential pkg-config \
+            libgtk-4-dev libwebkitgtk-6.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
       - name: Windows 安装器工具(Inno Setup 6)
         if: matrix.target == 'windows'
         run: command -v iscc || [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ] || choco install innosetup -y --no-progress
