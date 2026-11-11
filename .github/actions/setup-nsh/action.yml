@@ -1,0 +1,22 @@
+# 安装与 app/native/Cargo.toml 中 nsh 依赖同源(同一 git rev)的 nsh CLI。
+# 编译一次约 20 分钟,所以按 系统 + 架构 + rev 缓存编译好的二进制。
+# 注意:标签触发的运行只能读到默认分支(main)上写的缓存,ci.yml 在 main 上预热它。
+name: setup-nsh
+description: 安装 nsh CLI(按 rev 缓存)
+runs:
+  using: composite
+  steps:
+    - id: rev
+      shell: bash
+      run: |
+        rev=$(sed -n 's/^nsh-core = { git = "https:\/\/github.com\/longbridge\/nsh", rev = "\([0-9a-f]*\)" }$/\1/p' app/native/Cargo.toml)
+        [ -n "$rev" ] || { echo "没找到 nsh 的 git rev" >&2; exit 1; }
+        echo "rev=$rev" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/nsh
+          ~/.cargo/bin/nsh.exe
+        key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.rev.outputs.rev }}
+    - shell: bash
+      run: script/install-nsh.sh

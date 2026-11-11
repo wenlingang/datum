@@ -1,0 +1,63 @@
+# 日常 CI:推到 main 或提 PR 时跑核心测试。
+#
+# 另一个作用是预热缓存:GitHub 规定标签触发的运行只能读到自己和默认分支(main)上写的缓存,
+# 所以在 main 上编译好 nsh CLI(四个平台)与依赖,发版(release.yml)时就能直接复用,
+# 不必每次都从源码编译 nsh(约 20 分钟)。
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "site/**"
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app/native
+      - uses: ./.github/actions/setup-nsh
+      - run: cargo test --workspace --locked
+      - name: 类型检查与构建
+        working-directory: app
+        run: |
+          nsh check
+          nsh build 2>&1 | tee "$RUNNER_TEMP/build.log"
+          ! grep -q '^warn' "$RUNNER_TEMP/build.log"
+      - name: 核心界面测试(临时配置目录)
+        run: app/testing/run-tests.sh core
+
+  # 只在 main 上:为其余三个打包平台编译并缓存 nsh CLI(macOS Apple 芯片由上面的 test 预热)
+  warm-nsh:
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-nsh

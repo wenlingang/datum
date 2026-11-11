@@ -1,4 +1,4 @@
-# 发版:推送 v* 附注标签(如 v0.1.0)后自动 校验版本 → 测试 → 三平台打包 → 签名更新清单 → 建 Release。
+# 发版:推送 v* 附注标签(如 v0.1.0)后自动 校验版本 + 核心测试 ‖ 三平台打包(并行)→ 签名更新清单 → 建 Release。
 #
 # 标签必须与 app/nsh.json 的 "version" 一致;附注标签(git tag -a)的说明会作为更新说明,
 # 显示在应用「关于」里。带 `-` 的版本(如 v0.2.0-rc1)发为预发布,已安装的应用不会更新到它。
@@ -48,7 +48,7 @@ jobs:
       - name: 校验标签与版本号一致
         if: startsWith(github.ref, 'refs/tags/')
         run: script/check-version.sh "$GITHUB_REF_NAME"
-      - run: script/install-nsh.sh
+      - uses: ./.github/actions/setup-nsh
       - run: cargo test --workspace --locked
       - name: 类型检查与构建
         working-directory: app
@@ -56,11 +56,11 @@ jobs:
           nsh check
           nsh build 2>&1 | tee "$RUNNER_TEMP/build.log"
           ! grep -q '^warn' "$RUNNER_TEMP/build.log"
-      - name: 界面测试(临时配置目录)
-        run: app/testing/run-tests.sh
+      - name: 核心界面测试(临时配置目录)
+        run: app/testing/run-tests.sh core
 
+  # 与 test 并行;release 等两者都通过
   package:
-    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +91,7 @@ jobs:
       - name: Windows 安装器工具(Inno Setup 6)
         if: matrix.target == 'windows'
         run: command -v iscc || [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ] || choco install innosetup -y --no-progress
-      - run: script/install-nsh.sh
+      - uses: ./.github/actions/setup-nsh
       # 证书进入 runner 之前先把所有东西编译好:build script 与过程宏绝不能在发版私钥已解锁时运行
       - name: 打包
         working-directory: app
@@ -121,7 +121,7 @@ jobs:
         run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true
 
   release:
-    needs: package
+    needs: [test, package]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: macos-latest
     timeout-minutes: 30
@@ -131,7 +131,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/native
-      - run: script/install-nsh.sh
+      - uses: ./.github/actions/setup-nsh
       - uses: actions/download-artifact@v4
         with:
           path: dist
