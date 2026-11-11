@@ -226,6 +226,11 @@ code {
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; margin-top: 96px; }
 .facts p { font-size: 17px; color: var(--muted); margin: 0; }
 
+.facts.list { margin-top: 40px; }
+.keys-title { margin-top: 72px; }
+.keys { max-width: 640px; margin-top: 16px; width: 100%; border-collapse: collapse; font-size: 15px; }
+.keys td { padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.keys td:first-child { width: 1%; white-space: nowrap; padding-right: 24px; }
 .steps { list-style: none; padding: 0; margin: 40px 0 0; counter-reset: step; display: grid; gap: 30px; max-width: 760px; }
 .steps > li { counter-increment: step; display: grid; grid-template-columns: 48px 1fr; gap: 16px; }
 .steps > li::before {
@@ -433,6 +438,73 @@ document.documentElement.classList.add("js");
           <p lang="zh-CN">通过 nsh 用各平台自己的界面绘制（AppKit、Win32、GTK 4），数据层是 Rust，没有 WebView。支持英文、简体中文、繁体中文，默认跟随系统。</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <h2 lang="en">Everything in Datum</h2>
+      <h2 lang="zh-CN">功能一览</h2>
+      <div class="facts list">
+        <div>
+          <h3 lang="en">Connections</h3>
+          <h3 lang="zh-CN">连接管理</h3>
+          <p lang="en">Create, edit, test and delete connections, with a live connection-string preview and a database picker that lists what's on the server. SSL off / prefer / require / verify. Colored by environment; staging and prod passwords go to the system keychain. Switch databases from the sidebar, export or drop a database from its menu.</p>
+          <p lang="zh-CN">新建、编辑、测试、删除连接，实时预览连接串，数据库可从实例上的库列表里选。SSL 关闭 / 优先 / 必须 / 校验证书。按环境着色，staging 与 prod 的密码存进系统钥匙串。侧栏切库，库的右键菜单可导出、删除。</p>
+        </div>
+        <div>
+          <h3 lang="en">Tables</h3>
+          <h3 lang="zh-CN">表浏览</h3>
+          <p lang="en">Server-side paging and sorting, values colored by type, filters with and / or, full cell view with JSON formatting. Stage edits and deletes, then commit them in one transaction. Copy as INSERT, export CSV, SQL or Markdown.</p>
+          <p lang="zh-CN">服务端分页与排序，按类型着色，且 / 或组合筛选，单元格全文查看并自动格式化 JSON。暂存编辑与删除后一次事务提交。复制为 INSERT，导出 CSV、SQL、Markdown。</p>
+        </div>
+        <div>
+          <h3 lang="en">SQL editor</h3>
+          <h3 lang="zh-CN">SQL 编辑器</h3>
+          <p lang="en">Highlighting, completion that knows your tables, aliases and columns, keywords uppercased as you type. Run the statement under the cursor or the selection, format, Explain, set a row limit, and find past queries in per-database history.</p>
+          <p lang="zh-CN">语法高亮，补全认得表、别名和列，关键字自动大写。运行光标所在语句或选区，格式化、Explain、设置行数上限，查询历史按库隔离。</p>
+        </div>
+        <div>
+          <h3 lang="en">Safety</h3>
+          <h3 lang="zh-CN">安全</h3>
+          <p lang="en"><code>DROP</code>, <code>TRUNCATE</code>, <code>DELETE</code> or <code>UPDATE</code> without <code>WHERE</code>, and Redis <code>FLUSHALL</code> wait for review. Read-only runs are enforced by the database itself.</p>
+          <p lang="zh-CN"><code>DROP</code>、<code>TRUNCATE</code>、不带 <code>WHERE</code> 的 <code>DELETE</code> / <code>UPDATE</code>、Redis 的 <code>FLUSHALL</code> 都要先审查。只读执行由数据库本身强制。</p>
+        </div>
+        <div>
+          <h3 lang="en">AI assistant</h3>
+          <h3 lang="zh-CN">AI 助手</h3>
+          <p lang="en">Several providers (OpenAI-compatible, Anthropic, Gemini, with presets), one conversation per connection, your schema and a knowledge document in the prompt. Generated SQL comes as cards you confirm before running.</p>
+          <p lang="zh-CN">可配置多个服务商（OpenAI 兼容、Anthropic、Gemini，内置常用预设），按连接分会话，自动带上表结构与知识库文档。生成的 SQL 以卡片展示，确认后才执行。</p>
+        </div>
+        <div>
+          <h3 lang="en">Interface</h3>
+          <h3 lang="zh-CN">界面</h3>
+          <p lang="en">English, Simplified and Traditional Chinese; light, dark or system; font and size settings; resizable panes, tabs, and updates inside the app.</p>
+          <p lang="zh-CN">英文、简体中文、繁体中文；浅色、深色或跟随系统；字体字号可调；可拖动分栏、多标签页、应用内更新。</p>
+        </div>
+      </div>
+      <p class="note" lang="en">ER diagrams aren't available yet. MongoDB is no longer supported; Mongo connections saved by older versions stay in the config file but aren't shown.</p>
+      <p class="note" lang="zh-CN">ER 图暂未提供。已不再支持 MongoDB，旧版本保存的 Mongo 连接仍留在配置文件里，只是不再显示。</p>
+
+      <h3 class="keys-title" lang="en">Keyboard shortcuts</h3>
+      <h3 class="keys-title" lang="zh-CN">快捷键</h3>
+      <p class="muted" lang="en">Use Ctrl instead of ⌘ on Windows and Linux.</p>
+      <p class="muted" lang="zh-CN">Windows 与 Linux 上用 Ctrl 代替 ⌘。</p>
+      <table class="keys">
+        <tbody>
+          <tr><td><kbd>⌘↵</kbd></td><td><span lang="en">Run the statement under the cursor, or the selection</span><span lang="zh-CN">运行光标所在语句或选区</span></td></tr>
+          <tr><td><kbd>⌘⇧F</kbd></td><td><span lang="en">Format SQL</span><span lang="zh-CN">格式化 SQL</span></td></tr>
+          <tr><td><kbd>⌘E</kbd></td><td>Explain</td></tr>
+          <tr><td><kbd>⌘Y</kbd></td><td><span lang="en">Query history</span><span lang="zh-CN">查询历史</span></td></tr>
+          <tr><td><kbd>⌘⇧A</kbd></td><td><span lang="en">Send the selected SQL to the AI assistant</span><span lang="zh-CN">把选中的 SQL 发给 AI 助手</span></td></tr>
+          <tr><td><kbd>⌘F</kbd></td><td><span lang="en">Filter results</span><span lang="zh-CN">筛选结果</span></td></tr>
+          <tr><td><kbd>⌘S</kbd></td><td><span lang="en">Commit staged edits and deletes</span><span lang="zh-CN">提交暂存的编辑与删除</span></td></tr>
+          <tr><td><kbd>⌘R</kbd></td><td><span lang="en">Refresh the tab and the table list</span><span lang="zh-CN">刷新当前标签页与表列表</span></td></tr>
+          <tr><td><kbd>⌘T</kbd> / <kbd>⌘W</kbd></td><td><span lang="en">New query / close tab</span><span lang="zh-CN">新建查询 / 关闭标签页</span></td></tr>
+          <tr><td><kbd>⌘B</kbd></td><td><span lang="en">Show or hide the sidebar</span><span lang="zh-CN">显示 / 隐藏侧栏</span></td></tr>
+          <tr><td><kbd>⌘,</kbd></td><td><span lang="en">Settings</span><span lang="zh-CN">设置</span></td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
