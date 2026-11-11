@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | 繁體中文
 
-一款簡約現代的桌面資料庫管理工具,支援 **PostgreSQL**、**MySQL**、**SQLite** 與 **Redis**,可在 **macOS**、**Windows**、**Linux** 上執行。
+一款輕量、啟動快、簡約現代的桌面資料庫管理工具,支援 **PostgreSQL**、**MySQL**、**SQLite** 與 **Redis**,可在 **macOS**、**Windows**、**Linux** 上執行。
 
 介面以 TSX 寫在 [nsh](https://nsh.dev)(Native Shell)上,由各平台自己的元件繪製——macOS 用 AppKit,Windows 用 Win32 / Direct2D,
 Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給介面。不依賴 WebView 與 Node.js。
@@ -45,6 +45,23 @@ Linux 用 GTK 4。資料層是 Rust(`crates/core`),透過原生模組提供給�
 - **介面**:English / 简体中文 / 繁體中文(預設跟隨系統,AI 提示詞與內建規範隨語言切換)、淺色 / 深色 / 跟隨系統、字型與字級設定、可拖曳分欄、多分頁、App 內更新
 
 已不再支援 MongoDB。舊版本儲存的 Mongo 連線仍保留在設定檔中,只是不再顯示。
+
+## 效能
+
+Datum 不內嵌瀏覽器:介面由各平台原生視圖繪製,元件只在依賴的資料變化時更新對應部分,不整頁重繪。所以安裝包小、佔用少,大表也能很快顯示出來。
+
+| 項目 | 實測 |
+| --- | --- |
+| 安裝包 | macOS dmg 約 33 MB(Apple 晶片;Intel 約 36 MB),應用程式內更新包約 29 MB;Windows 安裝程式約 22 MB;Linux tar.gz 約 33 MB |
+| 啟動 | 從啟動到視窗出現約 0.2 秒 |
+| 閒置記憶體 | 約 31 MB |
+| 開啟 100 萬列的表 | 首頁約 0.1 秒(伺服器端分頁,每頁 100 列) |
+| 查詢傳回 10 萬列 × 10 欄 | 從執行到顯示在表格裡約 0.3 秒,其中取得資料後上屏約 40 ms |
+
+- 結果表是虛擬化的(nsh 的 DataTable):只為可見區域的儲存格建立視圖,捲動時重複使用。
+- 表瀏覽走伺服器端分頁,再大的表開啟也只取一頁;查詢結果預設最多 1000 列(可在設定裡調整)。
+
+<sub>測試環境:Apple M4、24 GB 記憶體、macOS 27.2,正式發布的 release 建置,本機 SQLite 資料庫。啟動時間為 5 次量測(0.17–0.20 s);記憶體為 macOS 的記憶體用量(footprint),即「活動監視器」顯示的數字。100 萬列表首頁 81–93 ms;10 萬列上屏 26–40 ms,載入後記憶體約 255 MB。另見 nsh 的[效能報告](https://nsh.dev/docs/performance-report)。</sub>
 
 ## 安裝
 

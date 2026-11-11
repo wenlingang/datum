@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-A clean, modern desktop database client for **PostgreSQL**, **MySQL**, **SQLite** and **Redis**, on **macOS**, **Windows** and **Linux**.
+A clean, lightweight and fast-starting desktop database client for **PostgreSQL**, **MySQL**, **SQLite** and **Redis**, on **macOS**, **Windows** and **Linux**.
 
 The UI is written in TSX on [nsh](https://nsh.dev) (Native Shell), which draws it with each platform's own widgets — AppKit on macOS,
 Win32 / Direct2D on Windows, GTK 4 on Linux. The data layer is Rust (`crates/core`), exposed to the UI through a native module. No WebView, no Node.js.
@@ -45,6 +45,23 @@ Win32 / Direct2D on Windows, GTK 4 on Linux. The data layer is Rust (`crates/cor
 - **Interface**: English / 简体中文 / 繁體中文 (follows the system by default; AI prompts and the built-in guidelines switch with the language), light / dark / system theme, font and size settings, resizable panes, tabs, in-app updates
 
 MongoDB is no longer supported. Mongo connections saved by earlier versions stay in the config file but are hidden.
+
+## Performance
+
+Datum doesn't embed a browser: the UI is drawn with native views, and a component updates only the part whose data changed instead of redrawing the whole page. That keeps the app small and light, and large tables quick to show.
+
+| Scenario | Measured |
+| --- | --- |
+| Download size | macOS dmg about 33 MB (Apple Silicon; Intel about 36 MB), in-app update about 29 MB; Windows installer about 22 MB; Linux tar.gz about 33 MB |
+| Launch | about 0.2 s from launch to the window appearing |
+| Idle memory | about 31 MB |
+| Open a 1,000,000-row table | first page in about 0.1 s (server-side pagination, 100 rows per page) |
+| Query returning 100,000 rows × 10 columns | about 0.3 s from running it to rows in the grid; once the data arrives, rendering takes about 40 ms |
+
+- The result grid is virtualized (nsh's DataTable): it creates views only for the visible cells and reuses them as you scroll.
+- Table browsing pages on the server, so even a huge table opens with a single page; query results are capped at 1000 rows by default (adjustable in Settings).
+
+<sub>Measured on an Apple M4 with 24 GB of RAM, macOS 27.2, release build, local SQLite database. Launch time over 5 runs (0.17–0.20 s); memory is the macOS memory footprint, the number Activity Monitor shows. First page of the 1,000,000-row table 81–93 ms; rendering 100,000 rows 26–40 ms, after which memory is about 255 MB. See also nsh's [performance report](https://nsh.dev/docs/performance-report).</sub>
 
 ## Install
 

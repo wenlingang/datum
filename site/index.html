@@ -216,6 +216,13 @@ code {
 .env.prod { color: var(--prod); }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 
+/* Performance numbers */
+.stats { list-style: none; padding: 0; margin: 40px 0 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.stats li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 20px; }
+.stats b { display: block; font-size: clamp(30px, 3.4vw, 42px); line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; white-space: nowrap; }
+.stats span { display: block; font-size: 16px; color: var(--muted); line-height: 1.45; }
+.note { font-size: 14px; color: var(--muted); margin: 20px 0 0; max-width: none; }
+
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; margin-top: 96px; }
 .facts p { font-size: 17px; color: var(--muted); margin: 0; }
 
@@ -240,6 +247,7 @@ footer a { color: var(--ink); }
   .scene, .scene.flip { grid-template-columns: 1fr; gap: 28px; }
   .scene.flip > :first-child { order: 0; }
   .facts { grid-template-columns: 1fr; gap: 28px; margin-top: 72px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   section.block { padding: 64px 0; }
 }
 @media (max-width: 560px) {
@@ -253,6 +261,12 @@ footer a { color: var(--ink); }
   .grid th, .grid td { padding: 8px 10px; }
   .grid .wide { display: none; }
   .pair { grid-template-columns: 1fr; }
+  .stats { gap: 12px; }
+  .stats li { padding: 16px 14px; }
+  .stats span { font-size: 15px; }
+}
+@media (max-width: 380px) {
+  .stats { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .js .console.done .grid tbody tr { transition: none; }
@@ -285,8 +299,8 @@ document.documentElement.classList.add("js");
     <div>
       <h1 lang="en">Your databases, one quiet window.</h1>
       <h1 lang="zh-CN">所有数据库，一个安静的窗口。</h1>
-      <p class="lede" lang="en">Datum is a native desktop client for PostgreSQL, MySQL, SQLite and Redis, on macOS, Windows and Linux. Write SQL with completion that knows your schema, browse and edit tables, and keep local, staging and prod apart.</p>
-      <p class="lede" lang="zh-CN">Datum 是一款原生桌面数据库客户端，支持 PostgreSQL、MySQL、SQLite 与 Redis，可在 macOS、Windows、Linux 上使用。补全懂你的表结构，浏览、编辑表格，local、staging、prod 分得清清楚楚。</p>
+      <p class="lede" lang="en">Datum is a lightweight, fast-starting native desktop client for PostgreSQL, MySQL, SQLite and Redis, on macOS, Windows and Linux. Write SQL with completion that knows your schema, browse and edit tables, and keep local, staging and prod apart.</p>
+      <p class="lede" lang="zh-CN">Datum 是一款轻量、启动快的原生桌面数据库客户端，支持 PostgreSQL、MySQL、SQLite 与 Redis，可在 macOS、Windows、Linux 上使用。补全懂你的表结构，浏览、编辑表格，local、staging、prod 分得清清楚楚。</p>
       <div class="actions">
         <a class="btn" href="https://github.com/wenlingang/datum/releases/latest/download/Datum.dmg"><span lang="en">Download for Mac</span><span lang="zh-CN">下载 Mac 版</span></a>
         <span class="req"><span lang="en">Also for</span><span lang="zh-CN">也有</span> <a href="https://github.com/wenlingang/datum/releases/latest/download/Datum-setup.exe">Windows</a> <span lang="en">and</span><span lang="zh-CN">与</span> <a href="https://github.com/wenlingang/datum/releases/latest">Linux</a>. <span id="ver"><span lang="en">Free and open source</span><span lang="zh-CN">免费开源</span></span></span>
@@ -323,6 +337,25 @@ document.documentElement.classList.add("js");
       </div>
     </div>
   </div>
+
+  <section class="block" id="performance">
+    <div class="wrap">
+      <h2 lang="en">Small, quick, light on memory.</h2>
+      <h2 lang="zh-CN">包小、启动快、占用少。</h2>
+      <p lang="en">Datum draws its UI with native views, not an embedded browser, and a component updates only the part whose data changed. The result grid creates views only for the visible cells and reuses them as you scroll.</p>
+      <p lang="zh-CN">Datum 用各平台原生视图绘制界面，不内嵌浏览器；组件只在依赖的数据变化时更新对应部分，不整页重绘。结果表只为可见区域的单元格创建视图，滚动时复用。</p>
+      <ul class="stats">
+        <li><b>≈ 33 MB</b><span lang="en">Mac download (Apple silicon); Windows installer about 22 MB</span><span lang="zh-CN">Mac 安装包（Apple 芯片）；Windows 安装器约 22 MB</span></li>
+        <li><b>≈ 0.2 s</b><span lang="en">From launch to the window appearing</span><span lang="zh-CN">从启动到窗口出现</span></li>
+        <li><b>≈ 31 MB</b><span lang="en">Memory while idle</span><span lang="zh-CN">空闲时的内存占用</span></li>
+        <li><b>≈ 0.3 s</b><span lang="en">Query returning 100,000 rows × 10 columns, from running it to rows in the grid</span><span lang="zh-CN">查询返回 10 万行 × 10 列，从执行到显示在表格里</span></li>
+      </ul>
+      <p class="muted" lang="en">Table browsing pages on the server, so a 1,000,000-row table shows its first page in about 0.1 s. Query results stop at 1000 rows by default, adjustable in Settings.</p>
+      <p class="muted" lang="zh-CN">表浏览走服务端分页，100 万行的表首屏约 0.1 秒。查询结果默认最多 1000 行，可在设置里调整。</p>
+      <p class="note" lang="en">Measured on an Apple M4 with 24 GB of RAM, macOS 27.2, release build, local SQLite database. Memory is the macOS footprint, as shown in Activity Monitor. See also nsh's <a href="https://nsh.dev/docs/performance-report">performance report</a>.</p>
+      <p class="note" lang="zh-CN">测试环境：Apple M4、24 GB 内存、macOS 27.2，正式发布的 release 构建，本地 SQLite 库。内存为 macOS 的内存占用（footprint），即「活动监视器」显示的数字。另见 nsh 的<a href="https://nsh.dev/docs/performance-report">性能报告</a>。</p>
+    </div>
+  </section>
 
   <section class="block">
     <div class="wrap">
