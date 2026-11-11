@@ -14,7 +14,7 @@ export type TabKind =
   | "table"
   /** SQL / Mongo / Redis 查询工作区(编辑器 + 结果) */
   | "query"
-  /** ER 图(TODO:画布暂未移植) */
+  /** ER 图(整库,或 table 为聚焦表) */
   | "erd";
 
 export interface WorkTab {

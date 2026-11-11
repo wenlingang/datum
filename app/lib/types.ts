@@ -110,6 +110,70 @@ export interface ColumnBrief {
 /** 表名 → 列 */
 export type ColumnsByTable = Record<string, ColumnBrief[]>;
 
+// ---------- ER 图(datum-core erd / schema)
+
+/** 一条外键列配对(复合外键按约束展开为多行)。 */
+export interface ForeignKey {
+  constraint: string;
+  table: string;
+  column: string;
+  refTable: string;
+  /** sqlite 引用隐式主键时为空串 */
+  refColumn: string;
+  /** 按 xxx_id 命名推断,库里没有物理约束 */
+  inferred: boolean;
+}
+
+export interface ErdSchema {
+  fks: ForeignKey[];
+  pkByTable: Record<string, string[]>;
+}
+
+export interface ErdColumn {
+  name: string;
+  dataType: string;
+  isPk: boolean;
+  isFk: boolean;
+}
+
+export interface ErdNode {
+  table: string;
+  /** 可见列(折叠时只含键列) */
+  columns: ErdColumn[];
+  collapsed: boolean;
+  /** 未显示的列数(尾行「+N 个字段」) */
+  hiddenCount: number;
+  isFocus: boolean;
+  /** 估算的绘制尺寸(点) */
+  w: number;
+  h: number;
+}
+
+export interface ErdEdge {
+  id: string;
+  /** 引用方表 */
+  source: string;
+  /** 被引用表 */
+  target: string;
+  /** "col → refCol",复合外键多行 */
+  label: string;
+  inferred: boolean;
+}
+
+export interface ErdGraph {
+  nodes: ErdNode[];
+  edges: ErdEdge[];
+  /** 参与构图的外键(含推断),搜索按约束名匹配用 */
+  fks: ForeignKey[];
+}
+
+export interface ErdBuildOptions {
+  focus?: string | null;
+  collapsed?: Record<string, boolean>;
+  full?: Record<string, boolean>;
+  inferred?: boolean;
+}
+
 export interface CellEdit {
   table: string;
   pkCol: string;

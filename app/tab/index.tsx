@@ -5,6 +5,7 @@ import { t } from "nsh/i18n";
 import { activate, conns, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { addTab, focusTab, newTabId, setResultToolsProvider, workspace, type WorkTab } from "../store/workspace";
+import { createErdModel } from "../erd/model";
 import { DetailPanelView } from "./DetailPanel";
 import {
   beautify,
@@ -115,23 +116,27 @@ export function insertDocument(connId: string, coll: string) {
   toast.info(t("tab.mongo_unsupported"));
 }
 
-/** 打开 ER 图 tab(画布 TODO)。 */
-export function openErd(connId: string) {
+/** 打开 ER 图 tab:整库,或以 `focus` 表为中心(只看它与直接邻居)。同连接同焦点复用已开的 tab。 */
+export function openErd(connId: string, focus: string | null = null) {
   const conn = conns.get(connId);
   if (!conn) return;
-  const existing = workspace.tabs().find((x) => x.kind === "erd" && x.connId === connId);
+  const existing = workspace
+    .tabs()
+    .find((x) => x.kind === "erd" && x.connId === connId && x.table === focus);
   if (existing) {
     addTabFocus(existing);
     return;
   }
+  const m = createErdModel(connId, conn.kind);
+  m.focus.set(focus);
   addTab({
     id: newTabId(),
     kind: "erd",
     connId,
     dbKind: conn.kind,
-    table: null,
-    title: signal(t("erd.title")),
-    state: null,
+    table: focus,
+    title: signal(focus ? t("erd.title_table", { table: focus }) : t("erd.title")),
+    state: m,
   });
 }
 
