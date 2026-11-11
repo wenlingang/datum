@@ -1,0 +1,41 @@
+# 打包(nsh package)的编译缓存:把 Cargo 的编译产物固定放到 .pkg-target(CARGO_TARGET_DIR),
+# 连同下载的依赖一起按 平台 + 架构 + app/native/Cargo.lock 缓存;没有完全命中时退回同平台最近的一份。
+# 标签运行只能读到 main 上写的缓存:ci.yml 在 main 上打包一次并保存(save: true),
+# release.yml 只读取(save: false),之后发版只需重新编译应用自己的代码。
+name: package-cache
+description: nsh package 的编译缓存
+inputs:
+  target:
+    description: macos | windows | linux
+    required: true
+  arch:
+    description: aarch64 | x86_64
+    required: true
+  save:
+    description: "true:读取并在任务结束时保存;false:只读取"
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/.pkg-target" >> "$GITHUB_ENV"
+    - if: inputs.save != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          .pkg-target
+        key: pkg-${{ inputs.target }}-${{ inputs.arch }}-${{ hashFiles('app/native/Cargo.lock') }}
+        restore-keys: pkg-${{ inputs.target }}-${{ inputs.arch }}-
+    - if: inputs.save == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          .pkg-target
+        key: pkg-${{ inputs.target }}-${{ inputs.arch }}-${{ hashFiles('app/native/Cargo.lock') }}
+        restore-keys: pkg-${{ inputs.target }}-${{ inputs.arch }}-

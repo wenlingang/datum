@@ -77,10 +77,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/package-cache
         with:
-          key: ${{ matrix.target }}-${{ matrix.arch }}
-          workspaces: app/native
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
       - name: Linux 构建依赖(GTK 4、GStreamer、WebKitGTK,与 nsh 自己的 CI 一致)
         if: matrix.target == 'linux'
         run: |

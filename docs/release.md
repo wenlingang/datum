@@ -43,10 +43,13 @@ DATUM_TLS_PG_PLAIN=5432 DATUM_TLS_PG_SSL=5444 DATUM_TLS_MYSQL=3306 DATUM_TLS_RED
 
 ## CI
 
-- `.github/workflows/ci.yml`:PR 跑核心测试;推到 `main` 时只在 nsh 版本变化(`app/native/Cargo.toml`)时自动跑,
-  其余时候在 Actions 页面手动触发。
-- nsh CLI 从源码编译约 20 分钟,`.github/actions/setup-nsh` 按 系统 + 架构 + nsh rev 缓存编译好的二进制。
-  标签触发的运行只能读到 `main` 上写的缓存,所以**升级 nsh 后先在 main 上跑一次 CI** 把四个平台的缓存建好,再发版。
+- `.github/workflows/ci.yml`:PR 跑核心测试;推到 `main` 时只在 nsh 版本或依赖变化(`app/native/Cargo.toml`、
+  `Cargo.lock`)或缓存方式变化时自动跑,其余时候在 Actions 页面手动触发。
+- 两份缓存,都由 `ci.yml` 在 `main` 上建好(标签触发的运行只能读到 `main` 上写的缓存):
+  - `.github/actions/setup-nsh`:按 系统 + 架构 + nsh rev 缓存编译好的 nsh CLI(从源码编译约 20 分钟)。
+  - `.github/actions/package-cache`:`nsh package` 的编译产物(`CARGO_TARGET_DIR=.pkg-target`)与依赖下载,
+    按 平台 + 架构 + `app/native/Cargo.lock` 缓存;发版只读取,只需重新编译应用自己的代码。
+- **升级 nsh 或依赖后,先确认 main 上的 CI 跑完**(或手动触发一次),再打标签发版。
 - 仓库是公开的,GitHub 托管 runner 不计费。
 
 ## 发版

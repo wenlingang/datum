@@ -5,14 +5,16 @@
 # 不必每次都从源码编译 nsh(约 20 分钟)。
 name: CI
 
-# 推到 main 时只在 nsh 版本变化(app/native/Cargo.toml)或安装方式变化时跑,用来预热缓存;
+# 推到 main 时只在 nsh 版本或依赖变化(app/native/Cargo.toml、Cargo.lock)或缓存方式变化时跑,用来预热缓存;
 # 平时可在 Actions 页面手动触发;PR 照常跑核心测试。
 on:
   push:
     branches: [main]
     paths:
       - "app/native/Cargo.toml"
+      - "app/native/Cargo.lock"
       - ".github/actions/setup-nsh/**"
+      - ".github/actions/package-cache/**"
       - "script/install-nsh.sh"
   pull_request:
   workflow_dispatch:
@@ -47,19 +49,39 @@ jobs:
       - name: 核心界面测试(临时配置目录)
         run: app/testing/run-tests.sh core
 
-  # 只在 main 上:为其余三个打包平台编译并缓存 nsh CLI(macOS Apple 芯片由上面的 test 预热)
-  warm-nsh:
+  # 只在 main 上(非 PR):四个平台各打一次包,保存 nsh CLI 与打包编译缓存,发版时直接复用。
+  # 只编译、不签名、不上传产物。
+  warm-package:
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15-intel, windows-2022, ubuntu-24.04]
+        include:
+          - { os: macos-latest, target: macos, arch: aarch64 }
+          - { os: macos-15-intel, target: macos, arch: x86_64 }
+          - { os: windows-2022, target: windows, arch: x86_64 }
+          - { os: ubuntu-24.04, target: linux, arch: x86_64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/package-cache
+        with:
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          save: "true"
+      - name: Linux 构建依赖
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev build-essential pkg-config \
+            libgtk-4-dev libwebkitgtk-6.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
       - uses: ./.github/actions/setup-nsh
+      - name: 打包(只为编译缓存)
+        working-directory: app
+        run: nsh package --target ${{ matrix.target }}
