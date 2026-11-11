@@ -158,4 +158,4 @@ jobs:
           prerelease=()
           [[ $version == *-* ]] && prerelease=(--prerelease)
           gh release create "$GITHUB_REF_NAME" ./* \
-            --title "Datum $version" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes "${prerelease[@]}"
+            --title "Datum $version" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes ${prerelease[@]+"${prerelease[@]}"}
