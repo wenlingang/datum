@@ -35,22 +35,38 @@ if [[ $found != "$pin" ]]; then
   exit 1
 fi
 
+# 每一步失败都要留下原因:命令替换里的命令失败,在 set -e 下会不留输出地退出
+echo "==> codesign"
 codesign --force --deep --timestamp=none --sign "$identity" "$app"
-codesign --verify --deep --strict "$app"
-info=$(codesign -dvvv "$app" 2>&1)
+echo "==> verify"
+codesign --verify --deep --strict --verbose=2 "$app" || { echo "❌ codesign --verify 失败" >&2; exit 1; }
+info=$(codesign -dvvv "$app" 2>&1) || { echo "❌ codesign -dvvv 失败:" >&2; echo "$info" >&2; exit 1; }
 signed=$(printf '%s\n' "$info" | awk -F= '/^Authority=/ && !seen {print $2; seen=1}')
-[[ $signed == "$identity" ]] || { echo "❌ 签名身份是 \"$signed\",不是 \"$identity\"" >&2; exit 1; }
+[[ $signed == "$identity" ]] || { echo "❌ 签名身份是 \"$signed\",不是 \"$identity\"" >&2; echo "$info" >&2; exit 1; }
 
 # 更新包:与 nsh 写出的同名、同结构(顶层就是 Datum.app/)
+echo "==> archive"
 rm -f "$archive"
 tar -C "$out" -czf "$archive" Datum.app
 
 # 首次安装用的 dmg(拖进「应用程序」)
+echo "==> dmg"
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
-hdiutil create -quiet -volname Datum -srcfolder "$staging" -ov -format UDZO "$dmg"
+# GitHub 的 macOS runner 上 hdiutil 偶尔报 "Resource busy":隔几秒重试,失败原因照常输出
+for attempt in 1 2 3 4 5; do
+  if hdiutil create -volname Datum -srcfolder "$staging" -ov -format UDZO "$dmg"; then
+    break
+  fi
+  if [[ $attempt == 5 ]]; then
+    echo "❌ hdiutil create 连续 5 次失败" >&2
+    exit 1
+  fi
+  echo "hdiutil create 失败(第 $attempt 次),5 秒后重试" >&2
+  sleep 5
+done
 
 echo "✅ $archive"
 echo "✅ $dmg"
