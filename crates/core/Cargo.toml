@@ -31,4 +31,7 @@ rustls-native-certs = "0.8"
 webpki-roots = "1"
 # SSH 隧道:纯 Rust 客户端,加密后端与 TLS 一致用 ring
 russh = { version = "0.65", default-features = false, features = ["ring", "flate2"] }
+# known_hosts 哈希主机名(与 russh 同版本)
+hmac = "0.13"
+sha1 = "0.11"
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

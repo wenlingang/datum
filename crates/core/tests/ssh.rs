@@ -180,6 +180,24 @@ async fn changed_host_key_is_rejected() {
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Key, &key));
     let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("host key has changed"), "{}", e.display());
+    // 只记录了另一种类型的密钥:不能当作没见过而首次信任
+    std::fs::write(
+        st.known_hosts_path(),
+        format!("[{}]:{} ecdsa-sha2-nistp256 AAAA\n", j.host, j.port),
+    )
+    .unwrap();
+    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    assert!(e.display().contains("identity cannot be confirmed"), "{}", e.display());
+    // 吊销
+    std::fs::write(st.known_hosts_path(), "").unwrap();
+    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
+    let learned = std::fs::read_to_string(st.known_hosts_path()).unwrap().trim().to_string();
+    std::fs::write(st.known_hosts_path(), format!("@revoked {learned}\n")).unwrap();
+    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    assert!(e.display().contains("@revoked"), "{}", e.display());
+    // 首次信任记下的那行能被再次认出
+    std::fs::write(st.known_hosts_path(), learned).unwrap();
+    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

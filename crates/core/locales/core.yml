@@ -93,6 +93,14 @@ core:
       en: "The SSH server's host key has changed and does not match the recorded one. This may be a man-in-the-middle attack; if the server was reinstalled, remove the old entry from known_hosts"
       zh-CN: SSH 跳板机的主机指纹与记录不一致,可能遭到中间人攻击;若服务器确实重装过,请从 known_hosts 删除旧记录
       zh-TW: SSH 跳板機的主機指紋與記錄不一致,可能遭到中間人攻擊;若伺服器確實重灌過,請從 known_hosts 刪除舊記錄
+    ssh_host_key_revoked:
+      en: "The SSH server presented a host key that is marked @revoked in known_hosts"
+      zh-CN: SSH 跳板机出示的主机密钥已在 known_hosts 中标记为吊销(@revoked)
+      zh-TW: SSH 跳板機出示的主機金鑰已在 known_hosts 中標記為撤銷(@revoked)
+    ssh_host_key_other_type:
+      en: "known_hosts records a %{recorded} key for this SSH server, but it presented a %{offered} key, so its identity cannot be confirmed. If this is expected, check the key with ssh-keyscan and add it to known_hosts"
+      zh-CN: known_hosts 中记录的是这台跳板机的 %{recorded} 密钥,它这次出示的是 %{offered} 密钥,无法确认身份。若确认正常,请用 ssh-keyscan 核对后把该密钥加入 known_hosts
+      zh-TW: known_hosts 中記錄的是這台跳板機的 %{recorded} 金鑰,它這次出示的是 %{offered} 金鑰,無法確認身分。若確認正常,請用 ssh-keyscan 核對後把該金鑰加入 known_hosts
     ssh_known_hosts_unreadable:
       en: "Could not verify the SSH server's host key: its known_hosts entry could not be read or recorded"
       zh-CN: 无法确认 SSH 跳板机的主机指纹:known_hosts 中的记录读取或写入失败

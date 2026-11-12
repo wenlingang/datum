@@ -2,11 +2,14 @@
 //!
 //! - 一个连接一条 SSH 会话;本地端口每来一个 TCP 连接就开一条 direct-tcpip 通道
 //!   (MySQL 连接池会陆续开多条)。会话断了,下一条连接进来时自动重连。
-//! - 主机指纹:先查 `~/.ssh/known_hosts`,再查 Datum 自己的 known_hosts(配置目录下);
-//!   指纹不一致直接拒绝,两处都没有记录的主机首次信任并记到 Datum 自己的文件里,
-//!   不改动用户的 `~/.ssh`。
+//! - 主机指纹:查 `~/.ssh/known_hosts` 与 Datum 自己的 known_hosts(配置目录下),规则见
+//!   [`known_hosts`]:有记录就必须对上(不论密钥类型)、吊销的拒绝;两处都没有记录才首次信任,
+//!   记到 Datum 自己的文件里,不改动用户的 `~/.ssh`。
 //! - 证书校验仍按数据库的原主机名进行([`Target::tls_host`]),驱动只是改连本地端口。
 
+mod known_hosts;
+
+use self::known_hosts::Status;
 use crate::core::connection::{Connection, SshAuth, SshTunnel};
 use crate::error::{AppError, AppResult, ErrorKind};
 use russh::client::{self, Handle};
@@ -78,33 +81,6 @@ fn ssh_err(key: &str) -> AppError {
 
 // ---------- 主机指纹 ----------
 
-#[derive(Debug, PartialEq, Eq)]
-enum HostKeyStatus {
-    Known,
-    Unknown,
-    /// 记录里有这台主机但指纹不同:(文件, 行号)
-    Changed(PathBuf, usize),
-    /// 文件读不了,或这台主机的记录解析不了:无法确认,按不可信处理
-    Unreadable(PathBuf, String),
-}
-
-/// 依次在各 known_hosts 文件里查这台主机的指纹;文件不存在的跳过。
-/// 出错时不当作「没见过」放行,否则一条读不了的记录就能让换了指纹的主机被重新信任。
-fn host_key_status(host: &str, port: u16, key: &keys::PublicKey, files: &[PathBuf]) -> HostKeyStatus {
-    for file in files {
-        if !file.exists() {
-            continue;
-        }
-        match keys::check_known_hosts_path(host, port, key, file) {
-            Ok(true) => return HostKeyStatus::Known,
-            Ok(false) => {}
-            Err(keys::Error::KeyChanged { line }) => return HostKeyStatus::Changed(file.clone(), line),
-            Err(e) => return HostKeyStatus::Unreadable(file.clone(), e.to_string()),
-        }
-    }
-    HostKeyStatus::Unknown
-}
-
 fn known_hosts_files(app_file: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     if let Some(home) = dirs::home_dir() {
@@ -136,42 +112,58 @@ impl client::Handler for HostKeyCheck {
             }
         };
         let files = known_hosts_files(&self.app_known_hosts);
-        match host_key_status(&self.host, self.port, key, &files) {
-            HostKeyStatus::Known => Ok(true),
-            HostKeyStatus::Unknown => {
+        let reject = |e: AppError| -> Result<bool, Self::Error> {
+            *self.rejected.lock().unwrap() = Some(e);
+            Ok(false)
+        };
+        let at = |file: &Path, line: usize| format!("{}:{} ({}:{})", self.host, self.port, file.display(), line);
+        match known_hosts::status(&self.host, self.port, key, &files) {
+            Status::Known => Ok(true),
+            Status::Unknown => {
                 // 首次连接:信任并记下,之后指纹变了就会被拦住。记不下来就不连:
                 // 否则每次都像首次连接,指纹被换了也发现不了
                 match keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, &self.app_known_hosts) {
                     Ok(()) => Ok(true),
-                    Err(e) => {
-                        *self.rejected.lock().unwrap() = Some(
-                            ssh_err("core.err.ssh_known_hosts_unreadable")
-                                .with_detail(format!("{}: {e}", self.app_known_hosts.display())),
-                        );
-                        Ok(false)
-                    }
+                    Err(e) => reject(
+                        ssh_err("core.err.ssh_known_hosts_unreadable")
+                            .with_detail(format!("{}: {e}", self.app_known_hosts.display())),
+                    ),
                 }
             }
-            HostKeyStatus::Unreadable(file, e) => {
-                *self.rejected.lock().unwrap() = Some(
-                    ssh_err("core.err.ssh_known_hosts_unreadable").with_detail(format!("{}: {e}", file.display())),
-                );
-                Ok(false)
+            Status::Unreadable(file, e) => {
+                reject(ssh_err("core.err.ssh_known_hosts_unreadable").with_detail(format!("{}: {e}", file.display())))
             }
-            HostKeyStatus::Changed(file, line) => {
-                *self.rejected.lock().unwrap() = Some(
-                    ssh_err("core.err.ssh_host_key_changed").with_detail(format!(
-                        "{}:{} ({}:{})",
-                        self.host,
-                        self.port,
-                        file.display(),
-                        line
-                    )),
-                );
-                Ok(false)
-            }
+            Status::Changed(file, line) => reject(ssh_err("core.err.ssh_host_key_changed").with_detail(at(&file, line))),
+            Status::Revoked(file, line) => reject(ssh_err("core.err.ssh_host_key_revoked").with_detail(at(&file, line))),
+            Status::OtherType(recorded, offered) => reject(
+                AppError::new(
+                    ErrorKind::Connection,
+                    t!("core.err.ssh_host_key_other_type", recorded = recorded.join(", "), offered = offered),
+                )
+                .with_detail(format!("{}:{}", self.host, self.port)),
+            ),
         }
     }
+}
+
+/// 握手时优先协商 known_hosts 里已记录的主机密钥类型(OpenSSH 同样如此),
+/// 免得服务器先出示另一种类型、被当成指纹不符拒绝。RSA 暂不支持(见 ssh_rsa_unsupported),不前置。
+fn preferred_key_algorithms(host: &str, port: u16, app_known_hosts: &Path) -> Vec<keys::Algorithm> {
+    let defaults: Vec<keys::Algorithm> = russh::Preferred::DEFAULT.key.to_vec();
+    let recorded: Vec<keys::Algorithm> = known_hosts::records(host, port, &known_hosts_files(app_known_hosts))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| !r.revoked)
+        .filter_map(|r| keys::Algorithm::new(&r.key_type).ok())
+        .filter(|a| !a.clone().is_rsa())
+        .collect();
+    let mut order: Vec<keys::Algorithm> = Vec::new();
+    for a in recorded.into_iter().chain(defaults) {
+        if !order.contains(&a) {
+            order.push(a);
+        }
+    }
+    order
 }
 
 // ---------- 会话 ----------
@@ -293,6 +285,10 @@ async fn authenticate(handle: &mut Session, cfg: &SshTunnel, secret: &str) -> Ap
 /// 连上跳板机并完成认证。
 async fn open_session(cfg: &SshTunnel, secret: &str, app_known_hosts: &Path) -> AppResult<Session> {
     let config = Arc::new(client::Config {
+        preferred: russh::Preferred {
+            key: preferred_key_algorithms(&cfg.host, cfg.port, app_known_hosts).into(),
+            ..russh::Preferred::DEFAULT
+        },
         keepalive_interval: Some(KEEPALIVE),
         keepalive_max: 3,
         nodelay: true,
@@ -464,34 +460,22 @@ mod tests {
     const K2: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIA6rWI3G1sz07DnfFlrouTcysQlj2P+jpNSOEWD9OJ3X";
 
     #[test]
-    fn host_key_unknown_then_learned_then_changed() {
-        let dir = std::env::temp_dir().join(format!("datum-ssh-{}", uuid::Uuid::new_v4()));
-        let file = dir.join("known_hosts");
-        let files = vec![dir.join("missing"), file.clone()];
-        assert_eq!(host_key_status("bastion", 22, &key(K1), &files), HostKeyStatus::Unknown);
-        keys::known_hosts::learn_known_hosts_path("bastion", 22, &key(K1), &file).unwrap();
-        assert_eq!(host_key_status("bastion", 22, &key(K1), &files), HostKeyStatus::Known);
-        assert!(matches!(
-            host_key_status("bastion", 22, &key(K2), &files),
-            HostKeyStatus::Changed(_, _)
-        ));
-        // 不同端口视为不同主机
-        assert_eq!(host_key_status("bastion", 2222, &key(K2), &files), HostKeyStatus::Unknown);
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn unparsable_record_for_the_host_is_not_trusted() {
+    fn recorded_host_key_type_is_negotiated_first() {
         let dir = std::env::temp_dir().join(format!("datum-ssh-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("known_hosts");
-        std::fs::write(&file, "bastion ssh-ed25519 not-base64!!\n").unwrap();
-        assert!(matches!(
-            host_key_status("bastion", 22, &key(K1), &[file.clone()]),
-            HostKeyStatus::Unreadable(_, _)
-        ));
-        // 别的主机的坏记录不影响
-        assert_eq!(host_key_status("other", 22, &key(K1), &[file]), HostKeyStatus::Unknown);
+        let host = "datum-test-bastion.invalid";
+        let ecdsa = keys::Algorithm::Ecdsa { curve: keys::EcdsaCurve::NistP256 };
+        // 没有记录:默认顺序
+        assert_eq!(preferred_key_algorithms(host, 2222, &file), russh::Preferred::DEFAULT.key.to_vec());
+        // 记录了 ecdsa:ecdsa 排第一,其余不重复
+        std::fs::write(&file, format!("[{host}]:2222 ecdsa-sha2-nistp256 AAAA\n")).unwrap();
+        let order = preferred_key_algorithms(host, 2222, &file);
+        assert_eq!(order[0], ecdsa);
+        assert_eq!(order.len(), russh::Preferred::DEFAULT.key.len());
+        // 只记录了 RSA:不前置(暂不支持),保持默认
+        std::fs::write(&file, format!("[{host}]:2222 ssh-rsa AAAA\n")).unwrap();
+        assert_eq!(preferred_key_algorithms(host, 2222, &file), russh::Preferred::DEFAULT.key.to_vec());
         let _ = std::fs::remove_dir_all(dir);
     }
 
