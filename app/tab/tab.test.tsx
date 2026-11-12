@@ -3,6 +3,7 @@
 // (其中 connections.json 只有一条指向该库的 sqlite 连接)。库里有 products 250 行、orders 400 行。
 // 测试按顺序执行,后面的会改库(提交编辑、删除 orders)。
 
+import { Store } from "datum/native";
 import { expect, open, type App } from "nsh/test";
 import { test } from "nsh/test";
 
@@ -89,6 +90,50 @@ test("破坏性语句先审查:取消不执行,确认才执行", async () => {
   expect(hasText(app, "Executed successfully")).toBe(false);
   await app.press("id:run");
   await app.waitFor("text:Review Destructive Statements");
+  // 影响范围预估:行数 + 前 10 行预览,数据未动
+  await app.waitFor("text:Will affect 400 rows", { timeout: 15000 });
+  await app.waitFor("text:Showing the first 10 of 400 rows");
   await app.press("id:risk-confirm");
   await app.waitUntil(() => hasText(app, "✓ Executed successfully · 400 rows affected"), { timeout: 15000 });
+});
+
+test("prod 连接:带 WHERE 的写语句也先确认并预估影响范围", async () => {
+  const sql = "UPDATE products SET price_cents = price_cents WHERE id <= 5";
+  // local:带 WHERE 的 UPDATE 直接执行
+  let app = await start();
+  await replaceSql(app, sql);
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "✓ Executed successfully · 5 rows affected"), { timeout: 15000 });
+  expect(app.shows("id:risk-dialog")).toBe(false);
+  app.dispose();
+  // 换成 prod(SQLite 不读密码,改环境不影响连接)
+  const original = (Store.connections() as any[])[0];
+  Store.saveConnection({ ...original, env: "prod" }, null);
+  try {
+    app = await start();
+    await replaceSql(app, sql);
+    await app.press("id:run");
+    await app.waitFor("text:Review Destructive Statements");
+    expect(app.texts()).toContain("UPDATE on production");
+    expect(hasText(app, "Running on database")).toBe(true);
+    expect(app.texts().some((x) => x.includes("Review the following 1 statements"))).toBe(true);
+    await app.waitFor("text:Will affect 5 rows", { timeout: 15000 });
+    // 预览表头带出列名,行数不超过 10 时不显示「共 N 行」
+    expect(app.texts()).toContain("sku");
+    expect(app.texts()).toContain("+5 columns");
+    expect(hasText(app, "Showing the first")).toBe(false);
+    await app.press("id:risk-cancel");
+    await app.waitFor("id:risk-dialog", { state: "gone" });
+    // 改写不了的写法:标明无法预估,不猜
+    await app.press(`text:${sql}`);
+    await app.keyboard.press("mod+a");
+    await app.type("id:sql-editor", "WITH x AS (SELECT 1) UPDATE products SET price_cents = price_cents WHERE id IN (SELECT 1 FROM x)");
+    await app.press("id:run");
+    await app.waitFor("text:Review Destructive Statements");
+    await app.waitFor("text:/^Can't estimate the affected rows/", { timeout: 15000 });
+    await app.press("id:risk-cancel");
+    app.dispose();
+  } finally {
+    Store.saveConnection(original, null);
+  }
 });

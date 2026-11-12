@@ -131,6 +131,15 @@ export interface RiskFinding {
   object?: string | null;
 }
 
+/** 写语句的影响范围预估(改写成只读查询得出):条件匹配的行数与前几行。 */
+export interface WriteImpact {
+  count: number;
+  /** 整表操作(TRUNCATE / DROP TABLE):数的是表里现有的行 */
+  wholeTable: boolean;
+  columns: string[];
+  rows: (string | null)[][];
+}
+
 export type ThemePreference = "light" | "dark" | "system";
 export type LanguagePreference = "system" | "zhCn" | "zhTw" | "en";
 

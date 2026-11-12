@@ -323,14 +323,32 @@ impl PgPool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
+        self.query_read_only_bounded(id, sql, max_rows, None).await
+    }
+
+    /// 同 [`Self::query_read_only`],`timeout_ms` 给定时由服务端限制执行时长(statement_timeout),
+    /// 超时即中止,不会占着连接拖住后面的语句。
+    pub async fn query_read_only_bounded(
+        &self,
+        id: &str,
+        sql: &str,
+        max_rows: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> AppResult<QueryResult> {
         let guard = self.clients.lock().await;
         let client = guard
             .get(id)
             .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
         run_capped(client, "SET default_transaction_read_only = on", None).await?;
+        if let Some(ms) = timeout_ms {
+            run_capped(client, &format!("SET statement_timeout = {ms}"), None).await?;
+        }
         let result = run_capped(client, sql, max_rows).await;
         // 语句可能留下中止的事务,先回滚再恢复,否则 RESET 会因事务已中止而失败
         let _ = client.batch_execute("ROLLBACK").await;
+        if timeout_ms.is_some() {
+            run_capped(client, "RESET statement_timeout", None).await?;
+        }
         run_capped(client, "RESET default_transaction_read_only", None).await?;
         result
     }

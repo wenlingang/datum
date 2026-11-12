@@ -65,9 +65,13 @@ impl Sql {
         risk::is_read_only(&doc)
     }
 
-    /// SQL 风险检查:破坏性语句清单。
-    pub fn analyze(doc: String) -> JsonValue {
-        findings_json(risk::analyze_sql(&doc))
+    /// SQL 风险检查:破坏性语句清单。`strict`(prod 连接)时带 WHERE 的 UPDATE / DELETE 也列出。
+    pub fn analyze(doc: String, strict: bool) -> JsonValue {
+        findings_json(if strict {
+            risk::analyze_sql_strict(&doc)
+        } else {
+            risk::analyze_sql(&doc)
+        })
     }
 
     /// Redis 命令风险检查。

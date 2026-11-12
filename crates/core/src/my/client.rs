@@ -215,12 +215,36 @@ impl MyPool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
+        self.query_read_only_bounded(id, sql, max_rows, None).await
+    }
+
+    /// 同 [`Self::query_read_only`],`timeout_ms` 给定时由服务端限制 SELECT 的执行时长
+    /// (MySQL 的 max_execution_time;MariaDB 没有这个变量,设置失败就不限时)。
+    pub async fn query_read_only_bounded(
+        &self,
+        id: &str,
+        sql: &str,
+        max_rows: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> AppResult<QueryResult> {
         let pool = self.pool(id).await?;
         let mut conn = pool.get_conn().await.map_err(qerr)?;
         conn.query_drop("SET SESSION TRANSACTION READ ONLY")
             .await
             .map_err(qerr)?;
+        let limited = match timeout_ms {
+            Some(ms) => conn
+                .query_drop(format!("SET SESSION max_execution_time = {ms}"))
+                .await
+                .is_ok(),
+            None => false,
+        };
         let result = Self::run_capped(&mut conn, sql, max_rows).await;
+        if limited {
+            conn.query_drop("SET SESSION max_execution_time = DEFAULT")
+                .await
+                .map_err(qerr)?;
+        }
         conn.query_drop("SET SESSION TRANSACTION READ WRITE")
             .await
             .map_err(qerr)?;

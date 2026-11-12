@@ -83,6 +83,16 @@ impl Db {
             .and_then(json)
     }
 
+    /// 预估一条写语句的影响范围(只读执行改写后的 COUNT 与预览):
+    /// `{ count, wholeTable, columns, rows }`;改写不了的语句返回 null。
+    pub async fn write_impact(kind: String, id: String, sql: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::write_impact(&state(), &k, &id, &sql).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// 表结构:列、主键、索引等。
     pub async fn table_detail(kind: String, id: String, table: String) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;

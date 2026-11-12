@@ -23,6 +23,7 @@ import {
   type RiskFinding,
   type RowDelete,
   type TableDetail,
+  type WriteImpact,
   supportsSql,
 } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
@@ -50,8 +51,32 @@ export interface RiskGate {
   database: string | null;
   /** 关系库(SQL 高亮);Redis 为 false */
   relational: boolean;
+  /** 每条命中的影响范围预估,与 findings 一一对应(Redis 不预估,为空) */
+  impacts: Signal<ImpactState[]>;
   /** 「确认执行」 */
   onConfirm: () => void;
+}
+
+/** 一条写语句的影响范围预估状态。 */
+export type ImpactState =
+  | { state: "loading" }
+  | { state: "ok"; impact: WriteImpact }
+  /** 改写不了(多表、CTE 等),不预估 */
+  | { state: "none" }
+  | { state: "error"; error: string };
+
+/** 依次预估各条命中的影响范围(逐条跑,不挤占同一连接)。弹窗关掉后结果写进已丢弃的信号,无副作用。 */
+async function loadImpacts(m: TabModel, gate: RiskGate) {
+  for (let i = 0; i < gate.findings.length; i++) {
+    let next: ImpactState;
+    try {
+      const impact = await db.writeImpact(m.dbKind, m.connId, gate.findings[i].sql);
+      next = impact ? { state: "ok", impact } : { state: "none" };
+    } catch (e) {
+      next = { state: "error", error: errorText(e) };
+    }
+    gate.impacts.update((list) => list.map((x, j) => (j === i ? next : x)));
+  }
 }
 
 /** 单元格全文弹窗的内容。 */
@@ -338,20 +363,26 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   if (!skipRisk) {
-    const findings = m.dbKind === "redis" ? sqlText.analyzeRedis(sql) : sqlText.analyze(sql);
+    const conn = conns.get(m.connId);
+    // prod 连接从严:带 WHERE 的 UPDATE / DELETE 也先确认,并预估影响范围
+    const findings =
+      m.dbKind === "redis" ? sqlText.analyzeRedis(sql) : sqlText.analyze(sql, conn?.env === "prod");
     if (findings.length > 0) {
       // 转为由用户在确认框里明确决定:不再沿用免确认的只读标记,
       // 也避免取消后标记残留到下一次手动执行
       m.readOnlyNext = false;
-      const conn = conns.get(m.connId);
       const database = conn ? (conn.kind === "sqlite" ? (conn.filePath ?? "") : conn.database) : "";
-      m.risk.set({
+      const relational = supportsSql(m.dbKind);
+      const gate: RiskGate = {
         findings,
         targetLabel: conn?.name ?? "",
         database: database ? database : null,
-        relational: supportsSql(m.dbKind),
+        relational,
+        impacts: signal<ImpactState[]>(relational ? findings.map(() => ({ state: "loading" as const })) : []),
         onConfirm: () => run(m, sql, skipHistory, true),
-      });
+      };
+      m.risk.set(gate);
+      if (relational) void loadImpacts(m, gate);
       return;
     }
   }

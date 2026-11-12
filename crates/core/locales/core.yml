@@ -129,6 +129,10 @@ core:
       en: "The SSH server could not reach the database (check the database host and port as seen from the SSH server)"
       zh-CN: 跳板机连不到数据库(主机和端口要填跳板机视角下的地址)
       zh-TW: 跳板機連不到資料庫(主機與連接埠要填跳板機視角下的位址)
+    impact_timeout:
+      en: "Counting took longer than %{secs} seconds and was stopped"
+      zh-CN: 统计超过 %{secs} 秒,已中止
+      zh-TW: 統計超過 %{secs} 秒,已中止
     invalid_redis_url:
       en: Invalid Redis connection string
       zh-CN: 无效的 Redis 连接串
@@ -297,6 +301,14 @@ core:
       en: UPDATE without WHERE
       zh-CN: UPDATE 无 WHERE
       zh-TW: UPDATE 無 WHERE
+    update_where:
+      en: UPDATE on production
+      zh-CN: 生产库 UPDATE
+      zh-TW: 正式環境 UPDATE
+    delete_where:
+      en: DELETE on production
+      zh-CN: 生产库 DELETE
+      zh-TW: 正式環境 DELETE
     with_dml:
       en: Data change inside WITH
       zh-CN: WITH 中的数据修改

@@ -745,6 +745,14 @@ risk:
     en: "Running on %{target}. The following %{count} statements are destructive:"
     zh-CN: "在 %{target} 上执行,以下 %{count} 条语句具有破坏性:"
     zh-TW: "在 %{target} 上執行,以下 %{count} 條陳述式具有破壞性:"
+  target_db_review:
+    en: "Running on database %{db}. Review the following %{count} statements before running:"
+    zh-CN: "在数据库 %{db} 上执行,请先核对以下 %{count} 条语句:"
+    zh-TW: "在資料庫 %{db} 上執行,請先核對以下 %{count} 條陳述式:"
+  target_conn_review:
+    en: "Running on %{target}. Review the following %{count} statements before running:"
+    zh-CN: "在 %{target} 上执行,请先核对以下 %{count} 条语句:"
+    zh-TW: "在 %{target} 上執行,請先核對以下 %{count} 條陳述式:"
   danger:
     en: Danger
     zh-CN: 高危
@@ -753,6 +761,42 @@ risk:
     en: Warning
     zh-CN: 警告
     zh-TW: 警告
+  impact_loading:
+    en: Estimating affected rows…
+    zh-CN: 正在预估影响范围…
+    zh-TW: 正在預估影響範圍…
+  impact_rows:
+    en: "Will affect %{count} rows"
+    zh-CN: 将影响 %{count} 行
+    zh-TW: 將影響 %{count} 列
+  impact_zero:
+    en: No rows match; nothing will change
+    zh-CN: 没有匹配的行,不会改动数据
+    zh-TW: 沒有符合的列,不會變動資料
+  impact_table:
+    en: "The table currently has %{count} rows; all of them will be removed"
+    zh-CN: 表中现有 %{count} 行,将全部删除
+    zh-TW: 資料表中現有 %{count} 列,將全部刪除
+  impact_table_empty:
+    en: The table is empty
+    zh-CN: 表中没有数据
+    zh-TW: 資料表中沒有資料
+  impact_none:
+    en: Can't estimate the affected rows for this statement (multi-table or complex form)
+    zh-CN: 此语句无法预估影响范围(多表或复杂写法)
+    zh-TW: 此陳述式無法預估影響範圍(多表或複雜寫法)
+  impact_failed:
+    en: "Couldn't estimate the affected rows: %{error}"
+    zh-CN: 预估影响范围失败:%{error}
+    zh-TW: 預估影響範圍失敗:%{error}
+  impact_preview_of:
+    en: "Showing the first %{shown} of %{count} rows"
+    zh-CN: 预览前 %{shown} 行,共 %{count} 行
+    zh-TW: 預覽前 %{shown} 列,共 %{count} 列
+  impact_more_cols:
+    en: "+%{count} columns"
+    zh-CN: +%{count} 列
+    zh-TW: +%{count} 欄
   irreversible:
     en: This cannot be undone. Double-check the target database before running.
     zh-CN: 此操作不可撤销,请核对目标数据库后再执行。

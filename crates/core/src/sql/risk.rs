@@ -346,9 +346,30 @@ fn classify(clean: &str) -> Option<(RiskLevel, String, Option<String>)> {
     None
 }
 
+/// 带 WHERE 的 UPDATE / DELETE(严格模式才算命中:prod 上执行前也要确认并预估影响范围)。
+fn classify_guarded_write(clean: &str) -> Option<(RiskLevel, String, Option<String>)> {
+    let s = clean.trim();
+    if DELETE.is_match(s) {
+        return Some((RiskLevel::Warning, t!("core.risk.delete_where").to_string(), object_after(s, &DELETE_OBJ)));
+    }
+    if UPDATE.is_match(s) {
+        return Some((RiskLevel::Warning, t!("core.risk.update_where").to_string(), object_after(s, &UPDATE_OBJ)));
+    }
+    None
+}
+
 /// 分析一段 SQL(可多语句),返回全部破坏性命中(按出现顺序)。
 /// 按三种数据库的词法规则各分析一遍取并集:任一规则下危险就提示。
 pub fn analyze_sql(doc: &str) -> Vec<RiskFinding> {
+    analyze_with(doc, false)
+}
+
+/// 同 [`analyze_sql`],另把带 WHERE 的 UPDATE / DELETE 也列为命中(prod 连接用)。
+pub fn analyze_sql_strict(doc: &str) -> Vec<RiskFinding> {
+    analyze_with(doc, true)
+}
+
+fn analyze_with(doc: &str, strict: bool) -> Vec<RiskFinding> {
     let mut found: Vec<(usize, RiskFinding)> = Vec::new();
     for rules in ALL_RULES {
         for l in lex(doc, rules) {
@@ -356,7 +377,8 @@ pub fn analyze_sql(doc: &str) -> Vec<RiskFinding> {
             if raw.is_empty() {
                 continue;
             }
-            if let Some((level, kind, object)) = classify(&l.clean) {
+            let hit = classify(&l.clean).or_else(|| strict.then(|| classify_guarded_write(&l.clean)).flatten());
+            if let Some((level, kind, object)) = hit {
                 let f = RiskFinding {
                     sql: raw.to_string(),
                     level,
@@ -371,6 +393,15 @@ pub fn analyze_sql(doc: &str) -> Vec<RiskFinding> {
                 }
             }
         }
+    }
+    // 同一条语句在某种词法规则下已判为危险(如 WHERE 只出现在另一种规则的字符串里),
+    // 就不再重复列出它的「带 WHERE」命中
+    if strict {
+        let guarded = [t!("core.risk.delete_where").to_string(), t!("core.risk.update_where").to_string()];
+        let snapshot: Vec<(String, String)> = found.iter().map(|(_, f)| (f.sql.clone(), f.kind.clone())).collect();
+        found.retain(|(_, f)| {
+            !guarded.contains(&f.kind) || !snapshot.iter().any(|(sql, kind)| *sql == f.sql && !guarded.contains(kind))
+        });
     }
     found.sort_by_key(|(start, _)| *start);
     found.into_iter().map(|(_, f)| f).collect()
@@ -1018,5 +1049,23 @@ mod tests {
         assert_eq!(f.sql, "db.orders.deleteMany({})");
         assert_eq!(f.object.as_deref(), Some("orders"));
         assert_eq!(f.kind, "deleteMany({})");
+    }
+
+    #[test]
+    fn strict_mode_also_flags_guarded_writes() {
+        assert!(analyze_sql("UPDATE t SET a = 1 WHERE id = 2").is_empty());
+        let f = analyze_sql_strict("UPDATE t SET a = 1 WHERE id = 2; DELETE FROM u WHERE x = 1; SELECT 1");
+        assert_eq!(f.len(), 2);
+        assert!(f.iter().all(|f| f.level == RiskLevel::Warning));
+        assert_eq!(f[0].object.as_deref(), Some("t"));
+        assert_eq!(f[1].object.as_deref(), Some("u"));
+        // 无 WHERE 的仍按危险列出,且不重复
+        let f = analyze_sql_strict("DELETE FROM t");
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].level, RiskLevel::Danger);
+        // 某种词法下 WHERE 在字符串里(无 WHERE = 危险):只列危险那一条
+        let f = analyze_sql_strict(r"DELETE FROM t WHERE a = 'x\' WHERE'");
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert!(analyze_sql_strict("INSERT INTO t VALUES (1)").is_empty());
     }
 }

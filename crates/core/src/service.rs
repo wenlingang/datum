@@ -121,6 +121,72 @@ pub async fn query_read_only(
     }
 }
 
+/// 写操作影响范围预估的结果:条件匹配的行数与前几行。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteImpact {
+    pub count: u64,
+    /// 整表操作(TRUNCATE / DROP TABLE):数的是表里现有的行
+    pub whole_table: bool,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Option<String>>>,
+}
+
+/// 预估的统计查询最多跑多久(服务端限时,PG / MySQL)。
+pub const IMPACT_TIMEOUT_MS: u32 = 5000;
+
+async fn read_only_bounded(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    max_rows: u32,
+) -> AppResult<QueryResult> {
+    let r = match kind {
+        DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(IMPACT_TIMEOUT_MS)).await,
+        DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(IMPACT_TIMEOUT_MS)).await,
+        DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, Some(max_rows)),
+        DbKind::Redis | DbKind::Mongo => return Err(unsupported()),
+    };
+    r.map_err(|e| {
+        let text = e.display().to_ascii_lowercase();
+        if text.contains("statement timeout") || text.contains("maximum statement execution time") {
+            AppError::new(ErrorKind::Query, t!("core.err.impact_timeout", secs = IMPACT_TIMEOUT_MS / 1000))
+        } else {
+            e
+        }
+    })
+}
+
+/// 预估一条写语句的影响范围:改写成只读的 COUNT 与预览查询,在数据库强制只读的会话里执行。
+/// 改写不了的语句(多表、CTE 等)返回 None。
+pub async fn write_impact(state: &AppState, kind: &DbKind, id: &str, stmt: &str) -> AppResult<Option<WriteImpact>> {
+    let Some(dialect) = Dialect::from_kind(kind) else {
+        return Ok(None);
+    };
+    let Some(q) = crate::sql::impact::impact_query(stmt, dialect) else {
+        return Ok(None);
+    };
+    let counted = read_only_bounded(state, kind, id, &q.count_sql, 1).await?;
+    let count = counted
+        .rows
+        .first()
+        .and_then(|r| r.first().cloned().flatten())
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .ok_or_else(|| AppError::new(ErrorKind::Query, t!("core.err.query_failed")))?;
+    let preview = if count == 0 {
+        QueryResult { columns: vec![], rows: vec![], affected: None }
+    } else {
+        read_only_bounded(state, kind, id, &q.rows_sql, crate::sql::impact::PREVIEW_ROWS).await?
+    };
+    Ok(Some(WriteImpact {
+        count,
+        whole_table: q.whole_table,
+        columns: preview.columns,
+        rows: preview.rows,
+    }))
+}
+
 pub async fn table_detail(
     state: &AppState,
     kind: &DbKind,
