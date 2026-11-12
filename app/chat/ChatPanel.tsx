@@ -19,6 +19,7 @@ import { chatDeps } from "./deps";
 import { ModelPicker } from "./ModelPicker";
 import { SqlCard, SqlConfirmDialog } from "./SqlCard";
 import { ResultTable, ShownNote, ToolCard } from "./ToolCard";
+import { ErrorText } from "../ui/error";
 
 /** 消息与输入框所在的居中一栏(面板窄时就是全宽)。 */
 const COLUMN = "w-full max-w-[820px] self-center";
@@ -267,7 +268,7 @@ function MessageRow(props: {
             {(e) => (
               <View testID="ai-error" class="flex-row items-start gap-2 rounded-(--radius) border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <Icon name="circle-alert" size={13} color="negative" class="mt-0.5" />
-                <Text class={`${FS.xs} min-w-0 flex-1 select-text text-negative`}>{`⚠️ ${e()}`}</Text>
+                <ErrorText size="xs" class="min-w-0 flex-1" text={e()} />
                 <If when={props.last}>
                   <Btn small variant="outline" icon="refresh-cw" label={t("chat.retry")} onPress={regenerate} testID="ai-retry" />
                 </If>

@@ -30,6 +30,7 @@ import {
 } from "./aiSettings";
 import { ActionMenu, CheckBox, DialogFrame, Dropdown, LoadingBtn, MaskedField, Toggle } from "./controls";
 import type { SettingsSection } from "./state";
+import { CopyButton, ErrorText } from "../ui/error";
 
 const SECTIONS: { id: SettingsSection; icon: IconName; key: string }[] = [
   { id: "ai", icon: "sparkles", key: "settings.section_ai" },
@@ -554,6 +555,7 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
                         <View class="flex-row items-center gap-1" style={{ maxWidth: 220 }}>
                           <Icon name="circle-x" size={13} color="negative" class="shrink-0" />
                           <Text class={`${FS.xs} text-negative line-clamp-1`}>{err()}</Text>
+                          <CopyButton text={err()} />
                         </View>
                       )}
                     </If>
@@ -873,7 +875,7 @@ function AboutSection() {
           <If when={(() => { const x = s(); return x.kind === "failed" ? x.error : null; })()}>
             {(e) => (
               <>
-                <Text class={`${FS.sm} text-negative`}>{t("settings.update_failed", { error: e() })}</Text>
+                <ErrorText text={t("settings.update_failed", { error: e() })} />
                 {check(t("settings.retry"))}
               </>
             )}

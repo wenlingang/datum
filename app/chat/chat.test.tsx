@@ -43,7 +43,7 @@ test("流式中途出错:错误追加在已收到的文本之后", async () => {
   const app = await open("./testing/error.tsx", SIZE);
   await app.type("id:ai-input", "hi");
   await app.submit("id:ai-input");
-  await app.waitFor("text:⚠️ network down", { timeout: 10_000 });
+  await app.waitFor("text:network down", { timeout: 10_000 });
   expect(app.shows("text:部分回复")).toBe(true);
   // 流结束后可以继续发送
   await app.type("id:ai-input", "again");

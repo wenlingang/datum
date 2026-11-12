@@ -11,6 +11,7 @@ import { Btn, DbIcon, envLabel, envToken, Hint, Icon, IconButton, TextField } fr
 import { FS, MONO } from "../ui/text";
 import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, type ConnDraft } from "./connection";
 import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField, Toggle } from "./controls";
+import { ErrorText } from "../ui/error";
 
 const TEST_TIMEOUT_SECS = 10;
 
@@ -468,9 +469,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
 
       <If when={error()}>
         {(e) => (
-          <Text testID="conn-error" class={`${FS.xs} text-negative`}>
-            {e()}
-          </Text>
+          <ErrorText testID="conn-error" size="xs" text={e()} />
         )}
       </If>
 
@@ -482,7 +481,9 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
           >
             <Icon name="circle-alert" size={14} color="negative" class="mt-0.5" />
             <Scroll class="min-w-0 flex-1" style={{ maxHeight: 132 }}>
-              <Text class={`${FS.xs} ${MONO} text-negative`}>{e()}</Text>
+              <View selectable>
+                <Text class={`${FS.xs} ${MONO} text-negative`}>{e()}</Text>
+              </View>
             </Scroll>
             <IconButton icon="copy" size={13} tooltip={t("chat.copy")} onPress={() => void copyTestError()} />
           </View>

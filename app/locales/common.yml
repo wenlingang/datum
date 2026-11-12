@@ -8,3 +8,16 @@ prefs:
     en: Language
     zh-CN: 语言
     zh-TW: 語言
+error_text:
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Copied
+    zh-CN: 已复制
+    zh-TW: 已複製
+  close:
+    en: Close
+    zh-CN: 关闭
+    zh-TW: 關閉

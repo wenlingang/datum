@@ -9,6 +9,7 @@ import { conns } from "../store/conns";
 import { Btn, Hint, Icon, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { openTable } from "./index";
+import { ErrorText } from "../ui/error";
 
 type Load<T> = { state: "loading" } | { state: "ok"; value: T } | { state: "error"; error: string };
 
@@ -23,7 +24,7 @@ function Loaded<T>(props: { load: Load<T>; error?: (e: string) => string; childr
       when={props.load.state === "ok"}
       else={
         <If when={props.load.state === "error"} else={<Hint>{t("rinsight.loading")}</Hint>}>
-          <Text class={`${FS.sm} text-negative`}>{props.error ? props.error(err()) : err()}</Text>
+          <ErrorText text={props.error ? props.error(err()) : err()} />
         </If>
       }
     >
@@ -338,7 +339,7 @@ export function RedisInsight(props: { connId: string }) {
         }
       >
         <Hint class={FS.xs}>{t("rinsight.scan_hint", { max: (200000).toLocaleString() })}</Hint>
-        <If when={startError()}>{(e) => <Text class={`${FS.sm} text-negative`}>{e()}</Text>}</If>
+        <If when={startError()}>{(e) => <ErrorText text={e()} />}</If>
         <If when={report()}>
           {(r) => (
             <View class="gap-5">

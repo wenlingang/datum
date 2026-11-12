@@ -249,3 +249,19 @@ test("自然语言筛选:没配置 AI 时提示去设置", async () => {
   await app.press("id:filter-nl-go");
   await app.waitUntil(() => app.texts().includes("AI provider not configured. Add one in Settings."), { timeout: 5000 });
 });
+
+test("系统智能引号:编辑器里敲出的弯引号改回直引号,SQL 照常执行;报错可一键复制", async () => {
+  const app = await start();
+  // 模拟 macOS 智能引号把 ' 换成 ’ ‘
+  await replaceSql(app, "SELECT name FROM categories WHERE name = \u2018Single Origin\u2019");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 1 rows returned") || hasText(app, "Query succeeded · 1 row"), { timeout: 15000 });
+  expect(app.texts().some((s) => s.includes("\u2018") || s.includes("\u2019"))).toBe(false);
+  // 报错区:可选中的报错原文 + 复制按钮
+  await app.press("text:SELECT name FROM categories WHERE name = 'Single Origin'");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT nope FROM categories");
+  await app.press("id:run");
+  await app.waitFor("id:query-error", { timeout: 15000 });
+  expect(app.shows("id:query-error-copy")).toBe(true);
+});

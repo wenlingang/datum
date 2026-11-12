@@ -19,8 +19,8 @@ export const toasts = () => items();
 function push(kind: ToastKind, text: string) {
   const id = nextId++;
   items.update((l) => [...l.slice(-4), { id, kind, text }]);
-  // 错误多停留一会儿,便于读完
-  setTimeout(() => dismissToast(id), kind === "error" ? 6000 : 3000);
+  // 错误多停留一会儿,便于读完或复制
+  setTimeout(() => dismissToast(id), kind === "error" ? 10000 : 3000);
 }
 
 export function dismissToast(id: number) {

@@ -12,6 +12,7 @@ import { toast } from "../store/toast";
 import { Btn, EnvBadge, Hint, Icon } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { formatBytes } from "./RedisInsight";
+import { ErrorText } from "../ui/error";
 
 /** 自动刷新间隔。 */
 const AUTO_MS = 5000;
@@ -387,13 +388,13 @@ export function Diagnostics(props: { connId: string }) {
                       </Hint>
                     }
                   >
-                    {(e) => <Text class={`${FS.sm} text-negative`}>{e()}</Text>}
+                    {(e) => <ErrorText text={e()} />}
                   </If>
                 }
               >
                 {(r) => (
                   <View class="gap-2">
-                    <If when={errors()[s().key]}>{(e) => <Text class={`${FS.sm} text-negative`}>{e()}</Text>}</If>
+                    <If when={errors()[s().key]}>{(e) => <ErrorText text={e()} />}</If>
                     <If
                       when={r().unavailable}
                       else={
@@ -409,7 +410,7 @@ export function Diagnostics(props: { connId: string }) {
                             <Text class={`${FS.sm} flex-1 text-foreground`}>{t(`diag.unavailable.${u().reason}`)}</Text>
                           </View>
                           <If when={u().detail}>
-                            {(d) => <Text class={`${FS.xs} ${MONO} text-muted-foreground`}>{d()}</Text>}
+                            {(d) => <ErrorText mono size="xs" tone="text-muted-foreground" text={d()} />}
                           </If>
                         </View>
                       )}

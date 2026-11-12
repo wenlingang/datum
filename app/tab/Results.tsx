@@ -9,6 +9,7 @@ import { Btn, Dot, Hint } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
 import { aiExplainPlan, aiFixError, viewIndices, type TabModel } from "./model";
+import { ErrorText } from "../ui/error";
 
 function okSummary(m: TabModel): string {
   const r = m.result();
@@ -74,9 +75,7 @@ export function Results(props: { m: TabModel }) {
   return (
     <View class="min-h-0 flex-1 bg-background">
       <If when={body() === "error"}>
-        <Text testID="query-error" class={`${FS.sm} p-3 font-mono text-destructive`}>
-          {m.err() ?? ""}
-        </Text>
+        <ErrorText testID="query-error" mono tone="text-destructive" class="p-3" text={m.err() ?? ""} />
         <If when={aiReady()}>
           <View class="flex-row px-3">
             <Btn testID="ai-fix-error" small icon="sparkles" label={t("tab.ai_fix_error")} onPress={() => aiFixError(m)} />

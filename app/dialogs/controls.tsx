@@ -8,6 +8,7 @@ import { t } from "nsh/i18n";
 import { color as tokenColor, Icon, IconButton, SectionLabel, TextField, tip, type IconName } from "../ui/kit";
 import { DropMenu, MItem, MSep } from "../ui/menu";
 import { FS } from "../ui/text";
+import { ErrorText } from "../ui/error";
 
 /** 对话框外框:标题 + 右上角关闭 + 内容。`width` 与 GPUI 版一致(点)。 */
 export function DialogFrame(props: {
@@ -419,7 +420,7 @@ export function SuggestField(props: {
               <Text class={`${FS.sm} px-2 py-1.5 text-muted-foreground`}>{props.loadingText}</Text>
             </If>
             <If when={props.state === "error"}>
-              <Text class={`${FS.xs} px-2 py-1.5 text-negative`}>{props.error ?? ""}</Text>
+              <ErrorText size="xs" class="px-2 py-1.5" text={props.error ?? ""} />
             </If>
             <If when={props.state === "ok" && shown().length === 0}>
               <Text class={`${FS.sm} px-2 py-1.5 text-muted-foreground`}>{props.emptyText}</Text>

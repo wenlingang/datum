@@ -19,6 +19,7 @@ import {
   type TabModel,
 } from "./model";
 import { SelectMenu } from "./ui";
+import { ErrorText } from "../ui/error";
 
 const OP_KEY: Record<FilterOp, string> = {
   contains: "filter.op.contains",
@@ -70,9 +71,16 @@ export function FilterBar(props: { m: TabModel }) {
       </View>
       <If when={m.nlNote()}>
         {(n) => (
-          <Text testID="filter-nl-note" class={`${FS.xs} pl-11`} classList={{ "text-negative": n().error, "text-muted-foreground": !n().error }}>
-            {n().text}
-          </Text>
+          <If
+            when={n().error}
+            else={
+              <Text testID="filter-nl-note" class={`${FS.xs} pl-11 text-muted-foreground`}>
+                {n().text}
+              </Text>
+            }
+          >
+            <ErrorText testID="filter-nl-note" size="xs" class="pl-11" text={n().text} />
+          </If>
         )}
       </If>
       <Each of={m.drafts()} key={(d) => d.id}>

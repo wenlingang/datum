@@ -7,6 +7,7 @@ import type { ToolStep } from "../store/ai";
 import { Btn, Icon } from "../ui/kit";
 import type { IconName } from "../ui/icons";
 import { FS, MONO } from "../ui/text";
+import { ErrorText } from "../ui/error";
 
 /** 展开后结果表最多显示的行与列(对话工作台里更多)。 */
 const SHOW_ROWS = 20;
@@ -80,7 +81,7 @@ function Body(props: { step: ToolStep; wide?: boolean; onOpenQuery?: (sql: strin
       <If when={props.step.name === "run_query" && (d()?.sql ?? props.step.args.sql)}>
         <Text class={`${FS.xs} ${MONO} select-text text-foreground`}>{String(d()?.sql ?? props.step.args.sql ?? "")}</Text>
       </If>
-      <If when={d()?.error}>{(e) => <Text class={`${FS.xs} text-negative`}>{e()}</Text>}</If>
+      <If when={d()?.error}>{(e) => <ErrorText size="xs" mono text={e()} />}</If>
       <If when={props.step.name === "run_query" && (d()?.rows?.length ?? 0) > 0}>
         <ResultTable columns={columnNames()} rows={d()?.rows ?? []} wide={props.wide} />
         <ShownNote columns={columnNames().length} rows={d()?.rows?.length ?? 0} wide={props.wide} />
