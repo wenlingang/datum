@@ -3,6 +3,7 @@
 import { signal } from "nsh";
 import { t } from "nsh/i18n";
 import { activate, conns, loadTables } from "../store/conns";
+import { supportsSql } from "../lib/types";
 import { toast } from "../store/toast";
 import { addTab, focusTab, newTabId, setResultToolsProvider, workspace, type WorkTab } from "../store/workspace";
 import { DetailPanelView } from "./DetailPanel";
@@ -153,6 +154,26 @@ export function openRedisInsight(connId: string) {
     dbKind: conn.kind,
     table: null,
     title: signal(t("rinsight.title")),
+    state: null,
+  });
+}
+
+/** 打开数据库诊断 tab(PG / MySQL / SQLite,每个连接一个,已开则切过去)。 */
+export function openDiagnostics(connId: string) {
+  const conn = conns.get(connId);
+  if (!conn || !supportsSql(conn.kind)) return;
+  const existing = workspace.tabs().find((x) => x.kind === "diag" && x.connId === connId);
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "diag",
+    connId,
+    dbKind: conn.kind,
+    table: null,
+    title: signal(t("diag.title")),
     state: null,
   });
 }

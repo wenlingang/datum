@@ -11,7 +11,17 @@ import { dismissToast, toasts } from "../../store/toast";
 import { focusTab, setDetailOpen, toggleDetail, workspace } from "../../store/workspace";
 import { DbIcon, Dot, Icon, IconButton } from "../../ui/kit";
 import { FS } from "../../ui/text";
-import { DetailPanel, modelOf, newQueryTab, openErd, openTable, runTabCommand, TabStatus, TabView } from "../index";
+import {
+  DetailPanel,
+  modelOf,
+  newQueryTab,
+  openDiagnostics,
+  openErd,
+  openTable,
+  runTabCommand,
+  TabStatus,
+  TabView,
+} from "../index";
 
 applyPrefs();
 reloadConnections();
@@ -92,6 +102,9 @@ function TabStrip() {
       </Each>
       <IconButton icon="plus" tooltip="new query" onPress={() => newQueryTab()} />
       <IconButton icon="network" tooltip="erd" onPress={() => connId && openErd(connId)} />
+      <Button testID="open-diag" onPress={() => connId && openDiagnostics(connId)} class="px-1.5">
+        <Icon name="stethoscope" size={13} />
+      </Button>
       <IconButton icon="panel-left" tooltip="detail" active={workspace.detailOpen()} onPress={toggleDetail} />
     </View>
   );

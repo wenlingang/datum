@@ -133,6 +133,18 @@ core:
       en: "Counting took longer than %{secs} seconds and was stopped"
       zh-CN: 统计超过 %{secs} 秒,已中止
       zh-TW: 統計超過 %{secs} 秒,已中止
+    diag_unknown:
+      en: "Unknown diagnostics section: %{key}"
+      zh-CN: 未知的诊断项:%{key}
+      zh-TW: 未知的診斷項:%{key}
+    diag_bad_arg:
+      en: Invalid target for this action
+      zh-CN: 操作目标无效
+      zh-TW: 操作目標無效
+    diag_signal_failed:
+      en: The session has already ended, or you lack permission to signal it
+      zh-CN: 会话已结束,或没有权限操作该会话
+      zh-TW: 工作階段已結束,或沒有權限操作該工作階段
     invalid_redis_url:
       en: Invalid Redis connection string
       zh-CN: 无效的 Redis 连接串

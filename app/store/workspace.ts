@@ -17,7 +17,9 @@ export type TabKind =
   /** ER 图(TODO:画布暂未移植) */
   | "erd"
   /** Redis 分析:概览、整库扫描(大 key / 前缀 / TTL / 热 key)、慢日志 */
-  | "redis";
+  | "redis"
+  /** 关系库诊断(PG / MySQL / SQLite):会话、锁等待、长事务、慢 SQL、索引与空间 */
+  | "diag";
 
 export interface WorkTab {
   /** 稳定 id(标签条 key、记忆激活 tab) */

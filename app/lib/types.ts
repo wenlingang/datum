@@ -401,3 +401,29 @@ export interface UndoPrep {
   rows: number;
   reason: string | null;
 }
+
+// ---------------------------------------------------------------- 关系库诊断
+
+/** 诊断里能触发的写操作。 */
+export type DiagAction = "cancel" | "terminate" | "kill_query" | "kill" | "vacuum_table" | "vacuum" | "analyze";
+
+/** 诊断分区说明(PG / MySQL / SQLite 各自一组)。 */
+export interface DiagSection {
+  key: string;
+  /** cards:只有一行,按列显示成卡片 */
+  layout: "table" | "cards";
+  /** 每行可做的操作;参数取自 targetColumns 指定的列 */
+  rowActions: DiagAction[];
+  targetColumns: string[];
+  /** 整库操作(分区标题旁的按钮) */
+  dbActions: DiagAction[];
+  /** 开销大,点「运行」才查 */
+  manual: boolean;
+}
+
+/** 一个分区的结果;依赖没开(扩展 / 开关 / 权限)时 unavailable 说明原因。 */
+export interface DiagResult {
+  columns: string[];
+  rows: (string | null)[][];
+  unavailable: { reason: string; detail: string | null } | null;
+}

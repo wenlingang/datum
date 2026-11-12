@@ -211,3 +211,30 @@ test("prod 连接:带 WHERE 的写语句也先确认并预估影响范围", asyn
     Store.saveConnection(original, null);
   }
 });
+
+test("数据库诊断:概览卡片、完整性检查手动运行、VACUUM 先确认", async () => {
+  const app = await start();
+  await app.press("id:open-diag");
+  await app.waitFor("id:diagnostics", { timeout: 10000 });
+  await app.waitFor("id:diag-cards", { timeout: 10000 });
+  expect(app.texts()).toContain("File Size");
+  expect(app.texts()).toContain("Journal Mode");
+  // 表空间:dbstat 可用时列出表,否则说明原因
+  await app.press("id:diag-tab-tables");
+  await app.waitUntil(() => app.shows("id:diag-table") || app.shows("id:diag-unavailable"), { timeout: 10000 });
+  // 完整性检查开销大:切过去不自动跑,点「运行」才查
+  await app.press("id:diag-tab-integrity");
+  await app.waitUntil(() => hasText(app, "This check can take a while"), { timeout: 5000 });
+  await app.press("id:diag-refresh");
+  await app.waitUntil(() => app.texts().includes("ok"), { timeout: 10000 });
+  // 整库 VACUUM:先弹确认框,取消不执行,确认后提示完成
+  await app.press("id:diag-tab-overview");
+  await app.press("id:diag-vacuum");
+  await app.waitFor("id:diag-confirm", { timeout: 5000 });
+  expect(app.texts()).toContain("VACUUM this database?");
+  await app.press("id:diag-confirm-cancel");
+  await app.waitUntil(() => !app.texts().includes("VACUUM this database?"), { timeout: 5000 });
+  await app.press("id:diag-vacuum");
+  await app.press("id:diag-confirm-ok");
+  await app.waitUntil(() => app.texts().includes("VACUUM finished"), { timeout: 10000 });
+});

@@ -24,6 +24,9 @@ import type {
   RedisOverview,
   RedisReport,
   RedisSlowEntry,
+  DiagAction,
+  DiagResult,
+  DiagSection,
 } from "./types";
 
 export const store = {
@@ -71,6 +74,10 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  diagSections: (kind: DbKind) => Db.diagSections(kind) as DiagSection[],
+  diagRun: async (kind: DbKind, id: string, section: string) => (await Db.diagRun(kind, id, section)) as DiagResult,
+  diagAct: (kind: DbKind, id: string, action: DiagAction, args: string[]) =>
+    Db.diagAct(kind, id, action, args) as Promise<void>,
 };
 
 export const sql = {

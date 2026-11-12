@@ -28,6 +28,10 @@ workspace:
     en: Redis Analysis
     zh-CN: Redis 分析
     zh-TW: Redis 分析
+  diagnostics:
+    en: Database Diagnostics
+    zh-CN: 数据库诊断
+    zh-TW: 資料庫診斷
   hide_detail:
     en: Hide Details Panel
     zh-CN: 隐藏详情栏

@@ -9,7 +9,7 @@ import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { openRedisInsight, openTable } from "../tab";
+import { openDiagnostics, openRedisInsight, openTable } from "../tab";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
 import { CtxMenu, DropMenu, MItem, MSep } from "../ui/menu";
@@ -196,6 +196,11 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
         <EnvBadge env={conn().env} />
         <If when={supportsSql(conn().kind)}>
           <IconButton icon="network" tooltip={t("workspace.relationship_diagram")} onPress={openErdForActive} />
+          <IconButton
+            icon="stethoscope"
+            tooltip={t("workspace.diagnostics")}
+            onPress={() => openDiagnostics(conn().id)}
+          />
         </If>
         <If when={conn().kind === "redis"}>
           <IconButton

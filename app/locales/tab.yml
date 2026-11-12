@@ -879,3 +879,637 @@ undo:
     en: "Restore the %{rows} rows as they were before? Changes made to them since are overwritten."
     zh-CN: "把这 %{rows} 行恢复成执行前的样子?之后对它们的改动会被覆盖。"
     zh-TW: "把這 %{rows} 列還原成執行前的樣子?之後對它們的變動會被覆蓋。"
+diag:
+  title:
+    en: "Diagnostics"
+    zh-CN: "数据库诊断"
+    zh-TW: "資料庫診斷"
+  heading:
+    en: "Diagnostics · %{name}"
+    zh-CN: "数据库诊断 · %{name}"
+    zh-TW: "資料庫診斷 · %{name}"
+  refresh:
+    en: "Refresh"
+    zh-CN: "刷新"
+    zh-TW: "重新整理"
+  run:
+    en: "Run"
+    zh-CN: "运行"
+    zh-TW: "執行"
+  auto:
+    en: "Auto-refresh %{secs}s"
+    zh-CN: "自动刷新 %{secs} 秒"
+    zh-TW: "自動重新整理 %{secs} 秒"
+  loading:
+    en: "Loading…"
+    zh-CN: "加载中…"
+    zh-TW: "載入中…"
+  connecting:
+    en: "Connecting…"
+    zh-CN: "正在连接…"
+    zh-TW: "正在連線…"
+  empty:
+    en: "Nothing here right now"
+    zh-CN: "当前没有记录"
+    zh-TW: "目前沒有記錄"
+  manual_hint:
+    en: "This check can take a while on large databases; click Run to start"
+    zh-CN: "大库上这项检查可能较慢,点「运行」开始"
+    zh-TW: "大型資料庫上這項檢查可能較慢,點「執行」開始"
+  row_count:
+    en: "%{n} rows · click SQL text to copy"
+    zh-CN: "%{n} 行 · 点击 SQL 文本可复制"
+    zh-TW: "%{n} 列 · 點擊 SQL 文字可複製"
+  copied:
+    en: "Copied"
+    zh-CN: "已复制"
+    zh-TW: "已複製"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  confirm_prod:
+    en: "This is a production connection."
+    zh-CN: "这是生产环境连接。"
+    zh-TW: "這是正式環境連線。"
+  section:
+    overview:
+      en: "Overview"
+      zh-CN: "概览"
+      zh-TW: "概覽"
+    sessions:
+      en: "Sessions"
+      zh-CN: "会话"
+      zh-TW: "工作階段"
+    locks:
+      en: "Lock Waits"
+      zh-CN: "锁等待"
+      zh-TW: "鎖等待"
+    long_tx:
+      en: "Long Transactions"
+      zh-CN: "长事务"
+      zh-TW: "長交易"
+    slow:
+      en: "Top SQL"
+      zh-CN: "慢 SQL 排行"
+      zh-TW: "慢 SQL 排行"
+    unused_indexes:
+      en: "Unused Indexes"
+      zh-CN: "未使用的索引"
+      zh-TW: "未使用的索引"
+    bloat:
+      en: "Dead Rows / Vacuum"
+      zh-CN: "死行 / Vacuum"
+      zh-TW: "死列 / Vacuum"
+    tables:
+      en: "Table Sizes"
+      zh-CN: "表空间"
+      zh-TW: "表空間"
+    integrity:
+      en: "Integrity Check"
+      zh-CN: "完整性检查"
+      zh-TW: "完整性檢查"
+  hint:
+    pg:
+      overview:
+        en: "Server version, database size, connections and cache hit rate. Statistics accumulate since the reset time."
+        zh-CN: "版本、库大小、连接数与缓存命中率;统计值从重置时间起累计。"
+        zh-TW: "版本、資料庫大小、連線數與快取命中率;統計值自重設時間起累計。"
+      sessions:
+        en: "Client sessions (excluding this one). Active first, then idle-in-transaction."
+        zh-CN: "客户端会话(不含当前连接);进行中的排前面,其次是事务中空闲。"
+        zh-TW: "用戶端工作階段(不含目前連線);進行中的排前面,其次是交易中閒置。"
+      locks:
+        en: "Who is waiting on whom. Terminating the blocking session usually releases the wait."
+        zh-CN: "谁在等谁;终止阻塞方的会话通常就能放行。"
+        zh-TW: "誰在等誰;終止阻塞方的工作階段通常就能放行。"
+      long_tx:
+        en: "Transactions open for more than 30 seconds; they hold locks and stop vacuum from cleaning up."
+        zh-CN: "打开超过 30 秒的事务:会持有锁、阻止 vacuum 回收。"
+        zh-TW: "開啟超過 30 秒的交易:會持有鎖、阻止 vacuum 回收。"
+      slow:
+        en: "Top 50 statements in this database by total time, from pg_stat_statements."
+        zh-CN: "按总耗时排序的前 50 条语句(本库),来自 pg_stat_statements。"
+        zh-TW: "依總耗時排序的前 50 條語句(本資料庫),來自 pg_stat_statements。"
+      unused_indexes:
+        en: "Indexes never scanned since statistics were reset (primary keys, unique and constraint indexes excluded). Check replicas before dropping."
+        zh-CN: "自统计重置以来从未被扫描的索引(已排除主键、唯一和约束索引);删除前确认只读副本上也没用到。"
+        zh-TW: "自統計重設以來從未被掃描的索引(已排除主鍵、唯一與約束索引);刪除前確認唯讀副本上也沒用到。"
+      bloat:
+        en: "Tables with the most dead rows, and when they were last vacuumed / analyzed."
+        zh-CN: "死行最多的表,以及上次 vacuum / analyze 的时间。"
+        zh-TW: "死列最多的表,以及上次 vacuum / analyze 的時間。"
+    mysql:
+      overview:
+        en: "Version, schema size, connections, buffer pool hit rate and QPS since startup."
+        zh-CN: "版本、库大小、连接数、缓冲池命中率与启动以来的 QPS。"
+        zh-TW: "版本、資料庫大小、連線數、緩衝池命中率與啟動以來的 QPS。"
+      sessions:
+        en: "Threads from the process list (excluding this one); sleeping threads last."
+        zh-CN: "进程列表里的线程(不含当前连接),Sleep 的排最后。"
+        zh-TW: "處理程序清單裡的執行緒(不含目前連線),Sleep 的排最後。"
+      locks:
+        en: "InnoDB lock waits: who is waiting on whom. Killing the blocking thread releases the wait."
+        zh-CN: "InnoDB 锁等待:谁在等谁;断开阻塞方线程即可放行。"
+        zh-TW: "InnoDB 鎖等待:誰在等誰;中斷阻塞方執行緒即可放行。"
+      long_tx:
+        en: "Open InnoDB transactions, oldest first."
+        zh-CN: "进行中的 InnoDB 事务,最老的在前。"
+        zh-TW: "進行中的 InnoDB 交易,最舊的在前。"
+      slow:
+        en: "Top 50 statement digests by total time, from performance_schema (all schemas)."
+        zh-CN: "按总耗时排序的前 50 类语句(所有库),来自 performance_schema。"
+        zh-TW: "依總耗時排序的前 50 類語句(所有資料庫),來自 performance_schema。"
+      unused_indexes:
+        en: "Indexes in this schema with no reads since server start (sys.schema_unused_indexes)."
+        zh-CN: "本库中自服务启动以来没有被读过的索引(sys.schema_unused_indexes)。"
+        zh-TW: "本資料庫中自服務啟動以來沒有被讀過的索引(sys.schema_unused_indexes)。"
+      tables:
+        en: "Tables in this schema by size; a large free space means OPTIMIZE TABLE could reclaim it."
+        zh-CN: "本库各表按大小排序;空闲空间大说明 OPTIMIZE TABLE 可回收。"
+        zh-TW: "本資料庫各表依大小排序;閒置空間大表示 OPTIMIZE TABLE 可回收。"
+    sqlite:
+      overview:
+        en: "File size, free pages and settings. VACUUM rewrites the file to reclaim free pages; ANALYZE refreshes planner statistics."
+        zh-CN: "文件大小、空闲页与设置。VACUUM 重写文件回收空闲页;ANALYZE 更新查询规划统计。"
+        zh-TW: "檔案大小、閒置頁與設定。VACUUM 重寫檔案回收閒置頁;ANALYZE 更新查詢規劃統計。"
+      tables:
+        en: "Space used by each table and index (dbstat)."
+        zh-CN: "每张表和索引占用的空间(dbstat)。"
+        zh-TW: "每張表與索引占用的空間(dbstat)。"
+      integrity:
+        en: "PRAGMA integrity_check: a single \"ok\" means the file is healthy (at most 100 problems are listed)."
+        zh-CN: "PRAGMA integrity_check:只有一行 ok 表示文件完好(最多列出 100 个问题)。"
+        zh-TW: "PRAGMA integrity_check:只有一列 ok 表示檔案完好(最多列出 100 個問題)。"
+  unavailable:
+    pg_stat_statements_missing:
+      en: "The pg_stat_statements extension is not installed in this database. Add it to shared_preload_libraries, restart, then run CREATE EXTENSION pg_stat_statements."
+      zh-CN: "本库没有安装 pg_stat_statements 扩展:把它加入 shared_preload_libraries 并重启,再执行 CREATE EXTENSION pg_stat_statements。"
+      zh-TW: "本資料庫沒有安裝 pg_stat_statements 擴充:把它加入 shared_preload_libraries 並重啟,再執行 CREATE EXTENSION pg_stat_statements。"
+    pg_stat_statements_not_loaded:
+      en: "pg_stat_statements is installed but not loaded: add it to shared_preload_libraries and restart the server."
+      zh-CN: "pg_stat_statements 已安装但未加载:需加入 shared_preload_libraries 并重启服务。"
+      zh-TW: "pg_stat_statements 已安裝但未載入:需加入 shared_preload_libraries 並重啟服務。"
+    performance_schema_off:
+      en: "performance_schema is disabled on this server (performance_schema = ON in my.cnf, then restart)."
+      zh-CN: "服务器未开启 performance_schema(在 my.cnf 设 performance_schema = ON 后重启)。"
+      zh-TW: "伺服器未開啟 performance_schema(在 my.cnf 設 performance_schema = ON 後重啟)。"
+    privilege:
+      en: "The current user lacks the privilege for this view (usually PROCESS, or SELECT on performance_schema / sys)."
+      zh-CN: "当前用户没有查看权限(通常需要 PROCESS,或 performance_schema / sys 的 SELECT 权限)。"
+      zh-TW: "目前使用者沒有檢視權限(通常需要 PROCESS,或 performance_schema / sys 的 SELECT 權限)。"
+    my_sys_missing:
+      en: "The required system view is not available on this server (sys schema missing, or a MySQL variant without it)."
+      zh-CN: "服务器上没有所需的系统视图(缺少 sys 库,或是不带它的 MySQL 分支)。"
+      zh-TW: "伺服器上沒有所需的系統檢視(缺少 sys 資料庫,或是不帶它的 MySQL 分支)。"
+    dbstat_missing:
+      en: "This SQLite build has no dbstat table, so per-table sizes are unavailable."
+      zh-CN: "当前 SQLite 未编入 dbstat,无法统计每张表的空间。"
+      zh-TW: "目前 SQLite 未編入 dbstat,無法統計每張表的空間。"
+  action:
+    cancel:
+      en: "Cancel Query"
+      zh-CN: "取消查询"
+      zh-TW: "取消查詢"
+    terminate:
+      en: "Terminate"
+      zh-CN: "终止会话"
+      zh-TW: "終止工作階段"
+    kill_query:
+      en: "Kill Query"
+      zh-CN: "中止查询"
+      zh-TW: "中止查詢"
+    kill:
+      en: "Kill"
+      zh-CN: "断开连接"
+      zh-TW: "中斷連線"
+    vacuum_table:
+      en: "VACUUM"
+      zh-CN: "VACUUM"
+      zh-TW: "VACUUM"
+    vacuum:
+      en: "VACUUM"
+      zh-CN: "VACUUM"
+      zh-TW: "VACUUM"
+    analyze:
+      en: "ANALYZE"
+      zh-CN: "ANALYZE"
+      zh-TW: "ANALYZE"
+  confirm:
+    cancel:
+      title:
+        en: "Cancel the query of session %{target}?"
+        zh-CN: "取消会话 %{target} 当前的查询?"
+        zh-TW: "取消工作階段 %{target} 目前的查詢?"
+      body:
+        en: "Runs pg_cancel_backend: the running statement is aborted, the session stays connected."
+        zh-CN: "执行 pg_cancel_backend:中止正在执行的语句,会话保持连接。"
+        zh-TW: "執行 pg_cancel_backend:中止正在執行的語句,工作階段保持連線。"
+    terminate:
+      title:
+        en: "Terminate session %{target}?"
+        zh-CN: "终止会话 %{target}?"
+        zh-TW: "終止工作階段 %{target}?"
+      body:
+        en: "Runs pg_terminate_backend: the connection is closed and its open transaction is rolled back."
+        zh-CN: "执行 pg_terminate_backend:断开该连接,未提交的事务会回滚。"
+        zh-TW: "執行 pg_terminate_backend:中斷該連線,未提交的交易會回滾。"
+    kill_query:
+      title:
+        en: "Kill the query of thread %{target}?"
+        zh-CN: "中止线程 %{target} 当前的查询?"
+        zh-TW: "中止執行緒 %{target} 目前的查詢?"
+      body:
+        en: "Runs KILL QUERY: the running statement is aborted, the connection stays open."
+        zh-CN: "执行 KILL QUERY:中止正在执行的语句,连接保留。"
+        zh-TW: "執行 KILL QUERY:中止正在執行的語句,連線保留。"
+    kill:
+      title:
+        en: "Kill thread %{target}?"
+        zh-CN: "断开线程 %{target}?"
+        zh-TW: "中斷執行緒 %{target}?"
+      body:
+        en: "Runs KILL: the connection is closed and its open transaction is rolled back."
+        zh-CN: "执行 KILL:断开该连接,未提交的事务会回滚。"
+        zh-TW: "執行 KILL:中斷該連線,未提交的交易會回滾。"
+    vacuum_table:
+      title:
+        en: "VACUUM %{target}?"
+        zh-CN: "对 %{target} 执行 VACUUM?"
+        zh-TW: "對 %{target} 執行 VACUUM?"
+      body:
+        en: "Runs VACUUM (ANALYZE): reclaims dead rows and refreshes statistics. It does not lock out reads or writes, but adds I/O load."
+        zh-CN: "执行 VACUUM (ANALYZE):回收死行并更新统计;不阻塞读写,但会增加 I/O。"
+        zh-TW: "執行 VACUUM (ANALYZE):回收死列並更新統計;不阻塞讀寫,但會增加 I/O。"
+    vacuum:
+      title:
+        en: "VACUUM this database?"
+        zh-CN: "对整个库执行 VACUUM?"
+        zh-TW: "對整個資料庫執行 VACUUM?"
+      body:
+        en: "Rewrites the whole file to reclaim free pages. The database is locked while it runs and needs free disk space about the size of the file."
+        zh-CN: "重写整个文件以回收空闲页;执行期间库被锁住,需要约等于文件大小的空闲磁盘。"
+        zh-TW: "重寫整個檔案以回收閒置頁;執行期間資料庫被鎖住,需要約等於檔案大小的閒置磁碟。"
+    analyze:
+      title:
+        en: "ANALYZE this database?"
+        zh-CN: "对整个库执行 ANALYZE?"
+        zh-TW: "對整個資料庫執行 ANALYZE?"
+      body:
+        en: "Collects statistics for the query planner. Data is not changed."
+        zh-CN: "收集查询规划用的统计信息,不改动数据。"
+        zh-TW: "收集查詢規劃用的統計資訊,不改動資料。"
+  done:
+    cancel:
+      en: "Cancel signal sent"
+      zh-CN: "已发送取消信号"
+      zh-TW: "已送出取消訊號"
+    terminate:
+      en: "Session terminated"
+      zh-CN: "会话已终止"
+      zh-TW: "工作階段已終止"
+    kill_query:
+      en: "Query killed"
+      zh-CN: "查询已中止"
+      zh-TW: "查詢已中止"
+    kill:
+      en: "Thread killed"
+      zh-CN: "连接已断开"
+      zh-TW: "連線已中斷"
+    vacuum_table:
+      en: "VACUUM finished"
+      zh-CN: "VACUUM 完成"
+      zh-TW: "VACUUM 完成"
+    vacuum:
+      en: "VACUUM finished"
+      zh-CN: "VACUUM 完成"
+      zh-TW: "VACUUM 完成"
+    analyze:
+      en: "ANALYZE finished"
+      zh-CN: "ANALYZE 完成"
+      zh-TW: "ANALYZE 完成"
+  col:
+    version:
+      en: "Version"
+      zh-CN: "版本"
+      zh-TW: "版本"
+    db_size_bytes:
+      en: "Database Size"
+      zh-CN: "库大小"
+      zh-TW: "資料庫大小"
+    connections:
+      en: "Connections"
+      zh-CN: "连接数"
+      zh-TW: "連線數"
+    active:
+      en: "Active"
+      zh-CN: "执行中"
+      zh-TW: "執行中"
+    idle_in_tx:
+      en: "Idle in Transaction"
+      zh-CN: "事务中空闲"
+      zh-TW: "交易中閒置"
+    cache_hit_pct:
+      en: "Cache Hit Rate"
+      zh-CN: "缓存命中率"
+      zh-TW: "快取命中率"
+    deadlocks:
+      en: "Deadlocks"
+      zh-CN: "死锁次数"
+      zh-TW: "死結次數"
+    xid_age:
+      en: "XID Age"
+      zh-CN: "事务号年龄"
+      zh-TW: "交易號年齡"
+    uptime:
+      en: "Uptime"
+      zh-CN: "运行时长"
+      zh-TW: "執行時長"
+    stats_reset:
+      en: "Stats Reset At"
+      zh-CN: "统计重置于"
+      zh-TW: "統計重設於"
+    pid:
+      en: "PID"
+      zh-CN: "PID"
+      zh-TW: "PID"
+    user:
+      en: "User"
+      zh-CN: "用户"
+      zh-TW: "使用者"
+    database:
+      en: "Database"
+      zh-CN: "库"
+      zh-TW: "資料庫"
+    client:
+      en: "Client"
+      zh-CN: "客户端"
+      zh-TW: "用戶端"
+    app:
+      en: "Application"
+      zh-CN: "应用"
+      zh-TW: "應用程式"
+    state:
+      en: "State"
+      zh-CN: "状态"
+      zh-TW: "狀態"
+    query_time:
+      en: "Query Time"
+      zh-CN: "语句耗时"
+      zh-TW: "語句耗時"
+    xact_time:
+      en: "Transaction Time"
+      zh-CN: "事务时长"
+      zh-TW: "交易時長"
+    wait:
+      en: "Waiting On"
+      zh-CN: "等待事件"
+      zh-TW: "等待事件"
+    query:
+      en: "SQL"
+      zh-CN: "SQL"
+      zh-TW: "SQL"
+    blocked_pid:
+      en: "Blocked PID"
+      zh-CN: "被阻塞 PID"
+      zh-TW: "被阻塞 PID"
+    waiting:
+      en: "Waiting"
+      zh-CN: "已等待"
+      zh-TW: "已等待"
+    blocking_pid:
+      en: "Blocking PID"
+      zh-CN: "阻塞方 PID"
+      zh-TW: "阻塞方 PID"
+    blocking_state:
+      en: "Blocker State"
+      zh-CN: "阻塞方状态"
+      zh-TW: "阻塞方狀態"
+    blocking_xact_time:
+      en: "Blocker Transaction Time"
+      zh-CN: "阻塞方事务时长"
+      zh-TW: "阻塞方交易時長"
+    blocked_query:
+      en: "Blocked SQL"
+      zh-CN: "被阻塞的 SQL"
+      zh-TW: "被阻塞的 SQL"
+    blocking_query:
+      en: "Blocker SQL"
+      zh-CN: "阻塞方 SQL"
+      zh-TW: "阻塞方 SQL"
+    state_time:
+      en: "In State For"
+      zh-CN: "状态持续"
+      zh-TW: "狀態持續"
+    xmin:
+      en: "xmin"
+      zh-CN: "xmin"
+      zh-TW: "xmin"
+    calls:
+      en: "Calls"
+      zh-CN: "次数"
+      zh-TW: "次數"
+    total_ms:
+      en: "Total"
+      zh-CN: "总耗时"
+      zh-TW: "總耗時"
+    mean_ms:
+      en: "Mean"
+      zh-CN: "平均"
+      zh-TW: "平均"
+    max_ms:
+      en: "Max"
+      zh-CN: "最长"
+      zh-TW: "最長"
+    rows:
+      en: "Rows"
+      zh-CN: "行数"
+      zh-TW: "列數"
+    hit_pct:
+      en: "Cache Hit"
+      zh-CN: "缓存命中"
+      zh-TW: "快取命中"
+    schema:
+      en: "Schema"
+      zh-CN: "Schema"
+      zh-TW: "Schema"
+    table:
+      en: "Table"
+      zh-CN: "表"
+      zh-TW: "表"
+    index:
+      en: "Index"
+      zh-CN: "索引"
+      zh-TW: "索引"
+    size_bytes:
+      en: "Size"
+      zh-CN: "大小"
+      zh-TW: "大小"
+    scans:
+      en: "Scans"
+      zh-CN: "扫描次数"
+      zh-TW: "掃描次數"
+    definition:
+      en: "Definition"
+      zh-CN: "定义"
+      zh-TW: "定義"
+    live_rows:
+      en: "Live Rows"
+      zh-CN: "活行"
+      zh-TW: "活列"
+    dead_rows:
+      en: "Dead Rows"
+      zh-CN: "死行"
+      zh-TW: "死列"
+    dead_pct:
+      en: "Dead %"
+      zh-CN: "死行占比"
+      zh-TW: "死列占比"
+    last_vacuum:
+      en: "Last Vacuum"
+      zh-CN: "上次 Vacuum"
+      zh-TW: "上次 Vacuum"
+    last_analyze:
+      en: "Last Analyze"
+      zh-CN: "上次 Analyze"
+      zh-TW: "上次 Analyze"
+    id:
+      en: "Thread"
+      zh-CN: "线程"
+      zh-TW: "執行緒"
+    host:
+      en: "Host"
+      zh-CN: "来源"
+      zh-TW: "來源"
+    command:
+      en: "Command"
+      zh-CN: "命令"
+      zh-TW: "命令"
+    seconds:
+      en: "Time"
+      zh-CN: "时长"
+      zh-TW: "時長"
+    blocked_id:
+      en: "Blocked Thread"
+      zh-CN: "被阻塞线程"
+      zh-TW: "被阻塞執行緒"
+    waiting_seconds:
+      en: "Waiting"
+      zh-CN: "已等待"
+      zh-TW: "已等待"
+    lock_type:
+      en: "Lock Type"
+      zh-CN: "锁类型"
+      zh-TW: "鎖類型"
+    blocking_id:
+      en: "Blocking Thread"
+      zh-CN: "阻塞方线程"
+      zh-TW: "阻塞方執行緒"
+    rows_locked:
+      en: "Rows Locked"
+      zh-CN: "锁定行"
+      zh-TW: "鎖定列"
+    rows_modified:
+      en: "Rows Modified"
+      zh-CN: "修改行"
+      zh-TW: "修改列"
+    rows_examined:
+      en: "Rows Examined"
+      zh-CN: "扫描行"
+      zh-TW: "掃描列"
+    rows_sent:
+      en: "Rows Sent"
+      zh-CN: "返回行"
+      zh-TW: "回傳列"
+    engine:
+      en: "Engine"
+      zh-CN: "引擎"
+      zh-TW: "引擎"
+    rows_estimate:
+      en: "Rows (est.)"
+      zh-CN: "行数(估)"
+      zh-TW: "列數(估)"
+    data_bytes:
+      en: "Data"
+      zh-CN: "数据"
+      zh-TW: "資料"
+    index_bytes:
+      en: "Indexes"
+      zh-CN: "索引"
+      zh-TW: "索引"
+    free_bytes:
+      en: "Free"
+      zh-CN: "空闲"
+      zh-TW: "閒置"
+    updated:
+      en: "Updated"
+      zh-CN: "更新于"
+      zh-TW: "更新於"
+    running:
+      en: "Running"
+      zh-CN: "执行中"
+      zh-TW: "執行中"
+    buffer_hit_pct:
+      en: "Buffer Pool Hit"
+      zh-CN: "缓冲池命中率"
+      zh-TW: "緩衝池命中率"
+    qps:
+      en: "QPS"
+      zh-CN: "QPS"
+      zh-TW: "QPS"
+    slow_queries:
+      en: "Slow Queries"
+      zh-CN: "慢查询数"
+      zh-TW: "慢查詢數"
+    aborted_connects:
+      en: "Failed Connects"
+      zh-CN: "失败连接"
+      zh-TW: "失敗連線"
+    file_size_bytes:
+      en: "File Size"
+      zh-CN: "文件大小"
+      zh-TW: "檔案大小"
+    pages:
+      en: "Pages"
+      zh-CN: "页数"
+      zh-TW: "頁數"
+    page_size_bytes:
+      en: "Page Size"
+      zh-CN: "页大小"
+      zh-TW: "頁大小"
+    free_pages:
+      en: "Free Pages"
+      zh-CN: "空闲页"
+      zh-TW: "閒置頁"
+    journal_mode:
+      en: "Journal Mode"
+      zh-CN: "日志模式"
+      zh-TW: "日誌模式"
+    auto_vacuum:
+      en: "Auto Vacuum"
+      zh-CN: "自动 Vacuum"
+      zh-TW: "自動 Vacuum"
+    tables:
+      en: "Tables"
+      zh-CN: "表"
+      zh-TW: "表"
+    indexes:
+      en: "Indexes"
+      zh-CN: "索引"
+      zh-TW: "索引"
+    name:
+      en: "Name"
+      zh-CN: "名称"
+      zh-TW: "名稱"
+    type:
+      en: "Type"
+      zh-CN: "类型"
+      zh-TW: "類型"
+    unused_bytes:
+      en: "Unused"
+      zh-CN: "未用"
+      zh-TW: "未用"
+    message:
+      en: "Result"
+      zh-CN: "结果"
+      zh-TW: "結果"

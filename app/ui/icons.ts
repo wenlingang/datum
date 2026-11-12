@@ -61,6 +61,7 @@ import search from "../assets/icons/search.svg";
 import settings from "../assets/icons/settings.svg";
 import sparkles from "../assets/icons/sparkles.svg";
 import squarePlay from "../assets/icons/square-play.svg";
+import stethoscope from "../assets/icons/stethoscope.svg";
 import sun from "../assets/icons/sun.svg";
 import table2 from "../assets/icons/table-2.svg";
 import table from "../assets/icons/table.svg";
@@ -136,6 +137,7 @@ export const ICONS = {
   "settings": settings,
   "sparkles": sparkles,
   "square-play": squarePlay,
+  "stethoscope": stethoscope,
   "sun": sun,
   "table-2": table2,
   "table": table,

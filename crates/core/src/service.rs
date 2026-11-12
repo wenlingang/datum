@@ -573,3 +573,24 @@ pub async fn mongo_delete_one(
 ) -> AppResult<()> {
     state.mongo_pool.delete_one(id, coll, doc_id).await
 }
+
+/// 诊断:某个库支持的分区。
+pub fn diag_sections(kind: &DbKind) -> Vec<crate::diag::SectionInfo> {
+    crate::diag::sections(kind)
+}
+
+/// 诊断:查询一个分区。
+pub async fn diag_run(state: &AppState, kind: &DbKind, id: &str, section: &str) -> AppResult<crate::diag::DiagResult> {
+    crate::diag::run(state, kind, id, section).await
+}
+
+/// 诊断:执行取消 / 终止会话、VACUUM 等操作。
+pub async fn diag_act(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    action: crate::diag::Action,
+    args: &[String],
+) -> AppResult<()> {
+    crate::diag::act(state, kind, id, action, args).await
+}

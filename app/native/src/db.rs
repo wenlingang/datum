@@ -200,4 +200,26 @@ impl Db {
     pub async fn redis_analysis_cancel(id: String) -> Result<(), String> {
         spawn(async move { service::redis_analysis_cancel(&state(), &id).await }).await
     }
+    /// 诊断:某个库支持的分区(PG / MySQL / SQLite;其他类型为空数组)。
+    pub fn diag_sections(kind: String) -> Result<JsonValue, String> {
+        json(service::diag_sections(&kind_of(&kind)?))
+    }
+
+    /// 诊断:查询一个分区 `{ columns, rows, unavailable }`。
+    pub async fn diag_run(kind: String, id: String, section: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::diag_run(&state(), &k, &id, &section).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// 诊断:取消 / 终止会话、VACUUM 等;`args` 取自分区声明的目标列。
+    pub async fn diag_act(kind: String, id: String, action: String, args: Vec<String>) -> Result<(), String> {
+        let k = kind_of(&kind)?;
+        let a: datum_core::diag::Action = from(JsonValue::String(action), "action")?;
+        spawn(async move { service::diag_act(&state(), &k, &id, a, &args).await })
+            .await?
+            .map_err(err)
+    }
 }
