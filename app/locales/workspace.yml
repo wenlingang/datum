@@ -41,13 +41,13 @@ workspace:
     zh-CN: 显示详情栏
     zh-TW: 顯示詳細資料欄
   hide_ai:
-    en: Hide AI Assistant
-    zh-CN: 隐藏 AI 助手
-    zh-TW: 隱藏 AI 助理
+    en: Hide AI
+    zh-CN: 隐藏 AI
+    zh-TW: 隱藏 AI
   ai_assistant:
-    en: AI Assistant
-    zh-CN: AI 助手
-    zh-TW: AI 助理
+    en: AI
+    zh-CN: AI
+    zh-TW: AI
   theme_tooltip:
     en: "Theme: %{name}"
     zh-CN: "主题:%{name}"

@@ -43,9 +43,9 @@ menu:
     zh-CN: 显示/隐藏详情栏
     zh-TW: 顯示/隱藏詳細資訊欄
   toggle_ai:
-    en: Toggle AI Assistant
-    zh-CN: 显示/隐藏 AI 助手
-    zh-TW: 顯示/隱藏 AI 助理
+    en: Toggle AI
+    zh-CN: 显示/隐藏 AI
+    zh-TW: 顯示/隱藏 AI
   ai_workbench:
     en: AI Workbench (Full Screen)
     zh-CN: AI 对话工作台(全屏)

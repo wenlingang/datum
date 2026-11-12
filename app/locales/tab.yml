@@ -363,9 +363,9 @@ tab:
     zh-TW: "請先在編輯器中選取要傳給 AI 的 SQL"
   menu:
     send_to_ai:
-      en: "Send to AI Assistant"
-      zh-CN: "发送给 AI 助手"
-      zh-TW: "傳送給 AI 助理"
+      en: "Send to AI"
+      zh-CN: "发送给 AI"
+      zh-TW: "傳送給 AI"
     run:
       en: "Run"
       zh-CN: "运行"

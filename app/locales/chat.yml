@@ -1,9 +1,9 @@
 _version: 2
 chat:
   title:
-    en: AI Assistant
-    zh-CN: AI 助手
-    zh-TW: AI 助理
+    en: AI
+    zh-CN: AI
+    zh-TW: AI
   placeholder_ask:
     en: Ask anything…
     zh-CN: 问点什么…
