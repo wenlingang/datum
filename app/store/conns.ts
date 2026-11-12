@@ -4,13 +4,14 @@
 import { batch, signal } from "nsh";
 import { t } from "nsh/i18n";
 import { db, errorText, store } from "../lib/native";
-import { type ColumnsByTable, type Connection, isSupportedKind, supportsSql } from "../lib/types";
+import { type ColumnsByTable, type Connection, type ForeignKey, isSupportedKind, supportsSql } from "../lib/types";
 import { toast } from "./toast";
 
 const connections = signal<Connection[]>([]);
 const activeId = signal<string | null>(null);
 const tables = signal<Record<string, string[]>>({});
 const columns = signal<Record<string, ColumnsByTable>>({});
+const foreignKeys = signal<Record<string, ForeignKey[]>>({});
 const databases = signal<Record<string, string[]>>({});
 const connected = signal<Record<string, true>>({});
 const loading = signal<Record<string, true>>({});
@@ -25,6 +26,8 @@ export const conns = {
   active: () => conns.get(activeId()),
   tables: (id: string) => tables()[id],
   columns: (id: string) => columns()[id],
+  /** 外键(物理 + 推断),补全 JOIN 的 ON 条件用;没加载完为 undefined。 */
+  foreignKeys: (id: string) => foreignKeys()[id],
   databases: (id: string) => databases()[id],
   isConnected: (id: string) => !!connected()[id],
   isLoading: (id: string) => !!loading()[id],
@@ -75,6 +78,9 @@ export async function loadTables(id: string): Promise<string[]> {
   if (supportsSql(conn.kind)) {
     db.fetchColumns(conn.kind, id)
       .then((cols) => setKey(columns, id, cols))
+      .catch(() => {});
+    db.foreignKeys(conn.kind, id)
+      .then((fks) => setKey(foreignKeys, id, fks))
       .catch(() => {});
   }
   return list;

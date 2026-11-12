@@ -49,7 +49,8 @@ pub fn rows_to_column_map(rows: &[Vec<Option<String>>]) -> ColumnsByTable {
 }
 
 /// 一条外键列配对(复合外键按约束展开为多行,保序)。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ForeignKey {
     /// 约束名;sqlite 无名,合成 `fk_表名_序号`
     pub constraint: String,

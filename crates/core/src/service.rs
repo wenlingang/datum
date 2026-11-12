@@ -371,6 +371,61 @@ pub async fn fetch_erd_schema(state: &AppState, kind: &DbKind, id: &str) -> AppR
     })
 }
 
+/// 补全用的外键:物理外键 + 按命名约定推断的逻辑外键(物理外键已覆盖的列不再推断)。
+pub async fn foreign_keys(state: &AppState, kind: &DbKind, id: &str) -> AppResult<Vec<schema::ForeignKey>> {
+    let erd = fetch_erd_schema(state, kind, id).await?;
+    let columns = fetch_columns(state, kind, id).await?;
+    let tables: Vec<String> = columns.keys().cloned().collect();
+    let mut fks = erd.fks;
+    let inferred = crate::erd::infer_foreign_keys(&tables, &columns, &fks);
+    fks.extend(inferred);
+    Ok(fks)
+}
+
+/// 补全取值:最多给出这么多个不同的值,超过就不算「枚举类」列。
+pub const DISTINCT_MAX: usize = 30;
+/// 取值抽样的行数与单值长度上限(太长的值不像枚举)。
+const DISTINCT_SAMPLE_ROWS: u32 = 5000;
+const DISTINCT_MAX_CHARS: usize = 64;
+const DISTINCT_TIMEOUT_MS: u32 = 3000;
+
+/// 看起来不是枚举的列类型:时间、浮点、大文本 / 二进制 / JSON。
+fn not_enum_like(data_type: &str) -> bool {
+    let t = data_type.to_ascii_lowercase();
+    ["time", "date", "float", "double", "real", "numeric", "decimal", "json", "blob", "bytea", "binary", "uuid", "text[]", "xml"]
+        .iter()
+        .any(|k| t.contains(k))
+}
+
+/// 低基数列的实际取值(补全用):在前几千行里取不同的值,不超过 [`DISTINCT_MAX`] 个才返回,
+/// 否则(或类型不像枚举)返回 None。只读会话 + 限时,不会拖慢编辑器。
+pub async fn distinct_values(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    table: &str,
+    column: &str,
+    data_type: &str,
+) -> AppResult<Option<Vec<String>>> {
+    let dialect = Dialect::from_kind(kind).ok_or_else(unsupported)?;
+    if not_enum_like(data_type) {
+        return Ok(None);
+    }
+    let sql = format!(
+        "SELECT DISTINCT v FROM (SELECT {col} AS v FROM {table} LIMIT {DISTINCT_SAMPLE_ROWS}) s WHERE v IS NOT NULL LIMIT {}",
+        DISTINCT_MAX + 1,
+        col = ident(column, dialect),
+        table = ident(table, dialect),
+    );
+    let r = query_read_only_timeout(state, kind, id, &sql, DISTINCT_MAX as u32 + 1, DISTINCT_TIMEOUT_MS).await?;
+    let mut values: Vec<String> = r.rows.into_iter().filter_map(|row| row.into_iter().next().flatten()).collect();
+    if values.len() > DISTINCT_MAX || values.iter().any(|v| v.chars().count() > DISTINCT_MAX_CHARS || v.contains('\n')) {
+        return Ok(None);
+    }
+    values.sort_by(|a, b| crate::grid::compare_cells(a, b));
+    Ok(Some(values))
+}
+
 /// 导出整个数据库为 INSERT 语句:逐表查询全部行,表间用注释分隔;单表失败不影响其他表。
 pub async fn export_database(
     state: &AppState,

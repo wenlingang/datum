@@ -261,6 +261,10 @@ tab:
     en: "db.users.find({ age: { $gt: 18 } })"
     zh-CN: "db.users.find({ age: { $gt: 18 } })"
     zh-TW: "db.users.find({ age: { $gt: 18 } })"
+  completion_value:
+    en: "Value in %{column}"
+    zh-CN: "%{column} 的取值"
+    zh-TW: "%{column} 的取值"
   editor_placeholder_redis:
     en: "Enter a Redis command, ⌘↵ to run"
     zh-CN: "输入 Redis 命令,⌘↵ 运行"

@@ -8,13 +8,14 @@ import { EditorKeys } from "datum/native";
 import { Button, Editor, type EditorCompletionItem, type EditorCompletionKind, type EditorCompletionRequest } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
-import { grid } from "../lib/native";
+import { grid, sql as sqlText } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { conns } from "../store/conns";
 import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
 import { beautify, commit, explain, run, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
 import { primaryRange, rangeOf } from "./textpos";
+import { columnValues, valueInsert } from "./values";
 
 const BOUNDARY = /[\s,;()]/;
 
@@ -32,33 +33,70 @@ function onTextChange(m: TabModel, value: string) {
   m.editor.edit([{ range: rangeOf(value, r.start, r.end), text: r.text }]);
 }
 
+/** 取值位置(`col = '…`):该列的实际取值(低基数列才有),按已输入的部分过滤,前缀匹配的排前面。 */
+async function valueItems(m: TabModel, text: string, offset: number): Promise<{ items: EditorCompletionItem[]; quoted: boolean } | null> {
+  if (!supportsSql(m.dbKind)) return null;
+  const vc = grid.valueContext(text, offset, conns.columns(m.connId) ?? null);
+  if (!vc) return null;
+  const values = await columnValues(m.dbKind, m.connId, vc.table, vc.column, vc.dataType);
+  const p = vc.prefix.toLowerCase();
+  const hits = (values ?? []).filter((v) => v.toLowerCase().includes(p));
+  hits.sort((a, b) => Number(!a.toLowerCase().startsWith(p)) - Number(!b.toLowerCase().startsWith(p)));
+  // 编辑器自动补上的右引号一并替换,避免插入后多出一个 '
+  const end = vc.quoted && text[vc.end] === "'" ? vc.end + 1 : vc.end;
+  const range = rangeOf(text, vc.start, end);
+  const items = hits.map((v) => ({
+    label: v,
+    kind: "value" as EditorCompletionKind,
+    detail: t("tab.completion_value", { column: vc.column }),
+    insertText: vc.quoted ? sqlText.literal(v, m.dbKind) : valueInsert(v, vc.dataType, (x) => sqlText.literal(x, m.dbKind)),
+    filterText: vc.quoted ? `'${v}` : v,
+    range,
+  }));
+  return { items, quoted: vc.quoted };
+}
+
 async function complete(m: TabModel, req: EditorCompletionRequest) {
   const editor = m.editor;
   if (!editor) return;
   const text = await editor.value();
   const cols = conns.columns(m.connId) ?? null;
   const tables = conns.tables(m.connId) ?? [];
-  const result = grid.completions(m.dbKind, text, req.offset, tables, cols, req.trigger === "invoked");
+  const values = await valueItems(m, text, req.offset);
+  // 引号里只给取值(普通补全在字符串里本来就不出)
+  if (values?.quoted) {
+    editor.presentCompletions(req.id, values.items.map((it, i) => ({ ...it, sortText: String(i).padStart(5, "0") })), true);
+    return;
+  }
+  const result = grid.completions(
+    m.dbKind,
+    text,
+    req.offset,
+    tables,
+    cols,
+    req.trigger === "invoked",
+    conns.foreignKeys(m.connId) ?? null,
+  );
   // 一律标为 incomplete:编辑器每敲一个字都重新来问。否则它只在本地过滤首次的答案——
   // 空格触发时的空答案会一直空下去,首次算出的替换范围也会过时(接受时只替换最初那一小段,
   // 「fro」变成「FROMrom」)。core 的补全是纯本地计算,重新问的代价很小。
   if (!result) {
-    editor.presentCompletions(req.id, [], true);
+    editor.presentCompletions(req.id, (values?.items ?? []).map((it, i) => ({ ...it, sortText: String(i).padStart(5, "0") })), true);
     return;
   }
   // 替换范围与编辑器的查询一致(通常如此)时不传 range:接受时替换「查询起点 → 光标」;
   // 不一致时(如带引号的标识符)才传 core 算出的范围
   const sameAsQuery = result.start === req.queryStart && result.end === req.offset;
   const range = sameAsQuery ? null : rangeOf(text, result.start, result.end);
-  const items: EditorCompletionItem[] = result.items.map((item, i) => ({
+  const base: EditorCompletionItem[] = result.items.map((item) => ({
     label: item.label,
     kind: item.kind as EditorCompletionKind,
     detail: item.detail || null,
     insertText: item.insert,
-    // 保持计算出的顺序(模板 → 列 → 表 → 关键字)
-    sortText: String(i).padStart(5, "0"),
     range,
   }));
+  // 保持计算出的顺序(取值 → 模板 → 列 → 表 → 关键字)
+  const items = [...(values?.items ?? []), ...base].map((it, i) => ({ ...it, sortText: String(i).padStart(5, "0") }));
   editor.presentCompletions(req.id, items, true);
 }
 

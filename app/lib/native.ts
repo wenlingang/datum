@@ -28,6 +28,8 @@ import type {
   DiagResult,
   DiagSection,
   NlFilter,
+  ForeignKey,
+  ValueContext,
 } from "./types";
 
 export const store = {
@@ -75,6 +77,11 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  /** 补全用的外键(物理 + 按命名推断)。 */
+  foreignKeys: async (kind: DbKind, id: string) => (await Db.foreignKeys(kind, id)) as ForeignKey[],
+  /** 低基数列的实际取值(最多 30 个);不是枚举类的列为 null。 */
+  distinctValues: async (kind: DbKind, id: string, table: string, column: string, dataType: string) =>
+    (await Db.distinctValues(kind, id, table, column, dataType)) as string[] | null,
   diagSections: (kind: DbKind) => Db.diagSections(kind) as DiagSection[],
   diagRun: async (kind: DbKind, id: string, section: string) => (await Db.diagRun(kind, id, section)) as DiagResult,
   diagAct: (kind: DbKind, id: string, action: DiagAction, args: string[]) =>
@@ -203,7 +210,11 @@ export const grid = {
     tables: string[],
     columns: ColumnsByTable | null,
     explicit: boolean,
-  ) => Grid.completions(kind, text, caret, tables, columns, explicit) as TabTypes.CompletionResult | null,
+    fks: ForeignKey[] | null = null,
+  ) => Grid.completions(kind, text, caret, tables, columns, explicit, fks) as TabTypes.CompletionResult | null,
+  /** 光标是否在某列的取值位置(`col = '…`、`col IN (…`)。 */
+  valueContext: (text: string, caret: number, columns: ColumnsByTable | null) =>
+    Grid.valueContext(text, caret, columns) as ValueContext | null,
   uppercaseKeywordBefore: (text: string, caret: number) =>
     Grid.uppercaseKeywordBefore(text, caret) as { start: number; end: number; text: string } | null,
 };

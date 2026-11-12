@@ -304,6 +304,18 @@ core:
       en: Update rows
       zh-CN: 更新数据
       zh-TW: 更新資料
+    related_to:
+      en: "Table · related to %{table}"
+      zh-CN: "表 · 关联 %{table}"
+      zh-TW: "資料表 · 關聯 %{table}"
+    fk:
+      en: "Foreign key %{name}"
+      zh-CN: "外键 %{name}"
+      zh-TW: "外鍵 %{name}"
+    fk_inferred:
+      en: "Inferred from column names"
+      zh-CN: "按列名推断的关联"
+      zh-TW: "依欄位名稱推斷的關聯"
   risk:
     delete_no_where:
       en: DELETE without WHERE

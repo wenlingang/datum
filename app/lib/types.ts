@@ -436,3 +436,24 @@ export interface NlFilter {
   /** 被丢弃的条件(列不存在、操作符不支持等) */
   dropped: string[];
 }
+
+/** 外键列配对(物理外键或按命名推断的),补全 JOIN 的 ON 条件用。 */
+export interface ForeignKey {
+  constraint: string;
+  table: string;
+  column: string;
+  refTable: string;
+  refColumn: string;
+  inferred: boolean;
+}
+
+/** 光标处于某列的取值位置(偏移为 UTF-16)。 */
+export interface ValueContext {
+  table: string;
+  column: string;
+  dataType: string;
+  start: number;
+  end: number;
+  prefix: string;
+  quoted: boolean;
+}

@@ -9,7 +9,7 @@ use datum_core::completion::{self, ItemKind};
 use datum_core::core::connection::DbKind;
 use datum_core::grid::{self, Align, CellTier, Conj, FilterOp, FilterRow};
 use datum_core::pg::browse::{ColumnInfo, TableDetail};
-use datum_core::schema::{ColumnBrief, ColumnsByTable};
+use datum_core::schema::{ColumnBrief, ColumnsByTable, ForeignKey};
 use datum_core::sql::{Dialect, build};
 use nsh_core::JsonValue;
 use nsh_core::prelude::*;
@@ -210,6 +210,7 @@ impl Grid {
         tables: Vec<String>,
         columns: JsonValue,
         explicit: bool,
+        fks: JsonValue,
     ) -> Result<JsonValue, String> {
         let k: DbKind = from(JsonValue::String(kind.clone()), "kind")?;
         let offset = utf16_to_byte(&text, caret as usize);
@@ -236,7 +237,8 @@ impl Grid {
                         )
                     })
                     .collect();
-                completion::sql_completions(&text, offset, &tables, &cols, explicit)
+                let fks: Vec<ForeignKey> = if fks.is_null() { vec![] } else { from(fks, "fks")? };
+                completion::sql_completions_with(&text, offset, &tables, &cols, &fks, explicit)
             }
         };
         let Some(r) = result else {
@@ -258,6 +260,39 @@ impl Grid {
             "start": byte_to_utf16(&text, r.replace.start),
             "end": byte_to_utf16(&text, r.replace.end),
             "items": items,
+        }))
+    }
+
+    /// 光标是否在某列的取值位置(`col = '…`、`col IN (…`):
+    /// `{ table, column, dataType, start, end, prefix, quoted }`(UTF-16),否则 null。
+    pub fn value_context(text: String, caret: u32, columns: JsonValue) -> Result<JsonValue, String> {
+        if columns.is_null() {
+            return Ok(JsonValue::Null);
+        }
+        let raw: std::collections::BTreeMap<String, Vec<BriefJs>> = from(columns, "columns")?;
+        let cols: ColumnsByTable = raw
+            .into_iter()
+            .map(|(t, list)| {
+                (t, list.into_iter().map(|c| ColumnBrief { name: c.name, data_type: c.data_type }).collect())
+            })
+            .collect();
+        let offset = utf16_to_byte(&text, caret as usize);
+        let Some(v) = completion::value_context(&text, offset, &cols) else {
+            return Ok(JsonValue::Null);
+        };
+        let data_type = cols
+            .get(&v.table)
+            .and_then(|cs| cs.iter().find(|c| c.name == v.column))
+            .map(|c| c.data_type.clone())
+            .unwrap_or_default();
+        Ok(json!({
+            "table": v.table,
+            "column": v.column,
+            "dataType": data_type,
+            "start": byte_to_utf16(&text, v.replace.start),
+            "end": byte_to_utf16(&text, v.replace.end),
+            "prefix": v.prefix,
+            "quoted": v.quoted,
         }))
     }
 

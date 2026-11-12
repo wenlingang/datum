@@ -1,7 +1,7 @@
 //! 编辑器补全的纯逻辑:给定文本、光标(字节偏移)与 schema,算出候选项与替换范围。
 //! UI 层把结果转换成编辑器的补全菜单项。
 
-use crate::schema::ColumnsByTable;
+use crate::schema::{ColumnsByTable, ForeignKey};
 use crate::sql::stmt::{current_statement, split_statements};
 use regex::Regex;
 use rust_i18n::t;
@@ -396,6 +396,18 @@ pub fn sql_completions(
     columns: &ColumnsByTable,
     explicit: bool,
 ) -> Option<Completions> {
+    sql_completions_with(text, offset, tables, columns, &[], explicit)
+}
+
+/// SQL 补全(带外键):`fks` 为物理外键 + 推断外键,用于 JOIN 的 `ON` 条件与关联表排序。
+pub fn sql_completions_with(
+    text: &str,
+    offset: usize,
+    tables: &[String],
+    columns: &ColumnsByTable,
+    fks: &[ForeignKey],
+    explicit: bool,
+) -> Option<Completions> {
     let offset = offset.min(text.len());
     let start = word_start(text, offset);
     let prefix = &text[start..offset];
@@ -445,9 +457,24 @@ pub fn sql_completions(
     let tail = &stmt_before[stmt_before.len().saturating_sub(40)..];
     let tail = tail.trim_start_matches(|c: char| !c.is_ascii());
 
-    // 表名位置:FROM/JOIN/INTO/UPDATE 后立即弹出
+    // JOIN 表名之后:按外键给出 ON 条件
+    if !fks.is_empty() {
+        if let Some(items) = join_on_items(stmt_before, tail, prefix, columns, fks) {
+            let items = filter_prefix(items, prefix);
+            if !items.is_empty() {
+                return Some(Completions { replace: start..offset, items });
+            }
+        }
+    }
+
+    // 表名位置:FROM/JOIN/INTO/UPDATE 后立即弹出;JOIN 后与已引用表有外键关联的表排前面
     if EAGER_TABLE.is_match(tail) {
-        let items = filter_prefix(table_items(tables), prefix);
+        let mut items = table_items(tables);
+        if !fks.is_empty() && JOIN_TABLE.is_match(tail) {
+            let left: Vec<String> = table_refs(stmt_before, columns).into_iter().map(|(t, _)| t).collect();
+            items = rank_related(items, &left, fks);
+        }
+        let items = filter_prefix(items, prefix);
         return (!items.is_empty()).then_some(Completions {
             replace: start..offset,
             items,
@@ -519,6 +546,176 @@ pub fn sql_completions(
         replace: start..offset,
         items,
     })
+}
+
+static JOIN_TABLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bjoin\s+$").unwrap());
+/// `JOIN 表 [AS] [别名] ` 或 `… ON `:组 1/2/3 为表名(不同引号),组 4 为别名,组 5 为 ON。
+static JOINED: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)\bjoin\s+(?:\w+\.)?(?:"([^"]+)"|`([^`]+)`|(\w+))(?:\s+(?:as\s+)?(\w+))?\s+(on\s+)?$"#).unwrap()
+});
+
+/// 与左侧已引用表有外键关联的表排到前面,详情标出关联到谁。
+fn rank_related(items: Vec<Item>, left: &[String], fks: &[ForeignKey]) -> Vec<Item> {
+    let related = |t: &str| -> Option<String> {
+        fks.iter().find_map(|f| {
+            if f.table == t && left.contains(&f.ref_table) {
+                Some(f.ref_table.clone())
+            } else if f.ref_table == t && left.contains(&f.table) {
+                Some(f.table.clone())
+            } else {
+                None
+            }
+        })
+    };
+    let (mut hit, rest): (Vec<Item>, Vec<Item>) = items.into_iter().partition(|i| related(&i.label).is_some());
+    for i in &mut hit {
+        if let Some(other) = related(&i.label) {
+            i.detail = t!("core.completion.related_to", table = other).to_string();
+        }
+    }
+    hit.extend(rest);
+    hit
+}
+
+/// 刚写完 `JOIN 表 [别名] `(或再加 `ON `)时,按外键生成连接条件。复合外键用 AND 拼成一条。
+/// 左侧的表来自光标前的语句;表名 / 别名按用户写法引用。
+fn join_on_items(
+    stmt_before: &str,
+    tail: &str,
+    prefix: &str,
+    columns: &ColumnsByTable,
+    fks: &[ForeignKey],
+) -> Option<Vec<Item>> {
+    let caps = JOINED.captures(tail)?;
+    let raw = caps.get(1).or(caps.get(2)).or(caps.get(3))?.as_str();
+    let after_on = caps.get(5).is_some();
+    let alias = caps
+        .get(4)
+        .map(|m| m.as_str().to_string())
+        .filter(|a| !NOT_ALIAS.contains(&a.to_ascii_lowercase().as_str()));
+    // 「JOIN t 」后面跟着的别名没写完时不打扰;前缀只可能是 ON 的开头
+    if !after_on && !prefix.is_empty() && !"on".starts_with(&prefix.to_ascii_lowercase()) {
+        return None;
+    }
+    let joined = columns.keys().find(|k| k.as_str() == raw || k.eq_ignore_ascii_case(raw))?.clone();
+    let joined_name = alias.clone().unwrap_or_else(|| raw.to_string());
+    // 左侧:JOIN 之前出现的表(排除这次 JOIN 自己)
+    let join_at = stmt_before.len() - tail.len() + caps.get(0)?.start();
+    let left = table_refs(&stmt_before[..join_at], columns);
+    if left.is_empty() {
+        return None;
+    }
+    let name_of = |table: &str| -> Option<String> {
+        left.iter().find(|(t, _)| t == table).map(|(t, a)| a.clone().unwrap_or_else(|| t.clone()))
+    };
+
+    // (约束, 方向) → 条件列表;按出现顺序保持稳定
+    let mut groups: Vec<(String, bool, Vec<String>, String)> = vec![];
+    for f in fks {
+        if f.ref_column.is_empty() {
+            continue;
+        }
+        let other = |t: &str| name_of(t).filter(|o| *o != joined_name);
+        let cond = if f.table == joined {
+            other(&f.ref_table).map(|o| format!("{joined_name}.{} = {o}.{}", f.column, f.ref_column))
+        } else {
+            None
+        }
+        .or_else(|| {
+            (f.ref_table == joined)
+                .then(|| other(&f.table))
+                .flatten()
+                .map(|o| format!("{joined_name}.{} = {o}.{}", f.ref_column, f.column))
+        });
+        let Some(cond) = cond else { continue };
+        let key = format!("{}|{}|{}", f.table, f.ref_table, f.constraint);
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.2.push(cond),
+            None => groups.push((key, f.inferred, vec![cond], f.constraint.clone())),
+        }
+    }
+    if groups.is_empty() {
+        return None;
+    }
+    // 物理外键在前
+    groups.sort_by_key(|g| g.1);
+    let items = groups
+        .into_iter()
+        .map(|(_, inferred, conds, constraint)| {
+            let body = conds.join(" AND ");
+            let text = if after_on { body } else { format!("ON {body}") };
+            let detail = if inferred {
+                t!("core.completion.fk_inferred").to_string()
+            } else {
+                t!("core.completion.fk", name = constraint).to_string()
+            };
+            Item { label: text.clone(), detail, kind: ItemKind::Snippet, insert: text }
+        })
+        .collect();
+    Some(items)
+}
+
+/// 光标处于某列的取值位置(`col = '…`、`col IN ('a', '…`):补全该列的实际取值。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueContext {
+    pub table: String,
+    pub column: String,
+    /// 被替换的字节范围:正在输入的值(含开头的引号)
+    pub replace: Range<usize>,
+    /// 已输入的部分(不含引号),用于过滤
+    pub prefix: String,
+    /// 正在引号里
+    pub quoted: bool,
+}
+
+static VALUE_POS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?i)(?:(\w+)\.)?(\w+|"[^"]+"|`[^`]+`)\s*(?:=|<>|!=|\bin\s*\((?:\s*(?:'(?:[^']|'')*'|[\w.-]+)\s*,)*)\s*('(?:[^']|'')*|[\w.-]*)$"#,
+    )
+    .unwrap()
+});
+
+/// 判断光标是否处在某列的取值位置;列需能对应到语句里引用的表(别名 / 表名限定,或在唯一的表里)。
+pub fn value_context(text: &str, offset: usize, columns: &ColumnsByTable) -> Option<ValueContext> {
+    let offset = offset.min(text.len());
+    let stmt_start = split_statements(text)
+        .into_iter()
+        .find(|r| offset <= r.end)
+        .map_or(0, |r| r.start);
+    let before = &text[stmt_start.min(offset)..offset];
+    let line = &before[before.rfind('\n').map_or(0, |i| i + 1)..];
+    if line.contains("--") {
+        return None;
+    }
+    let caps = VALUE_POS.captures(before)?;
+    let token = caps.get(3)?;
+    let quoted = token.as_str().starts_with('\'');
+    // 已闭合的引号(`'a'` 之后)不在取值位置
+    if quoted && token.as_str().len() > 1 && token.as_str().replace("''", "").ends_with('\'') {
+        return None;
+    }
+    let col_raw = caps.get(2)?.as_str().trim_matches(|c| c == '"' || c == '`');
+    if NOT_ALIAS.contains(&col_raw.to_ascii_lowercase().as_str()) {
+        return None;
+    }
+    let stmt = current_statement(text, offset);
+    let refs = table_refs(&stmt, columns);
+    let has_col = |t: &str| columns.get(t).and_then(|cs| cs.iter().find(|c| c.name.eq_ignore_ascii_case(col_raw)).map(|c| c.name.clone()));
+    let (table, column) = match caps.get(1) {
+        Some(q) => {
+            let q = q.as_str();
+            let t = refs
+                .iter()
+                .find(|(t, a)| a.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(q)) || t.eq_ignore_ascii_case(q))
+                .map(|(t, _)| t.clone())?;
+            let c = has_col(&t)?;
+            (t, c)
+        }
+        None => refs.iter().find_map(|(t, _)| has_col(t).map(|c| (t.clone(), c)))?,
+    };
+    let start = stmt_start + token.start();
+    let prefix = token.as_str().trim_start_matches('\'').replace("''", "'");
+    Some(ValueContext { table, column, replace: start..offset, prefix, quoted })
 }
 
 /// 常用 Redis 命令:(名称, 签名, 首参是否为 key)。
@@ -844,5 +1041,94 @@ mod tests {
         let text = "db.orders.fi";
         let r = mongo_completions(text, text.len(), &colls, false).unwrap();
         assert!(r.items.iter().any(|i| i.label == "find"));
+    }
+
+    fn fk(table: &str, column: &str, ref_table: &str, ref_column: &str, constraint: &str, inferred: bool) -> ForeignKey {
+        ForeignKey {
+            constraint: constraint.into(),
+            table: table.into(),
+            column: column.into(),
+            ref_table: ref_table.into(),
+            ref_column: ref_column.into(),
+            inferred,
+        }
+    }
+
+    fn shop() -> (Vec<String>, ColumnsByTable, Vec<ForeignKey>) {
+        let mut cols = ColumnsByTable::new();
+        let c = |n: &str, t: &str| ColumnBrief { name: n.into(), data_type: t.into() };
+        cols.insert("users".into(), vec![c("id", "int"), c("status", "text")]);
+        cols.insert("orders".into(), vec![c("id", "int"), c("user_id", "int"), c("status", "text")]);
+        cols.insert("items".into(), vec![c("order_id", "int"), c("order_rev", "int"), c("sku", "text")]);
+        cols.insert("logs".into(), vec![c("msg", "text")]);
+        let fks = vec![
+            fk("orders", "user_id", "users", "id", "orders_user_fk", false),
+            // 复合外键
+            fk("items", "order_id", "orders", "id", "items_order_fk", false),
+            fk("items", "order_rev", "orders", "rev", "items_order_fk", false),
+            fk("logs", "user_id", "users", "id", "inferred_logs_user_id", true),
+        ];
+        (vec!["users".into(), "orders".into(), "items".into(), "logs".into()], cols, fks)
+    }
+
+    #[test]
+    fn join_on_from_foreign_keys_with_aliases() {
+        let (t, c, f) = shop();
+        let text = "SELECT * FROM users u JOIN orders o ";
+        let got = sql_completions_with(text, text.len(), &t, &c, &f, false).unwrap();
+        assert_eq!(labels(&Some(got.clone())), vec!["ON o.user_id = u.id"]);
+        assert_eq!(got.items[0].detail, "Foreign key orders_user_fk");
+        // 已写了 ON:只补条件
+        let text = "SELECT * FROM users u JOIN orders o ON ";
+        let got = sql_completions_with(text, text.len(), &t, &c, &f, false);
+        assert_eq!(labels(&got)[0], "o.user_id = u.id");
+        // 正在敲 ON 的开头也给
+        let text = "SELECT * FROM users u JOIN orders o o";
+        assert_eq!(labels(&sql_completions_with(text, text.len(), &t, &c, &f, false))[0], "ON o.user_id = u.id");
+    }
+
+    #[test]
+    fn join_on_reverse_direction_composite_and_no_alias() {
+        let (t, c, f) = shop();
+        // 被引用方后 JOIN;没有别名时用表名
+        let text = "select * from items join orders ";
+        let got = labels(&sql_completions_with(text, text.len(), &t, &c, &f, false));
+        assert_eq!(got, vec!["ON orders.id = items.order_id AND orders.rev = items.order_rev"]);
+        // 与左侧没有关联的表:不给 ON 条件
+        let text = "select * from logs l join orders o ";
+        assert!(!labels(&sql_completions_with(text, text.len(), &t, &c, &f, false)).iter().any(|l| l.starts_with("ON")));
+        // 不传外键时行为不变
+        let text = "SELECT * FROM users u JOIN orders o ";
+        assert!(!labels(&sql_completions(text, text.len(), &t, &c, false)).iter().any(|l| l.starts_with("ON")));
+    }
+
+    #[test]
+    fn join_table_position_ranks_related_tables_first() {
+        let (t, c, f) = shop();
+        let text = "select * from users u join ";
+        let got = sql_completions_with(text, text.len(), &t, &c, &f, false).unwrap();
+        let l: Vec<&str> = got.items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(&l[..2], &["orders", "logs"]);
+        assert_eq!(got.items[0].detail, "Table · related to users");
+    }
+
+    #[test]
+    fn value_context_positions() {
+        let (_, c, _) = shop();
+        let text = "select * from orders o where o.status = 'pa";
+        let v = value_context(text, text.len(), &c).unwrap();
+        assert_eq!((v.table.as_str(), v.column.as_str(), v.prefix.as_str(), v.quoted), ("orders", "status", "pa", true));
+        assert_eq!(&text[v.replace.clone()], "'pa");
+        // 裸列名 + 刚打完 = 与空格
+        let text = "SELECT * FROM users WHERE status = ";
+        let v = value_context(text, text.len(), &c).unwrap();
+        assert_eq!((v.column.as_str(), v.prefix.as_str(), v.quoted, v.replace.len()), ("status", "", false, 0));
+        // IN 列表的后续项
+        let text = "select * from users where status in ('active', '";
+        assert_eq!(value_context(text, text.len(), &c).unwrap().prefix, "");
+        // 引号已闭合、未知列、注释里:不算
+        assert!(value_context("select * from users where status = 'a' ", 39, &c).is_none());
+        assert!(value_context("select * from users where nope = '", 34, &c).is_none());
+        assert!(value_context("select 1 -- where status = '", 28, &c).is_none());
     }
 }

@@ -222,4 +222,28 @@ impl Db {
             .await?
             .map_err(err)
     }
+
+    /// 补全用的外键:物理外键 + 按命名推断的(`[{ constraint, table, column, refTable, refColumn, inferred }]`)。
+    pub async fn foreign_keys(kind: String, id: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::foreign_keys(&state(), &k, &id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// 补全用:低基数列的实际取值(最多 30 个);不是枚举类的列为 null。
+    pub async fn distinct_values(
+        kind: String,
+        id: String,
+        table: String,
+        column: String,
+        data_type: String,
+    ) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::distinct_values(&state(), &k, &id, &table, &column, &data_type).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
 }
