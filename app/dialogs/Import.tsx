@@ -8,6 +8,7 @@ import { db, dialogsNative, errorText, sql, store } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
 import { Btn, DbIcon, color } from "../ui/kit";
+import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { DialogFrame, Dropdown, LoadingBtn } from "./controls";
 
@@ -41,6 +42,14 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
   const text = signal("");
   const fileName = signal<string | null>(null);
   const report = signal<Report | null>(null);
+  // 编辑器不受控:用户输入只回报到 text;选文件载入的内容经 setValue 推回(见 ui/editor)
+  const sqlText = editorText(
+    () => text(),
+    (v) => {
+      text.set(v);
+      report.set(null);
+    },
+  );
   let alive = true;
   cleanup(() => (alive = false));
 
@@ -132,11 +141,9 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
           <Editor
             testID="import-sql"
             class="flex-1"
-            value={text()}
-            onChange={({ value }) => {
-              text.set(value);
-              report.set(null);
-            }}
+            ref={sqlText.ref}
+            defaultValue={sqlText.defaultValue}
+            onChange={sqlText.onChange}
             readOnly={running()}
             language="sql"
             placeholder={t("import.placeholder")}

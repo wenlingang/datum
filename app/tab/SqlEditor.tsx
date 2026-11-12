@@ -3,7 +3,7 @@
 //
 // 补全的计算在 datum_core::completion(经 lib/native 的 grid.completions);这里只转成编辑器的补全项。
 
-import { signal, Text, View } from "nsh";
+import { signal, Text, untracked, View } from "nsh";
 import { EditorKeys } from "datum/native";
 import { Button, Editor, type EditorCompletionItem, type EditorCompletionKind, type EditorCompletionRequest } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
@@ -18,7 +18,8 @@ import { primaryRange, rangeOf } from "./textpos";
 
 const BOUNDARY = /[\s,;()]/;
 
-/** 输入边界字符时,把紧邻前面的 SQL 关键字转为大写(长度不变,光标不跳)。 */
+/** 输入边界字符时,把紧邻前面的 SQL 关键字转为大写(长度不变,光标不跳)。
+ *  只把文本记进 `m.sql`,不写回编辑器(编辑器不受控,见 model 的 `setSql`)。 */
 function onTextChange(m: TabModel, value: string) {
   const prev = m.sql();
   m.sql.set(value);
@@ -142,7 +143,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
         }}
         testID="sql-editor"
         class="flex-1 bg-editor"
-        value={m.sql()}
+        defaultValue={untracked(() => m.sql())}
         language={m.dbKind === "redis" ? "text" : "sql"}
         placeholder={placeholder()}
         autoFocus={props.autoFocus}

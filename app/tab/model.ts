@@ -275,9 +275,15 @@ export function selectionText(m: TabModel): string {
   return r ? text.slice(r[0], r[1]) : "";
 }
 
-/** 替换编辑器全文(保留撤销)。 */
+/**
+ * 程序替换编辑器全文(保留撤销):格式化、插入历史、AI「编辑器运行」等。
+ * 编辑器不受控(只用 defaultValue 给初值):用户打字只回报到 `m.sql`,不再把它当 value 写回去——
+ * 原生侧打字快于 JS 处理 onChange 时,写回的是过时的文本,会把编辑器里已经打出来的内容替换掉、
+ * 光标跳回去,后面的字插错位置。所以只有程序主动改时才经 `setValue` 推给编辑器。
+ */
 export function setSql(m: TabModel, text: string) {
   m.sql.set(text);
+  m.editor?.setValue(text);
 }
 
 /** 运行时取:有选区跑选区,否则跑光标所在的那条语句(Redis 为光标所在行)。 */
@@ -508,7 +514,7 @@ export function beautify(m: TabModel) {
   if (!supportsSql(m.dbKind) || m.kind !== "query") return;
   const source = m.sql();
   const formatted = sqlText.format(source);
-  if (formatted !== source) m.sql.set(formatted);
+  if (formatted !== source) setSql(m, formatted);
 }
 
 /** 跳页(仅表浏览)。 */

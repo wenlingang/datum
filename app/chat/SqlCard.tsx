@@ -8,6 +8,7 @@ import { errorText, sql as sqlNative } from "../lib/native";
 import type { DbKind, WriteImpact } from "../lib/types";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, Icon } from "../ui/kit";
+import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { executeSql, runInEditor, target, undoCard } from "./actions";
 import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmRequest, updateCard } from "./cards";
@@ -86,6 +87,7 @@ function ImpactPreview(props: { sql: string }) {
 const MAX_LINES = 14;
 
 /** Datum 外观的 SQL 编辑器(卡片与确认框共用)。 */
+/** 卡片里的 SQL 编辑器(文本由卡片状态持有,接法见 ui/editor 的 `editorText`)。 */
 function SqlEditor(props: {
   value: string;
   readOnly?: boolean;
@@ -93,11 +95,16 @@ function SqlEditor(props: {
   onChange?: (value: string) => void;
   testID?: string;
 }) {
+  const text = editorText(
+    () => props.value,
+    (v) => props.onChange?.(v),
+  );
   return (
     <Editor
+      ref={text.ref}
       testID={props.testID}
-      value={props.value}
-      onChange={({ value }) => props.onChange?.(value)}
+      defaultValue={text.defaultValue}
+      onChange={text.onChange}
       readOnly={props.readOnly}
       language="sql"
       lineNumbers

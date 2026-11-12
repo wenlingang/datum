@@ -5,6 +5,7 @@ import { cleanup, Clipboard, signal, Text, View } from "nsh";
 import { Dialog, Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { Btn, IconButton } from "../ui/kit";
+import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { stageEdit, type CellDialogState, type TabModel } from "./model";
 
@@ -27,6 +28,14 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
   const draft = signal(initial);
   const base = signal(initial);
   const staged = signal(false);
+  // 编辑器不受控:用户输入只回报到 draft;格式化 JSON 等程序修改经 setValue 推回(见 ui/editor)
+  const draftText = editorText(
+    () => draft(),
+    (v) => {
+      draft.set(v);
+      staged.set(false);
+    },
+  );
   const copied = signal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   cleanup(() => timer && clearTimeout(timer));
@@ -64,11 +73,9 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
         <Editor
           testID="cell-editor"
           class="flex-1 bg-editor"
-          value={draft()}
-          onChange={({ value }) => {
-            draft.set(value);
-            staged.set(false);
-          }}
+          ref={draftText.ref}
+          defaultValue={draftText.defaultValue}
+          onChange={draftText.onChange}
           readOnly={!c.editable}
           lineNumbers={false}
           folding={false}

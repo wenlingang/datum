@@ -40,6 +40,18 @@ async function replaceSql(app: App, sql: string) {
   await app.type("id:sql-editor", sql);
 }
 
+test("格式化替换编辑器全文(编辑器不受控,程序修改经 setValue 推给编辑器)", async () => {
+  const app = await start();
+  await replaceSql(app, "select id, name from categories where id > 1");
+  await app.keyboard.press("mod+shift+f");
+  await app.waitUntil(() => app.texts().some((x) => x.startsWith("SELECT")), { timeout: 5000 });
+  expect(app.texts().some((x) => x.includes("select id"))).toBe(false);
+  // 格式化后的文本就是要执行的文本
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 3 rows returned"), { timeout: 15000 });
+  app.dispose();
+});
+
 test("SELECT 语句:状态行报告返回行数", async () => {
   const app = await start();
   await replaceSql(app, "SELECT id, name FROM categories");

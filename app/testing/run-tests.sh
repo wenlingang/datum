@@ -3,6 +3,7 @@
 #   app/testing/run-tests.sh            # 全部
 #   app/testing/run-tests.sh tab        # 只跑某一块:workspace | tab | dialogs | chat | rust
 #   app/testing/run-tests.sh core       # 核心(CI 用):rust + 查询/表浏览 + 快捷键 + 连接表单等对话框
+#   app/testing/run-tests.sh native     # 真实窗口里的输入测试(开原生窗口,不在 all 里):快速连续输入不乱序
 # 每块测试各自的夹具:
 #   workspace:两个 SQLite 连接(c-roastery 带 9 张表、c-shop)
 #   tab      :一个 SQLite 连接(dev-sqlite),数据来自 roastery-seed.sql
@@ -53,6 +54,18 @@ if want dialogs; then
   D="$ROOT/dialogs"; mkdir -p "$D"
   sqlite3 "$D/test.db" "create table t(id integer primary key, name text); insert into t(name) values('a'),('b');"
   run dialogs "$D" dialogs/dialogs.test.tsx
+fi
+
+# 真实窗口:只在显式要求时跑(会开窗口,需要桌面环境)
+if [ "$ONLY" = native ]; then
+  D="$ROOT/native-tab"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
+  echo "==> native-tab"
+  DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" tab/typing.native.test.tsx || FAILED=1
+  D="$ROOT/native-chat"; mkdir -p "$D"
+  echo "==> native-chat"
+  DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" chat/typing.native.test.tsx || FAILED=1
 fi
 
 if want chat; then

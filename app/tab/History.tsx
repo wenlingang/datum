@@ -10,7 +10,7 @@ import { clearHistory, history } from "../store/history";
 import { toast } from "../store/toast";
 import { Btn, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
-import { run, type TabModel } from "./model";
+import { run, setSql, type TabModel } from "./model";
 
 /** 多行 SQL 压缩为单行用于列表展示。 */
 const compress = (sql: string) => sql.split(/\s+/).filter(Boolean).join(" ");
@@ -42,7 +42,7 @@ function meta(e: HistoryEntry): string {
  *  被双击到 prod 连接的 tab 上静默执行是不可接受的。 */
 function pick(m: TabModel, e: HistoryEntry) {
   m.historyOpen.set(false);
-  m.sql.set(e.sql);
+  setSql(m, e.sql);
   if (e.connId === m.connId) run(m, e.sql, true, false);
   else toast.info(t("history.from_other_conn", { name: e.connName }));
 }

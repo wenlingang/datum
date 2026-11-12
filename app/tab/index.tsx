@@ -19,6 +19,7 @@ import {
   run,
   selectionText,
   sendSelectionToAi,
+  setSql,
   toggleFilter,
   viewRows,
 } from "./model";
@@ -104,7 +105,8 @@ export function newQueryTab(sql?: string): WorkTab | undefined {
   if (!tab) return undefined;
   addTab(tab);
   if (!conns.isConnected(conn.id)) void loadTables(conn.id);
-  if (sql) modelOf(tab)?.sql.set(sql);
+  const model = modelOf(tab);
+  if (sql && model) setSql(model, sql);
   return tab;
 }
 
@@ -171,7 +173,7 @@ export function insertAndRun(sql: string, connId: string, confirmed: boolean) {
   const m = modelOf(tab);
   if (!tab || !m || tab.connId !== connId) return;
   focusTab(tab);
-  m.sql.set(sql);
+  setSql(m, sql);
   // 未经确认的(静态检查判定为只读而免确认)在只读模式下执行:
   // 静态检查看不穿视图里的写函数等副作用,由数据库兜底拒绝写入
   m.readOnlyNext = !confirmed;
