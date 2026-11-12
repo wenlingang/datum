@@ -427,3 +427,12 @@ export interface DiagResult {
   rows: (string | null)[][];
   unavailable: { reason: string; detail: string | null } | null;
 }
+
+/** 自然语言筛选的转换结果(条件已在原生侧校验过列名与操作符)。 */
+export interface NlFilter {
+  conj: Conj;
+  filters: { col: string; op: FilterOp; value: string }[];
+  note: string | null;
+  /** 被丢弃的条件(列不存在、操作符不支持等) */
+  dropped: string[];
+}

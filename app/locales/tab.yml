@@ -1,5 +1,29 @@
 _version: 2
 filter:
+  nl_placeholder:
+    en: "Describe it in a sentence, e.g. last 7 days, status failed, amount over 100 — Enter to let AI build the conditions"
+    zh-CN: "用一句话描述,如:最近 7 天、状态失败、金额大于 100 —— 回车让 AI 生成条件"
+    zh-TW: "用一句話描述,如:最近 7 天、狀態失敗、金額大於 100 —— Enter 讓 AI 產生條件"
+  nl_go:
+    en: AI Filter
+    zh-CN: AI 筛选
+    zh-TW: AI 篩選
+  nl_busy:
+    en: Thinking…
+    zh-CN: 生成中…
+    zh-TW: 產生中…
+  nl_not_configured:
+    en: AI provider not configured. Add one in Settings.
+    zh-CN: 还没有配置 AI 服务商,请先在设置里添加。
+    zh-TW: 尚未設定 AI 服務商,請先在設定中新增。
+  nl_nothing:
+    en: Could not turn that into filter conditions; try naming the columns.
+    zh-CN: 没能转换成筛选条件,试试直接说出列名。
+    zh-TW: 沒能轉換成篩選條件,試試直接說出欄位名稱。
+  nl_dropped:
+    en: "Skipped (unknown column or unsupported): %{list}"
+    zh-CN: "已忽略(列不存在或不支持):%{list}"
+    zh-TW: "已忽略(欄位不存在或不支援):%{list}"
   value_placeholder:
     en: "Filter value… press Enter to apply"
     zh-CN: "筛选值…回车应用"

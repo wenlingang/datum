@@ -102,6 +102,16 @@ impl Ai {
         spawn(ai_cmd::ai_list_models(p)).await?.and_then(json)
     }
 
+    /// 表浏览的自然语言筛选:`columns` 为 `[{ name, dataType? }]`,`samples` 为前几行(帮模型认枚举写法)。
+    /// 返回 `{ conj, filters: [{ col, op, value }], note, dropped }`;一次性请求,不进对话历史。
+    pub async fn nl_filter(question: String, columns: JsonValue, samples: JsonValue) -> Result<JsonValue, String> {
+        let cols: Vec<datum_core::ai::nl_filter::ColumnInfo> = from(columns, "columns")?;
+        let rows: Vec<Vec<Option<String>>> = from(samples, "samples")?;
+        spawn(async move { datum_core::ai::nl_filter::translate(&state(), &question, &cols, &rows).await })
+            .await?
+            .and_then(json)
+    }
+
     /// 知识库文档(项目约定,拼进 system prompt)。
     pub fn knowledge() -> Result<JsonValue, String> {
         json(ai_cmd::ai_read_knowledge(&state()))

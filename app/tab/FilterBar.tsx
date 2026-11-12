@@ -1,17 +1,18 @@
 // 结果区筛选条:条件之间用统一的连接词(且/或),编辑只改草稿,
 // 点「应用」或在值输入框回车才作用到结果。对应 GPUI 版 tab/filter.rs。
 
-import { Text, View } from "nsh";
+import { signal, Text, View } from "nsh";
 import { Button } from "nsh/base";
 import { t } from "nsh/i18n";
 import { FILTER_OPS, type FilterOp } from "../lib/types";
-import { Btn, IconButton, TextField } from "../ui/kit";
+import { Btn, Icon, IconButton, TextField } from "../ui/kit";
 import { FS } from "../ui/text";
 import {
   filterAdd,
   filterApply,
   filterClear,
   filterDirty,
+  filterFromText,
   filterPreviewCount,
   removeDraft,
   updateDraft,
@@ -40,8 +41,40 @@ export function FilterBar(props: { m: TabModel }) {
   const columns = () => m.result()?.columns ?? [];
   const total = () => m.result()?.rows.length ?? 0;
   const canClear = () => m.drafts().length > 0 || m.applied().length > 0;
+  const nl = signal("");
   return (
-    <View class="max-h-[220px] shrink-0 gap-2 border-b border-border bg-panel px-5 py-3">
+    <View class="max-h-[260px] shrink-0 gap-2 border-b border-border bg-panel px-5 py-3">
+      {/* 自然语言筛选:一句话交给 AI,转成下面的且/或条件 */}
+      <View class="flex-row items-center gap-2">
+        <View class="w-9 shrink-0 items-center">
+          <Icon name="sparkles" size={14} color="ai" />
+        </View>
+        <TextField
+          testID="filter-nl"
+          class="h-7 min-w-0 flex-1"
+          placeholder={t("filter.nl_placeholder")}
+          value={nl()}
+          disabled={m.nlBusy()}
+          onChange={({ value }) => nl.set(value)}
+          onSubmit={() => void filterFromText(m, nl())}
+        />
+        <Btn
+          small
+          testID="filter-nl-go"
+          variant="ai"
+          icon={m.nlBusy() ? "loader-circle" : "wand-sparkles"}
+          disabled={m.nlBusy() || nl().trim() === ""}
+          label={m.nlBusy() ? t("filter.nl_busy") : t("filter.nl_go")}
+          onPress={() => void filterFromText(m, nl())}
+        />
+      </View>
+      <If when={m.nlNote()}>
+        {(n) => (
+          <Text testID="filter-nl-note" class={`${FS.xs} pl-11`} classList={{ "text-negative": n().error, "text-muted-foreground": !n().error }}>
+            {n().text}
+          </Text>
+        )}
+      </If>
       <Each of={m.drafts()} key={(d) => d.id}>
         {(d, i) => (
           <View class="flex-row items-center gap-2">

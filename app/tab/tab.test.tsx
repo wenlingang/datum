@@ -238,3 +238,14 @@ test("数据库诊断:概览卡片、完整性检查手动运行、VACUUM 先确
   await app.press("id:diag-confirm-ok");
   await app.waitUntil(() => app.texts().includes("VACUUM finished"), { timeout: 10000 });
 });
+
+test("自然语言筛选:没配置 AI 时提示去设置", async () => {
+  const app = await start();
+  await app.press("id:tab:products");
+  await app.waitUntil(() => app.texts().includes("Coffee 2"), { timeout: 15000 });
+  await app.keyboard.press("mod+f");
+  await app.waitFor("id:filter-nl", { timeout: 5000 });
+  await app.type("id:filter-nl", "status failed");
+  await app.press("id:filter-nl-go");
+  await app.waitUntil(() => app.texts().includes("AI provider not configured. Add one in Settings."), { timeout: 5000 });
+});

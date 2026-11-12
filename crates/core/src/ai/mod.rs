@@ -5,6 +5,7 @@ pub mod commands;
 pub mod db_tools;
 pub mod gemini;
 pub mod markdown;
+pub mod nl_filter;
 pub mod openai;
 pub mod presets;
 pub mod prompt;

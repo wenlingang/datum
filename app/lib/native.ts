@@ -27,6 +27,7 @@ import type {
   DiagAction,
   DiagResult,
   DiagSection,
+  NlFilter,
 } from "./types";
 
 export const store = {
@@ -114,6 +115,9 @@ export const ai = {
     Ai.chat(messages, (e) => onEvent(e as ChatEvent)),
   /** 停止当前对话(回复以已收到的内容结束)。 */
   stopChat: () => Ai.stopChat(),
+  /** 表浏览的自然语言筛选:一句话 → 且/或筛选条件。 */
+  nlFilter: async (question: string, columns: { name: string; dataType: string | null }[], samples: (string | null)[][]) =>
+    (await Ai.nlFilter(question, columns, samples)) as NlFilter,
   /** 带工具的对话:AI 可在连接 `id` 上列表、看表结构、跑只读查询。 */
   agentChat: (kind: DbKind, id: string, messages: { role: string; content: string }[], onEvent: (e: AgentEvent) => void) =>
     Ai.agentChat(kind, id, messages, (e) => onEvent(e as AgentEvent)),

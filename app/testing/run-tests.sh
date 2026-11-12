@@ -48,6 +48,17 @@ if want tab; then
   printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
+  # 自然语言筛选:本地起一个 OpenAI 兼容的假服务,固定回一段筛选 JSON
+  D="$ROOT/tab-nl"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
+  printf '%s' '{"conj":"and","filters":[{"col":"Origin","op":"eq","value":"Kenya"},{"col":"roast_level","op":"eq","value":"medium"},{"col":"rating","op":"gt","value":"4"}],"note":"rating 列不存在"}' > "$D/reply.txt"
+  python3 "$HERE/ai-mock.py" "$D/reply.txt" "$D/requests.log" "$D/port" & MOCK=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$D/port" ] && break; sleep 0.2; done
+  printf '{"providers":[{"id":"mock","name":"Mock","protocol":"openai","baseUrl":"http://127.0.0.1:%s","apiKey":"sk-test","enabled":true,"models":[{"id":"mock-model","enabled":true}]}],"current":{"providerId":"mock","model":"mock-model"}}' "$(cat "$D/port")" > "$D/ai_settings.json"
+  run tab-nl "$D" tab/nl.test.tsx
+  kill $MOCK 2>/dev/null; wait $MOCK 2>/dev/null || true
+  grep -q 'Request: Kenya medium' "$D/requests.log" || { echo "nl filter: 请求里没有用户原话"; FAILED=1; }
 fi
 
 if want dialogs; then

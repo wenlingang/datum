@@ -12,7 +12,7 @@ import { batch, signal, type Signal } from "nsh";
 import type { EditorRef, EditorSelection } from "nsh/base";
 import { t } from "nsh/i18n";
 import { askAiExplainPlan, askAiFixError, planText, sendToAi } from "../chat/index";
-import { db, errorText, grid, redisKey, sql as sqlText } from "../lib/native";
+import { ai, db, errorText, grid, redisKey, sql as sqlText } from "../lib/native";
 import {
   type CellEdit,
   type Conj,
@@ -133,6 +133,9 @@ export interface TabModel {
   readonly conj: Signal<Conj>;
   readonly applied: Signal<FilterRow[]>;
   readonly appliedConj: Signal<Conj>;
+  /** 自然语言筛选:转换中 / 转换后的说明(模型备注、丢弃的条件)或错误 */
+  readonly nlBusy: Signal<boolean>;
+  readonly nlNote: Signal<{ error: boolean; text: string } | null>;
 
   // 工具条浮层与弹窗
   readonly limitOpen: Signal<boolean>;
@@ -186,6 +189,8 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     conj: signal<Conj>("and"),
     applied: signal<FilterRow[]>([]),
     appliedConj: signal<Conj>("and"),
+    nlBusy: signal(false),
+    nlNote: signal<{ error: boolean; text: string } | null>(null),
     limitOpen: signal(false),
     historyOpen: signal(false),
     risk: signal<RiskGate | null>(null),
@@ -364,6 +369,7 @@ function resetFilter(m: TabModel) {
     m.conj.set("and");
     m.appliedConj.set("and");
     m.filterOpen.set(false);
+    m.nlNote.set(null);
   });
 }
 
@@ -790,6 +796,54 @@ export function filterClear(m: TabModel) {
     resetFilter(m);
     m.selectedRow.set(null);
   });
+}
+
+/** 发给 AI 的样例行数(帮它认出枚举值的写法)。 */
+const NL_SAMPLE_ROWS = 5;
+
+/** 自然语言筛选:一句话交给 AI 转成且/或条件,替换草稿并应用;条件留在筛选条上可见可改。 */
+export async function filterFromText(m: TabModel, text: string) {
+  const result = m.result();
+  const question = text.trim();
+  if (!result || !question || m.nlBusy()) return;
+  if (!ai.status().ready) {
+    m.nlNote.set({ error: true, text: t("filter.nl_not_configured") });
+    return;
+  }
+  const token = m.token;
+  batch(() => {
+    m.nlBusy.set(true);
+    m.nlNote.set(null);
+  });
+  try {
+    const types = columnTypes(m);
+    const columns = result.columns.map((name) => ({ name, dataType: types[name] ?? null }));
+    const r = await ai.nlFilter(question, columns, result.rows.slice(0, NL_SAMPLE_ROWS));
+    // 等待期间结果被换掉(翻页、刷新、重新执行):条件可能已不适用,丢弃
+    if (token !== m.token) return;
+    if (r.filters.length === 0) {
+      m.nlNote.set({ error: true, text: r.note ?? t("filter.nl_nothing") });
+      return;
+    }
+    batch(() => {
+      m.drafts.set(
+        r.filters.map((f) => {
+          m.filterSeq += 1;
+          return { id: m.filterSeq, col: f.col, op: f.op, value: f.value };
+        }),
+      );
+      m.conj.set(r.conj);
+      m.filterOpen.set(true);
+    });
+    filterApply(m);
+    const parts = [r.note, r.dropped.length > 0 ? t("filter.nl_dropped", { list: r.dropped.join("; ") }) : null];
+    const info = parts.filter((p): p is string => !!p).join(" ");
+    m.nlNote.set(info ? { error: false, text: info } : null);
+  } catch (e) {
+    m.nlNote.set({ error: true, text: errorText(e) });
+  } finally {
+    m.nlBusy.set(false);
+  }
 }
 
 export function filterPreviewCount(m: TabModel): number {

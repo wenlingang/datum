@@ -331,3 +331,42 @@ async fn list_models_per_protocol() {
     assert_eq!(req.line, "GET /v1beta/models?pageSize=1000");
     assert_eq!(req.header("x-goog-api-key"), Some("sk-test"));
 }
+
+/// 自然语言筛选:按已保存的 AI 设置发一次请求,回复解析成筛选条件(列名纠正、非法条件丢弃)。
+#[tokio::test]
+async fn nl_filter_roundtrip() {
+    use datum_core::ai::nl_filter::{self, ColumnInfo};
+    use datum_core::ai::settings::{AiSettings, AiSettingsRepo};
+    let reply = r#"{"conj":"and","filters":[{"col":"Status","op":"eq","value":"FAILED"},{"col":"amount","op":"gt","value":100},{"col":"nope","op":"eq","value":"x"}]}"#;
+    let frame = serde_json::json!({ "choices": [{ "delta": { "content": reply } }] }).to_string();
+    let (base, req) = mock(200, "text/event-stream", sse(&[&frame, "[DONE]"])).await;
+
+    let dir = std::env::temp_dir().join(format!("datum-nlf-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let settings: AiSettings = serde_json::from_value(serde_json::json!({
+        "providers": [{ "id": "p", "name": "P", "protocol": "openai", "baseUrl": base, "apiKey": "sk-test",
+                        "enabled": true, "models": [{ "id": "m", "enabled": true }] }],
+        "current": { "providerId": "p", "model": "m" }
+    }))
+    .unwrap();
+    AiSettingsRepo::new(&dir).save(&settings).unwrap();
+    let state = datum_core::AppState::new(dir);
+
+    let cols: Vec<ColumnInfo> = ["status", "amount"]
+        .iter()
+        .map(|n| ColumnInfo { name: n.to_string(), data_type: Some("text".into()) })
+        .collect();
+    let samples = vec![vec![Some("FAILED".to_string()), Some("12.5".to_string())]];
+    let r = nl_filter::translate(&state, "失败且金额大于 100", &cols, &samples).await.unwrap();
+    assert_eq!(r.conj, "and");
+    assert_eq!(r.filters.len(), 2);
+    assert_eq!(r.filters[0].col, "status");
+    assert_eq!(r.filters[1].value, "100");
+    assert_eq!(r.dropped, vec!["nope eq x".to_string()]);
+
+    let req = req.await.unwrap();
+    let msgs = req.body["messages"].as_array().unwrap();
+    assert_eq!(msgs[0]["role"], "system");
+    let user = msgs[1]["content"].as_str().unwrap();
+    assert!(user.contains("status (text)") && user.contains("FAILED | 12.5") && user.ends_with("失败且金额大于 100"));
+}

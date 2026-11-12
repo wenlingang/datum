@@ -58,6 +58,10 @@ ai:
       zh-CN: 数据库开发规范(内置默认)
       zh-TW: 資料庫開發規範(內建預設)
   err:
+    nl_filter_unreadable:
+      en: "The AI reply could not be turned into filter conditions; try rephrasing"
+      zh-CN: AI 的回复无法转换成筛选条件,换个说法试试
+      zh-TW: AI 的回覆無法轉換成篩選條件,換個說法試試
     no_chat_models:
       en: The provider returned no usable chat models; you can add one manually
       zh-CN: 服务商未返回可用的对话模型,可手动添加
