@@ -4,13 +4,13 @@
 import { cleanup, Clipboard, Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { dialogsNative, errorText, probeDatabases, store } from "../lib/native";
-import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSL_MODES } from "../lib/types";
+import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSH_AUTHS, type SshAuth, SSL_MODES } from "../lib/types";
 import { activate, loadTables, saveConnection } from "../store/conns";
 import { toast } from "../store/toast";
-import { Btn, DbIcon, envLabel, envToken, Icon, IconButton, TextField } from "../ui/kit";
+import { Btn, DbIcon, envLabel, envToken, Hint, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, type ConnDraft } from "./connection";
-import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField } from "./controls";
+import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField, Toggle } from "./controls";
 
 const TEST_TIMEOUT_SECS = 10;
 
@@ -72,6 +72,17 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
       toast.error(errorText(e));
     }
   }
+
+  async function pickKey() {
+    try {
+      const path = await dialogsNative.pickFile(t("conn_form.ssh_pick_key"), null, []);
+      if (path) set({ sshKeyPath: path });
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  }
+
+  const sshAuthLabel = (a: SshAuth) => t(`conn_form.ssh_auth_${a}`);
 
   async function runTest() {
     if (test().kind === "testing") return;
@@ -195,7 +206,21 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
   async function loadDatabases() {
     const cur = d();
     // 库名本身不参与:输入库名时不必重新连;其余参数变了才重新拉
-    const key = JSON.stringify([cur.kind, cur.host, cur.port, cur.user, cur.password, cur.ssl]);
+    const key = JSON.stringify([
+      cur.kind,
+      cur.host,
+      cur.port,
+      cur.user,
+      cur.password,
+      cur.ssl,
+      cur.ssh,
+      cur.sshHost,
+      cur.sshPort,
+      cur.sshUser,
+      cur.sshAuth,
+      cur.sshKeyPath,
+      cur.sshSecret,
+    ]);
     if (key === dbKey && (dbList().state === "ok" || dbList().state === "loading")) return;
     dbKey = key;
     const mine = ++dbAttempt;
@@ -224,129 +249,222 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
   }
 
   return (
-    <View class="gap-4">
-      <View class="flex-row gap-4">
-        <Field label={t("conn_form.type")}>
-          <Dropdown
-            testID="conn-kind"
-            center
-            items={DB_KINDS.map((k) => ({ value: k, title: KIND_LABEL[k], leading: () => <DbIcon kind={k} size={14} /> }))}
-            value={d().kind}
-            label={KIND_LABEL[d().kind]}
-            accessibilityLabel={t("conn_form.type")}
-            leading={<Icon name={`db-${d().kind}`} size={16} color="primary" />}
-            onChange={(k) => set(withKind(d(), k as ConnDraft["kind"]))}
-          />
-        </Field>
-        <Field label={t("conn_form.name")}>
-          <TextField
-            testID="conn-name"
-            autoFocus
-            value={d().name}
-            placeholder={t("conn_form.name_placeholder")}
-            onChange={({ value }) => set({ name: value })}
-          />
-        </Field>
-      </View>
-
-      <If when={sqlite()}>
-        <Field label={t("conn_form.file_path")} class="">
-          <View class="flex-row gap-2">
-            <TextField
-              testID="conn-file"
-              class="flex-1"
-              value={d().filePath}
-              placeholder={t("conn_form.file_placeholder")}
-              onChange={({ value }) => set({ filePath: value })}
-            />
-            <IconButton
-              icon="folder-open"
-              tooltip={t("conn_form.choose_file")}
-              onPress={pickFile}
-              color="foreground"
-              class="h-8 w-8 border border-input"
-            />
-          </View>
-        </Field>
-      </If>
-
-      <If when={!sqlite()}>
-        <Field label={t("conn_form.env")} class="">
-          <Segmented
-            testID="conn-env"
-            options={ENVS.map((e) => ({ value: e, label: envLabel(e), color: envToken(e) }))}
-            value={d().env}
-            onChange={(env) => set({ env })}
-          />
-        </Field>
-      </If>
-
-      <If when={!sqlite()}>
+    <View class="min-h-0 shrink gap-4">
+      {/* 字段区可滚动:开了 SSH 隧道后表单变高,底部按钮仍留在窗口内 */}
+      <Scroll testID="conn-fields" class="min-h-0 shrink" contentClass="gap-4">
         <View class="flex-row gap-4">
-          <Field label={t("conn_form.host")}>
-            <TextField testID="conn-host" value={d().host} placeholder="127.0.0.1" onChange={({ value }) => set({ host: value })} />
-          </Field>
-          <Field label={t("conn_form.port")} class="shrink-0" style={{ width: 132 }}>
-            <TextField
-              testID="conn-port"
-              value={d().port}
-              placeholder="5432"
-              keyboardType="number-pad"
-              onChange={({ value }) => set({ port: value })}
-            />
-          </Field>
-        </View>
-        <View class="flex-row gap-4">
-          <Field label={t("conn_form.user")}>
-            <TextField testID="conn-user" value={d().user} placeholder="postgres" onChange={({ value }) => set({ user: value })} />
-          </Field>
-          <Field label={t("conn_form.password")}>
-            <MaskedField
-              testID="conn-password"
-              value={d().password}
-              placeholder={props.editing ? t("conn_form.password_keep") : t("conn_form.password_none")}
-              onChange={({ value }) => set({ password: value })}
-            />
-          </Field>
-        </View>
-        <View class="flex-row gap-4">
-          <Field label={t("conn_form.database")}>
-            <SuggestField
-              testID="conn-database"
-              value={d().database}
-              placeholder="postgres"
-              onChange={(database) => set({ database })}
-              onOpen={() => void loadDatabases()}
-              items={dbList().items}
-              state={dbList().state}
-              error={dbList().error}
-              loadingText={t("conn_form.db_loading")}
-              emptyText={t("conn_form.db_none")}
-              toggleLabel={t("conn_form.db_pick")}
-            />
-          </Field>
-          <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
+          <Field label={t("conn_form.type")}>
             <Dropdown
-              testID="conn-ssl"
+              testID="conn-kind"
               center
-              items={SSL_MODES.map((m) => ({ value: m, title: sslLabel(m) }))}
-              value={d().ssl}
-              label={sslLabel(d().ssl)}
-              accessibilityLabel={t("conn_form.ssl_mode")}
-              tooltip={d().kind === "redis" ? t("conn_form.ssl_redis_hint") : t("conn_form.ssl_hint")}
-              leading={<Icon name={d().ssl === "disable" ? "lock-open" : "lock"} size={15} color="foreground" />}
-              onChange={(m) => set({ ssl: m as ConnDraft["ssl"] })}
+              items={DB_KINDS.map((k) => ({ value: k, title: KIND_LABEL[k], leading: () => <DbIcon kind={k} size={14} /> }))}
+              value={d().kind}
+              label={KIND_LABEL[d().kind]}
+              accessibilityLabel={t("conn_form.type")}
+              leading={<Icon name={`db-${d().kind}`} size={16} color="primary" />}
+              onChange={(k) => set(withKind(d(), k as ConnDraft["kind"]))}
+            />
+          </Field>
+          <Field label={t("conn_form.name")}>
+            <TextField
+              testID="conn-name"
+              autoFocus
+              value={d().name}
+              placeholder={t("conn_form.name_placeholder")}
+              onChange={({ value }) => set({ name: value })}
             />
           </Field>
         </View>
-      </If>
 
-      <View class="flex-row items-center gap-2.5 rounded-(--radius) border border-border bg-background px-3.5 py-3">
-        <Icon name="link-2" size={14} color="fg-faint" />
-        <Text testID="conn-preview" class={`${FS.xs} ${MONO} flex-1 text-muted-foreground line-clamp-1`}>
-          {preview()}
-        </Text>
-      </View>
+        <If when={sqlite()}>
+          <Field label={t("conn_form.file_path")} class="">
+            <View class="flex-row gap-2">
+              <TextField
+                testID="conn-file"
+                class="flex-1"
+                value={d().filePath}
+                placeholder={t("conn_form.file_placeholder")}
+                onChange={({ value }) => set({ filePath: value })}
+              />
+              <IconButton
+                icon="folder-open"
+                tooltip={t("conn_form.choose_file")}
+                onPress={pickFile}
+                color="foreground"
+                class="h-8 w-8 border border-input"
+              />
+            </View>
+          </Field>
+        </If>
+
+        <If when={!sqlite()}>
+          <Field label={t("conn_form.env")} class="">
+            <Segmented
+              testID="conn-env"
+              options={ENVS.map((e) => ({ value: e, label: envLabel(e), color: envToken(e) }))}
+              value={d().env}
+              onChange={(env) => set({ env })}
+            />
+          </Field>
+        </If>
+
+        <If when={!sqlite()}>
+          <View class="flex-row gap-4">
+            <Field label={t("conn_form.host")}>
+              <TextField testID="conn-host" value={d().host} placeholder="127.0.0.1" onChange={({ value }) => set({ host: value })} />
+            </Field>
+            <Field label={t("conn_form.port")} class="shrink-0" style={{ width: 132 }}>
+              <TextField
+                testID="conn-port"
+                value={d().port}
+                placeholder="5432"
+                keyboardType="number-pad"
+                onChange={({ value }) => set({ port: value })}
+              />
+            </Field>
+          </View>
+          <View class="flex-row gap-4">
+            <Field label={t("conn_form.user")}>
+              <TextField testID="conn-user" value={d().user} placeholder="postgres" onChange={({ value }) => set({ user: value })} />
+            </Field>
+            <Field label={t("conn_form.password")}>
+              <MaskedField
+                testID="conn-password"
+                value={d().password}
+                placeholder={props.editing ? t("conn_form.password_keep") : t("conn_form.password_none")}
+                onChange={({ value }) => set({ password: value })}
+              />
+            </Field>
+          </View>
+          <View class="flex-row gap-4">
+            <Field label={t("conn_form.database")}>
+              <SuggestField
+                testID="conn-database"
+                value={d().database}
+                placeholder="postgres"
+                onChange={(database) => set({ database })}
+                onOpen={() => void loadDatabases()}
+                items={dbList().items}
+                state={dbList().state}
+                error={dbList().error}
+                loadingText={t("conn_form.db_loading")}
+                emptyText={t("conn_form.db_none")}
+                toggleLabel={t("conn_form.db_pick")}
+              />
+            </Field>
+            <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
+              <Dropdown
+                testID="conn-ssl"
+                center
+                items={SSL_MODES.map((m) => ({ value: m, title: sslLabel(m) }))}
+                value={d().ssl}
+                label={sslLabel(d().ssl)}
+                accessibilityLabel={t("conn_form.ssl_mode")}
+                tooltip={d().kind === "redis" ? t("conn_form.ssl_redis_hint") : t("conn_form.ssl_hint")}
+                leading={<Icon name={d().ssl === "disable" ? "lock-open" : "lock"} size={15} color="foreground" />}
+                onChange={(m) => set({ ssl: m as ConnDraft["ssl"] })}
+              />
+            </Field>
+          </View>
+        </If>
+
+
+        <If when={!sqlite()}>
+          <View class="gap-3">
+            <Toggle
+              testID="conn-ssh"
+              checked={d().ssh}
+              label={t("conn_form.ssh")}
+              onChange={(ssh) => set({ ssh })}
+            />
+            <If when={d().ssh}>
+              <View testID="conn-ssh-fields" class="gap-3 rounded-(--radius) border border-border bg-background px-3.5 py-3">
+                <View class="flex-row gap-4">
+                  <Field label={t("conn_form.ssh_host")}>
+                    <TextField
+                      testID="conn-ssh-host"
+                      value={d().sshHost}
+                      placeholder="bastion.example.com"
+                      onChange={({ value }) => set({ sshHost: value })}
+                    />
+                  </Field>
+                  <Field label={t("conn_form.port")} class="shrink-0" style={{ width: 132 }}>
+                    <TextField
+                      testID="conn-ssh-port"
+                      value={d().sshPort}
+                      placeholder="22"
+                      keyboardType="number-pad"
+                      onChange={({ value }) => set({ sshPort: value })}
+                    />
+                  </Field>
+                </View>
+                <View class="flex-row gap-4">
+                  <Field label={t("conn_form.ssh_user")}>
+                    <TextField
+                      testID="conn-ssh-user"
+                      value={d().sshUser}
+                      placeholder="ubuntu"
+                      onChange={({ value }) => set({ sshUser: value })}
+                    />
+                  </Field>
+                  <Field label={t("conn_form.ssh_auth")} class="shrink-0" style={{ width: 240 }}>
+                    <Segmented
+                      testID="conn-ssh-auth"
+                      options={SSH_AUTHS.map((a) => ({ value: a, label: sshAuthLabel(a) }))}
+                      value={d().sshAuth}
+                      onChange={(sshAuth) => set({ sshAuth })}
+                    />
+                  </Field>
+                </View>
+                <If when={d().sshAuth === "key"}>
+                  <Field label={t("conn_form.ssh_key_path")} class="">
+                    <View class="flex-row gap-2">
+                      <TextField
+                        testID="conn-ssh-key"
+                        class="flex-1"
+                        value={d().sshKeyPath}
+                        placeholder={t("conn_form.ssh_key_placeholder")}
+                        onChange={({ value }) => set({ sshKeyPath: value })}
+                      />
+                      <IconButton
+                        icon="folder-open"
+                        tooltip={t("conn_form.choose_file")}
+                        onPress={pickKey}
+                        color="foreground"
+                        class="h-8 w-8 border border-input"
+                      />
+                    </View>
+                  </Field>
+                </If>
+                <If when={d().sshAuth !== "agent"}>
+                  <Field label={d().sshAuth === "key" ? t("conn_form.ssh_passphrase") : t("conn_form.ssh_password")} class="">
+                    <MaskedField
+                      testID="conn-ssh-secret"
+                      value={d().sshSecret}
+                      placeholder={
+                        props.editing
+                          ? t("conn_form.password_keep")
+                          : d().sshAuth === "key"
+                            ? t("conn_form.ssh_passphrase_none")
+                            : t("conn_form.password_none")
+                      }
+                      onChange={({ value }) => set({ sshSecret: value })}
+                    />
+                  </Field>
+                </If>
+                <Hint class={FS.xs}>{t("conn_form.ssh_hint")}</Hint>
+              </View>
+            </If>
+          </View>
+        </If>
+
+        <View class="flex-row items-center gap-2.5 rounded-(--radius) border border-border bg-background px-3.5 py-3">
+          <Icon name="link-2" size={14} color="fg-faint" />
+          <Text testID="conn-preview" class={`${FS.xs} ${MONO} flex-1 text-muted-foreground line-clamp-1`}>
+            {preview()}
+          </Text>
+        </View>
+      </Scroll>
 
       <If when={error()}>
         {(e) => (

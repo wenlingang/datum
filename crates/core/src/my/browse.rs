@@ -109,8 +109,7 @@ mod tests {
         let pool = MyPool::default();
         pool.connect(
             "t",
-            &h,
-            port,
+            &crate::ssh::Target::direct(&h, port),
             &u,
             &pw,
             &db,

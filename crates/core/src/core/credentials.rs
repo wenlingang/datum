@@ -54,6 +54,53 @@ pub fn delete_password<B: SecretBackend>(backend: &B, conn: &Connection) -> AppR
     }
 }
 
+fn ssh_account_key(conn: &Connection) -> String {
+    format!("ssh:{}:{}", conn.env_label(), conn.id)
+}
+
+/// 保存 SSH 密码 / 私钥密码短语:Local 留在 `ssh.secret`;其余写钥匙串并清空该字段。
+/// 没有 SSH 配置时不做任何事。
+pub fn save_ssh_secret<B: SecretBackend>(
+    backend: &B,
+    mut conn: Connection,
+    secret: &str,
+) -> AppResult<Connection> {
+    let plaintext = conn.env.stores_password_in_plaintext();
+    let account = ssh_account_key(&conn);
+    let Some(ssh) = conn.ssh.as_mut() else {
+        return Ok(conn);
+    };
+    if plaintext {
+        ssh.secret = Some(secret.to_string());
+    } else {
+        ssh.secret = None;
+        backend.set(SERVICE, &account, secret)?;
+    }
+    Ok(conn)
+}
+
+/// 取 SSH 密钥:Local 从 `ssh.secret`;其余从钥匙串。缺失视为空
+/// (无密码短语的私钥、agent 认证都不需要)。
+pub fn load_ssh_secret<B: SecretBackend>(backend: &B, conn: &Connection) -> AppResult<String> {
+    let Some(ssh) = conn.ssh.as_ref() else {
+        return Ok(String::new());
+    };
+    if conn.env.stores_password_in_plaintext() {
+        Ok(ssh.secret.clone().unwrap_or_default())
+    } else {
+        Ok(backend.get(SERVICE, &ssh_account_key(conn))?.unwrap_or_default())
+    }
+}
+
+/// 删除 SSH 密钥:Local 无需操作;其余从钥匙串删除(不存在也不报错)。
+pub fn delete_ssh_secret<B: SecretBackend>(backend: &B, conn: &Connection) -> AppResult<()> {
+    if conn.env.stores_password_in_plaintext() {
+        Ok(())
+    } else {
+        backend.delete(SERVICE, &ssh_account_key(conn))
+    }
+}
+
 pub struct KeyringBackend;
 impl SecretBackend for KeyringBackend {
     fn set(&self, service: &str, account: &str, secret: &str) -> AppResult<()> {
@@ -127,6 +174,7 @@ mod tests {
             ssl_mode: Default::default(),
             uri: None,
             auth_source: None,
+            ssh: None,
         }
     }
 
@@ -154,6 +202,45 @@ mod tests {
         assert_eq!(saved.plaintext_password, None);
         assert_eq!(b.store.borrow().len(), 1);
         assert_eq!(load_password(&b, &saved).unwrap(), "pw");
+    }
+
+    fn with_ssh(mut c: Connection) -> Connection {
+        c.ssh = Some(crate::core::connection::SshTunnel {
+            host: "bastion".into(),
+            port: 22,
+            user: "ops".into(),
+            ..Default::default()
+        });
+        c
+    }
+
+    #[test]
+    fn ssh_secret_local_plaintext_prod_keychain() {
+        let b = FakeBackend::default();
+        let local = save_ssh_secret(&b, with_ssh(conn(Env::Local)), "s1").unwrap();
+        assert_eq!(local.ssh.as_ref().unwrap().secret.as_deref(), Some("s1"));
+        assert!(b.store.borrow().is_empty());
+        assert_eq!(load_ssh_secret(&b, &local).unwrap(), "s1");
+
+        let prod = save_ssh_secret(&b, with_ssh(conn(Env::Prod)), "s2").unwrap();
+        assert_eq!(prod.ssh.as_ref().unwrap().secret, None);
+        assert_eq!(load_ssh_secret(&b, &prod).unwrap(), "s2");
+        // 与数据库密码分开存
+        let prod = save_password(&b, prod, "dbpw").unwrap();
+        assert_eq!(load_password(&b, &prod).unwrap(), "dbpw");
+        assert_eq!(load_ssh_secret(&b, &prod).unwrap(), "s2");
+        delete_ssh_secret(&b, &prod).unwrap();
+        assert_eq!(load_ssh_secret(&b, &prod).unwrap(), "");
+        assert_eq!(load_password(&b, &prod).unwrap(), "dbpw");
+    }
+
+    #[test]
+    fn ssh_secret_missing_is_empty_and_no_ssh_is_noop() {
+        let b = FakeBackend::default();
+        assert_eq!(load_ssh_secret(&b, &with_ssh(conn(Env::Prod))).unwrap(), "");
+        let plain = save_ssh_secret(&b, conn(Env::Prod), "x").unwrap();
+        assert!(plain.ssh.is_none());
+        assert!(b.store.borrow().is_empty());
     }
 
     #[test]

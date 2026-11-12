@@ -423,6 +423,70 @@ settings:
 
 # 新建/编辑连接(dialogs/connection_form.rs)
 conn_form:
+  ssh:
+    en: Connect through an SSH tunnel
+    zh-CN: 通过 SSH 隧道连接
+    zh-TW: 透過 SSH 通道連線
+  ssh_host:
+    en: SSH Host
+    zh-CN: 跳板机地址
+    zh-TW: 跳板機位址
+  ssh_user:
+    en: SSH User
+    zh-CN: SSH 用户名
+    zh-TW: SSH 使用者名稱
+  ssh_auth:
+    en: Authentication
+    zh-CN: 认证方式
+    zh-TW: 認證方式
+  ssh_auth_password:
+    en: Password
+    zh-CN: 密码
+    zh-TW: 密碼
+  ssh_auth_key:
+    en: Key
+    zh-CN: 私钥
+    zh-TW: 私鑰
+  ssh_auth_agent:
+    en: Agent
+    zh-CN: Agent
+    zh-TW: Agent
+  ssh_key_path:
+    en: Private Key
+    zh-CN: 私钥文件
+    zh-TW: 私鑰檔案
+  ssh_key_placeholder:
+    en: "Default: ~/.ssh/id_ed25519, id_ecdsa or id_rsa"
+    zh-CN: 留空则用 ~/.ssh/id_ed25519、id_ecdsa 或 id_rsa
+    zh-TW: 留空則用 ~/.ssh/id_ed25519、id_ecdsa 或 id_rsa
+  ssh_pick_key:
+    en: Choose SSH Private Key
+    zh-CN: 选择 SSH 私钥
+    zh-TW: 選擇 SSH 私鑰
+  ssh_password:
+    en: SSH Password
+    zh-CN: SSH 密码
+    zh-TW: SSH 密碼
+  ssh_passphrase:
+    en: Passphrase
+    zh-CN: 私钥密码短语
+    zh-TW: 私鑰密碼短語
+  ssh_passphrase_none:
+    en: Leave empty if the key has no passphrase
+    zh-CN: 私钥没有密码短语就留空
+    zh-TW: 私鑰沒有密碼短語就留空
+  ssh_hint:
+    en: "Host and port above are the database as seen from the SSH server (often 127.0.0.1 or an internal address). Secrets are stored like the database password: in the system keychain for staging / prod."
+    zh-CN: 上面的主机和端口填跳板机视角下的数据库地址(常见是 127.0.0.1 或内网地址)。SSH 密码与数据库密码一样,staging / prod 存在系统钥匙串。
+    zh-TW: 上面的主機與連接埠填跳板機視角下的資料庫位址(常見是 127.0.0.1 或內網位址)。SSH 密碼與資料庫密碼一樣,staging / prod 存在系統鑰匙圈。
+  ssh_host_required:
+    en: Enter the SSH host
+    zh-CN: 请填写跳板机地址
+    zh-TW: 請填寫跳板機位址
+  ssh_user_required:
+    en: Enter the SSH user
+    zh-CN: 请填写 SSH 用户名
+    zh-TW: 請填寫 SSH 使用者名稱
   db_pick:
     en: List databases on this server
     zh-CN: 列出实例上的库

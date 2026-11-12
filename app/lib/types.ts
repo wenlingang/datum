@@ -44,6 +44,22 @@ export interface Connection {
   sslMode: SslMode;
   uri?: string | null;
   authSource?: string | null;
+  /** 经 SSH 跳板机连接;缺省 / null 为直连 */
+  ssh?: SshTunnel | null;
+}
+
+export type SshAuth = "password" | "key" | "agent";
+export const SSH_AUTHS: SshAuth[] = ["password", "key", "agent"];
+
+export interface SshTunnel {
+  host: string;
+  port: number;
+  user: string;
+  auth: SshAuth;
+  /** 私钥路径;空则用 ~/.ssh 下的默认私钥 */
+  keyPath: string;
+  /** SSH 密码 / 私钥密码短语:保存时 null 为沿用原值;从 core 读回来的永远是 null */
+  secret?: string | null;
 }
 
 export interface HistoryEntry {

@@ -77,6 +77,50 @@ core:
       en: "Timed out: the server did not respond to the handshake (check that the SSL mode matches the server)"
       zh-CN: 连接超时:服务器未响应握手(请检查 SSL 模式是否与服务器一致)
       zh-TW: 連線逾時:伺服器未回應交握(請檢查 SSL 模式是否與伺服器一致)
+    ssh_connect_failed:
+      en: Could not connect to the SSH server
+      zh-CN: 无法连接 SSH 跳板机
+      zh-TW: 無法連線 SSH 跳板機
+    ssh_timeout:
+      en: "Timed out: the SSH server did not respond within 10 seconds"
+      zh-CN: 连接超时:SSH 跳板机 10 秒内没有响应
+      zh-TW: 連線逾時:SSH 跳板機 10 秒內沒有回應
+    ssh_auth_failed:
+      en: "SSH authentication failed: check the user, password or key"
+      zh-CN: SSH 认证失败:请检查用户名、密码或私钥
+      zh-TW: SSH 認證失敗:請檢查使用者名稱、密碼或私鑰
+    ssh_host_key_changed:
+      en: "The SSH server's host key has changed and does not match the recorded one. This may be a man-in-the-middle attack; if the server was reinstalled, remove the old entry from known_hosts"
+      zh-CN: SSH 跳板机的主机指纹与记录不一致,可能遭到中间人攻击;若服务器确实重装过,请从 known_hosts 删除旧记录
+      zh-TW: SSH 跳板機的主機指紋與記錄不一致,可能遭到中間人攻擊;若伺服器確實重灌過,請從 known_hosts 刪除舊記錄
+    ssh_known_hosts_unreadable:
+      en: "Could not verify the SSH server's host key: its known_hosts entry could not be read or recorded"
+      zh-CN: 无法确认 SSH 跳板机的主机指纹:known_hosts 中的记录读取或写入失败
+      zh-TW: 無法確認 SSH 跳板機的主機指紋:known_hosts 中的記錄讀取或寫入失敗
+    ssh_key_not_found:
+      en: "SSH private key not found (with no path given, ~/.ssh/id_ed25519, id_ecdsa and id_rsa are tried)"
+      zh-CN: 找不到 SSH 私钥(未填路径时依次查找 ~/.ssh/id_ed25519、id_ecdsa、id_rsa)
+      zh-TW: 找不到 SSH 私鑰(未填路徑時依序尋找 ~/.ssh/id_ed25519、id_ecdsa、id_rsa)
+    ssh_key_encrypted:
+      en: "The SSH private key is protected by a passphrase: enter it in the passphrase field"
+      zh-CN: SSH 私钥有密码短语保护,请填写密码短语
+      zh-TW: SSH 私鑰有密碼短語保護,請填寫密碼短語
+    ssh_key_invalid:
+      en: "Could not read the SSH private key (wrong passphrase or unsupported format)"
+      zh-CN: 无法读取 SSH 私钥(密码短语错误或格式不支持)
+      zh-TW: 無法讀取 SSH 私鑰(密碼短語錯誤或格式不支援)
+    ssh_rsa_unsupported:
+      en: "RSA SSH keys are not supported yet: use an ed25519 or ecdsa key (ssh-keygen -t ed25519)"
+      zh-CN: 暂不支持 RSA 类型的 SSH 私钥,请改用 ed25519 或 ecdsa 私钥(ssh-keygen -t ed25519)
+      zh-TW: 暫不支援 RSA 類型的 SSH 私鑰,請改用 ed25519 或 ecdsa 私鑰(ssh-keygen -t ed25519)
+    ssh_agent_unavailable:
+      en: Could not reach the SSH agent
+      zh-CN: 无法连接 ssh-agent
+      zh-TW: 無法連線 ssh-agent
+    ssh_forward_failed:
+      en: "The SSH server could not reach the database (check the database host and port as seen from the SSH server)"
+      zh-CN: 跳板机连不到数据库(主机和端口要填跳板机视角下的地址)
+      zh-TW: 跳板機連不到資料庫(主機與連接埠要填跳板機視角下的位址)
     invalid_redis_url:
       en: Invalid Redis connection string
       zh-CN: 无效的 Redis 连接串

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use tokio_postgres::config::SslMode as PgSslMode;
 use tokio_postgres::{Client, Config, SimpleQueryMessage};
+use crate::ssh::Target;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
 /// 按 SSL 模式设置握手策略:禁用 / 优先(服务器不支持就退回明文)/ 必须。
@@ -88,21 +89,28 @@ fn describe(e: &tokio_postgres::Error) -> String {
     s
 }
 
+/// 连接地址:走 SSH 隧道时实际连本地转发端口(hostaddr),
+/// 主机名仍填数据库的原主机名,证书与 SNI 按它校验。
+pub fn apply_target(cfg: &mut Config, target: &Target) {
+    cfg.host(&target.tls_host).port(target.port);
+    if target.tunneled() {
+        if let Ok(ip) = target.host.parse::<std::net::IpAddr>() {
+            cfg.hostaddr(ip);
+        }
+    }
+}
+
 /// 用给定参数尝试建立一次连接以验证可达性与认证(不缓存)。
 pub async fn test_connect(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     db: &str,
     ssl: SslMode,
 ) -> AppResult<()> {
     let mut cfg = Config::new();
-    cfg.host(host)
-        .port(port)
-        .user(user)
-        .password(pass)
-        .dbname(db);
+    apply_target(&mut cfg, target);
+    cfg.user(user).password(pass).dbname(db);
     apply_ssl_mode(&mut cfg, ssl);
     // 建连成功(完成握手与认证)即视为连通;立即丢弃。
     let (_client, _connection) = cfg.connect(tls_connector(ssl)).await.map_err(|e| {
@@ -118,8 +126,7 @@ pub async fn test_connect(
 /// 用给定参数临时连接实例,列出可连接的非模板库(新建连接表单里选库用,不缓存)。
 /// 先连 `db`(表单里填的库);它为空或连不上时依次退回 `postgres`、`template1`。
 pub async fn probe_databases(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     db: &str,
@@ -137,7 +144,8 @@ pub async fn probe_databases(
     let mut last_err = None;
     for name in candidates {
         let mut cfg = Config::new();
-        cfg.host(host).port(port).user(user).password(pass).dbname(name);
+        apply_target(&mut cfg, target);
+        cfg.user(user).password(pass).dbname(name);
         apply_ssl_mode(&mut cfg, ssl);
         match cfg.connect(tls_connector(ssl)).await {
             Ok((client, connection)) => {

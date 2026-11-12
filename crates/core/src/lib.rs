@@ -21,6 +21,7 @@ pub mod schema;
 pub mod service;
 pub mod sql;
 pub mod sqlite;
+pub mod ssh;
 pub mod tls;
 
 pub use commands::AppState;

@@ -94,6 +94,47 @@ impl SslMode {
     pub const ALL: [SslMode; 4] = [Self::Disable, Self::Prefer, Self::Require, Self::VerifyFull];
 }
 
+/// SSH 跳板机的认证方式。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SshAuth {
+    #[default]
+    Password,
+    /// 私钥文件,`secret` 为可选的密码短语
+    Key,
+    /// 系统的 ssh-agent(Unix 的 SSH_AUTH_SOCK;Windows 的 OpenSSH agent / Pageant)
+    Agent,
+}
+
+/// 经 SSH 跳板机转发到数据库(PG / MySQL / Redis)。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnel {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    #[serde(default)]
+    pub auth: SshAuth,
+    /// 仅私钥认证:私钥文件路径;空则依次尝试 ~/.ssh/id_ed25519、id_ecdsa、id_rsa
+    #[serde(default)]
+    pub key_path: String,
+    /// SSH 密码或私钥密码短语,规则同数据库密码:仅 Local 明文存这里,其余在钥匙串。
+    /// 前端保存时:Some 为新值,None 为保留原值;返回给前端时永远是 None。
+    #[serde(default)]
+    pub secret: Option<String>,
+}
+
+impl SshTunnel {
+    /// 是否同一跳板机与身份(不比较密钥本身)。
+    pub fn same_endpoint(&self, other: &SshTunnel) -> bool {
+        self.host == other.host
+            && self.port == other.port
+            && self.user == other.user
+            && self.auth == other.auth
+            && self.key_path == other.key_path
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Connection {
@@ -120,9 +161,20 @@ pub struct Connection {
     /// 仅 Mongo 表单模式:认证库,None 等同 "admin"。
     #[serde(default)]
     pub auth_source: Option<String>,
+    /// 经 SSH 隧道连接;None 为直连。SQLite 忽略。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh: Option<SshTunnel>,
 }
 
 impl Connection {
+    /// 需要走的 SSH 隧道(SQLite / Mongo 不走)。
+    pub fn tunnel(&self) -> Option<&SshTunnel> {
+        match self.kind {
+            DbKind::Pg | DbKind::Mysql | DbKind::Redis => self.ssh.as_ref(),
+            DbKind::Sqlite | DbKind::Mongo => None,
+        }
+    }
+
     pub fn env_label(&self) -> &'static str {
         match self.env {
             Env::Local => "local",
@@ -157,6 +209,7 @@ mod tests {
             ssl_mode: Default::default(),
             uri: None,
             auth_source: None,
+            ssh: None,
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: Connection = serde_json::from_str(&json).unwrap();

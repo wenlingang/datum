@@ -1,5 +1,6 @@
 use crate::core::connection::SslMode;
 use crate::error::{AppError, AppResult, ErrorKind};
+use crate::ssh::Target;
 use redis::aio::MultiplexedConnection;
 use redis::FromRedisValue;
 use rust_i18n::t;
@@ -55,15 +56,54 @@ pub fn build_url(host: &str, port: u16, user: &str, pass: &str, db: &str, ssl: S
 }
 
 pub async fn test_connect(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     db: &str,
     ssl: SslMode,
 ) -> AppResult<()> {
-    open(&build_url(host, port, user, pass, db, ssl)).await?;
+    let url = build_url(&target.host, target.port, user, pass, db, ssl);
+    open_target(target, &url, ssl).await?;
     Ok(())
+}
+
+/// 按连接地址建连。走 SSH 隧道且要校验证书时,redis 自己建的 TLS 只能按连接地址
+/// (127.0.0.1)校验主机名,所以这里自己在转发端口上做 TLS 握手,按数据库原主机名校验。
+pub async fn open_target(target: &Target, url: &str, ssl: SslMode) -> AppResult<MultiplexedConnection> {
+    if !(target.tunneled() && ssl == SslMode::VerifyFull) {
+        return open(url).await;
+    }
+    crate::tls::install_default_provider();
+    let info = redis::Client::open(url)
+        .map_err(|e| {
+            AppError::new(ErrorKind::Connection, t!("core.err.invalid_redis_url")).with_detail(e.to_string())
+        })?
+        .get_connection_info()
+        .redis
+        .clone();
+    let failed = |e: String| {
+        AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "Redis")).with_detail(e)
+    };
+    let connect = async {
+        let tcp = tokio::net::TcpStream::connect((target.host.as_str(), target.port))
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        let name = rustls::pki_types::ServerName::try_from(target.tls_host.clone())
+            .map_err(|e| failed(e.to_string()))?;
+        let tls = tokio_rustls::TlsConnector::from(std::sync::Arc::new(crate::tls::client_config(true)))
+            .connect(name, tcp)
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        let (con, driver) = MultiplexedConnection::new(&info, tls)
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        tokio::spawn(driver);
+        Ok(con)
+    };
+    match tokio::time::timeout(CONNECT_TIMEOUT, connect).await {
+        Ok(r) => r,
+        Err(_) => Err(failed(t!("core.err.connect_timeout").to_string())),
+    }
 }
 
 /// 握手 + 认证的总时限。rediss 连到明文端口时服务端不会回应 TLS 握手,不设时限会一直挂住。
@@ -114,6 +154,13 @@ fn format_reply(v: &redis::Value) -> String {
 impl RedisPool {
     pub async fn connect(&self, id: &str, url: &str) -> AppResult<()> {
         let con = open(url).await?;
+        self.conns.lock().await.insert(id.to_string(), con);
+        Ok(())
+    }
+
+    /// 按连接地址建连(可能经 SSH 隧道,见 [`open_target`])。
+    pub async fn connect_target(&self, id: &str, target: &Target, url: &str, ssl: SslMode) -> AppResult<()> {
+        let con = open_target(target, url, ssl).await?;
         self.conns.lock().await.insert(id.to_string(), con);
         Ok(())
     }

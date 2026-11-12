@@ -4,12 +4,13 @@ use crate::core::credentials;
 use crate::core::repository::ConnectionRepo;
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rds::client::{KeyDetail, KeyValue};
+use crate::ssh::Target;
 use rust_i18n::t;
 
-fn build_url(conn: &Connection, password: &str) -> String {
+fn build_url(conn: &Connection, target: &Target, password: &str) -> String {
     crate::rds::client::build_url(
-        &conn.host,
-        conn.port,
+        &target.host,
+        target.port,
         &conn.user,
         password,
         &conn.database,
@@ -24,10 +25,14 @@ pub async fn redis_connect(state: &AppState, id: String) -> AppResult<()> {
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
     let password = credentials::load_password(&state.backend, &conn)?;
+    let (target, tunnel) = crate::ssh::resolve(&conn, &state.ssh_context(&conn)?).await?;
+    let url = build_url(&conn, &target, &password);
     state
         .redis_pool
-        .connect(&id, &build_url(&conn, &password))
-        .await
+        .connect_target(&id, &target, &url, conn.ssl_mode)
+        .await?;
+    state.tunnels.set(&id, tunnel).await;
+    Ok(())
 }
 
 pub async fn redis_scan(state: &AppState, id: String, pattern: String) -> AppResult<Vec<String>> {

@@ -33,7 +33,8 @@ impl Dialogs {
     /// 用表单当前参数(不保存)列出实例下的库,新建/编辑连接时下拉选库。
     pub async fn probe_databases(conn: JsonValue, password: String) -> Result<JsonValue, String> {
         let conn: datum_core::core::connection::Connection = crate::runtime::from(conn, "connection")?;
-        crate::runtime::spawn(async move { datum_core::service::probe_databases(&conn, &password).await })
+        let ssh = crate::conn::ssh_context(&conn);
+        crate::runtime::spawn(async move { datum_core::service::probe_databases(&conn, &password, &ssh).await })
             .await?
             .map_err(crate::runtime::err)
             .and_then(json)

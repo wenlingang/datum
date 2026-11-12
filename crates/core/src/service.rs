@@ -14,6 +14,7 @@ use crate::rds::client::{KeyDetail, KeyValue};
 use crate::schema::{self, ColumnsByTable, ErdSchema};
 use crate::sql::build::{build_insert_row, ident};
 use crate::sql::Dialect;
+pub use crate::ssh::SshContext;
 use crate::{mongo, my, pg, rds, sqlite, AppState};
 use mongodb::bson::{Bson, Document};
 use rust_i18n::t;
@@ -40,6 +41,7 @@ pub async fn connect(state: &AppState, kind: &DbKind, id: &str) -> AppResult<()>
 
 /// 断开并移除连接(服务器侧会话随之终止)。
 pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
+    let tunnel_id = id;
     let id = id.to_string();
     let _ = match kind {
         DbKind::Pg => pg::commands::pg_disconnect(state, id).await,
@@ -51,6 +53,8 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
             Ok(())
         }
     };
+    // 驱动断开后再关隧道
+    state.tunnels.close(tunnel_id).await;
 }
 
 /// 列出对象:关系库为表名,Redis 为全部 key。
@@ -268,14 +272,16 @@ pub async fn redis_exec(state: &AppState, id: &str, command: &str) -> AppResult<
     rds::commands::redis_exec(state, id.to_string(), command.to_string()).await
 }
 
-/// 测试连通性(用表单当前参数,不保存)。
+/// 测试连通性(用表单当前参数,不保存)。配了 SSH 时先建一条临时隧道,测完即关。
 pub async fn test_connection(
     conn: &crate::core::connection::Connection,
     password: &str,
+    ssh: &SshContext,
 ) -> AppResult<()> {
     if conn.kind == DbKind::Mongo {
         return mongo::client::test_connect(&mongo::uri::connect_uris(conn, password)).await;
     }
+    let (target, _tunnel) = crate::ssh::resolve(conn, ssh).await?;
     let kind = match conn.kind {
         DbKind::Pg => "pg",
         DbKind::Mysql => "mysql",
@@ -285,8 +291,7 @@ pub async fn test_connection(
     };
     crate::commands::test_connection(
         kind.into(),
-        conn.host.clone(),
-        conn.port,
+        target,
         conn.user.clone(),
         password.into(),
         conn.database.clone(),
@@ -301,14 +306,16 @@ pub async fn test_connection(
 pub async fn probe_databases(
     conn: &crate::core::connection::Connection,
     password: &str,
+    ssh: &SshContext,
 ) -> AppResult<Vec<String>> {
     match conn.kind {
         DbKind::Pg => {
-            pg::client::probe_databases(&conn.host, conn.port, &conn.user, password, &conn.database, conn.ssl_mode)
-                .await
+            let (target, _tunnel) = crate::ssh::resolve(conn, ssh).await?;
+            pg::client::probe_databases(&target, &conn.user, password, &conn.database, conn.ssl_mode).await
         }
         DbKind::Mysql => {
-            my::client::probe_databases(&conn.host, conn.port, &conn.user, password, conn.ssl_mode).await
+            let (target, _tunnel) = crate::ssh::resolve(conn, ssh).await?;
+            my::client::probe_databases(&target, &conn.user, password, conn.ssl_mode).await
         }
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
         DbKind::Sqlite | DbKind::Mongo => Ok(vec![]),

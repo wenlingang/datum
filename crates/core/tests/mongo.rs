@@ -32,6 +32,7 @@ fn base_conn(id: &str, db: &str) -> Connection {
         ssl_mode: SslMode::Disable,
         uri: None,
         auth_source: None,
+        ssh: None,
     }
 }
 
@@ -263,7 +264,7 @@ async fn uri_mode_and_prefer_fallback_connect() {
     let mut p = base_conn("prefer", "datum_it_uri");
     p.ssl_mode = SslMode::Prefer;
     let started = std::time::Instant::now();
-    service::test_connection(&p, "").await.unwrap();
+    service::test_connection(&p, "", &Default::default()).await.unwrap();
     // 加密探测不能白等完整的 server selection 超时(5s)
     assert!(
         started.elapsed() < std::time::Duration::from_secs(3),
@@ -272,7 +273,7 @@ async fn uri_mode_and_prefer_fallback_connect() {
     );
     let mut r = base_conn("require", "datum_it_uri");
     r.ssl_mode = SslMode::Require;
-    assert!(service::test_connection(&r, "").await.is_err());
+    assert!(service::test_connection(&r, "", &Default::default()).await.is_err());
 }
 
 /// 开了认证的库的端口(`DATUM_MONGO_AUTH`),未设置时相关用例跳过。准备方式:
@@ -313,15 +314,15 @@ async fn wrong_password_is_reported_without_plaintext_fallback() {
     c.ssl_mode = SslMode::Prefer;
     let started = std::time::Instant::now();
     // 服务器没开 TLS:加密探测失败后退回明文,明文这次认证失败,应如实报认证错误
-    let e = service::test_connection(&c, "wrong").await.unwrap_err();
+    let e = service::test_connection(&c, "wrong", &Default::default()).await.unwrap_err();
     assert!(e.display().contains("Authentication"), "{}", e.display());
     assert!(started.elapsed() < std::time::Duration::from_secs(4));
     c.ssl_mode = SslMode::Disable;
     let started = std::time::Instant::now();
-    let e = service::test_connection(&c, "wrong").await.unwrap_err();
+    let e = service::test_connection(&c, "wrong", &Default::default()).await.unwrap_err();
     assert!(e.display().contains("Authentication"), "{}", e.display());
     assert!(started.elapsed() < std::time::Duration::from_secs(2));
-    service::test_connection(&c, "rootpw").await.unwrap();
+    service::test_connection(&c, "rootpw", &Default::default()).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

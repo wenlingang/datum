@@ -45,9 +45,11 @@ impl Store {
     }
 
     /// 用表单当前参数(而非已保存配置)测一次连通性。
+    /// `conn.ssh.secret` 为 null 时(编辑时没改 SSH 密钥)用已保存的。
     pub async fn test_connection(conn: JsonValue, password: String) -> Result<(), String> {
         let conn: Connection = from(conn, "connection")?;
-        spawn(async move { service::test_connection(&conn, &password).await })
+        let ssh = ssh_context(&conn);
+        spawn(async move { service::test_connection(&conn, &password, &ssh).await })
             .await?
             .map_err(err)
     }
@@ -87,5 +89,18 @@ impl Store {
     /// 配置目录(诊断用)。
     pub fn config_dir() -> String {
         state().config_dir.display().to_string()
+    }
+}
+
+/// 表单参数建隧道的上下文:SSH 密钥取表单里填的,没填(null)则用已保存的。
+pub fn ssh_context(conn: &Connection) -> service::SshContext {
+    let st = state();
+    let secret = match conn.ssh.as_ref().and_then(|s| s.secret.clone()) {
+        Some(s) => s,
+        None => core_cmd::saved_ssh_secret(&st, &conn.id).unwrap_or_default(),
+    };
+    service::SshContext {
+        secret,
+        known_hosts: st.known_hosts_path(),
     }
 }

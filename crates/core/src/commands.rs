@@ -21,6 +21,8 @@ pub struct AppState {
     pub my_pool: MyPool,
     pub sqlite_pool: SqlitePool,
     pub mongo_pool: crate::mongo::client::MongoPool,
+    /// 已连接的 SSH 隧道(按连接 id)
+    pub tunnels: crate::ssh::TunnelPool,
 }
 
 impl AppState {
@@ -35,6 +37,7 @@ impl AppState {
             my_pool: MyPool::default(),
             sqlite_pool: SqlitePool::default(),
             mongo_pool: Default::default(),
+            tunnels: Default::default(),
         }
     }
 
@@ -44,6 +47,19 @@ impl AppState {
         dirs::config_dir()
             .unwrap_or_else(|| std::env::temp_dir())
             .join("com.dbstudio.app")
+    }
+
+    /// Datum 自己的 known_hosts(首次连接的跳板机指纹记在这里,不动用户的 ~/.ssh)。
+    pub fn known_hosts_path(&self) -> PathBuf {
+        self.config_dir.join("known_hosts")
+    }
+
+    /// 已保存连接建隧道所需的上下文(SSH 密钥从钥匙串 / 明文字段读取)。
+    pub fn ssh_context(&self, conn: &Connection) -> AppResult<crate::ssh::SshContext> {
+        Ok(crate::ssh::SshContext {
+            secret: credentials::load_ssh_secret(&self.backend, conn)?,
+            known_hosts: self.known_hosts_path(),
+        })
     }
 
     fn repo(&self) -> ConnectionRepo {
@@ -57,6 +73,9 @@ impl AppState {
 /// 返回给前端的连接(永远不含密码)。
 fn sanitize(mut c: Connection) -> Connection {
     c.plaintext_password = None;
+    if let Some(ssh) = c.ssh.as_mut() {
+        ssh.secret = None;
+    }
     c
 }
 
@@ -66,6 +85,17 @@ fn sanitize(mut c: Connection) -> Connection {
 fn carry_over_password(mut conn: Connection, existing: Option<&Connection>) -> Connection {
     if let Some(e) = existing {
         conn.plaintext_password = e.plaintext_password.clone();
+    }
+    conn
+}
+
+/// 编辑时未提供新的 SSH 密钥:沿用已存连接的明文 SSH 密钥(Local;其余环境在钥匙串,不受影响)。
+fn carry_over_ssh_secret(mut conn: Connection, existing: Option<&Connection>) -> Connection {
+    let old = existing
+        .and_then(|e| e.ssh.as_ref())
+        .and_then(|s| s.secret.clone());
+    if let Some(ssh) = conn.ssh.as_mut() {
+        ssh.secret = old;
     }
     conn
 }
@@ -82,13 +112,33 @@ pub fn save_connection(
 ) -> AppResult<Connection> {
     let _g = state.lock.lock().unwrap();
     let mut all = state.repo().load()?;
+    let mut conn = conn;
+    // 前端在 ssh.secret 里带新的 SSH 密钥(None 为保留原值),与数据库密码分开处理
+    let ssh_secret = conn.ssh.as_mut().and_then(|s| s.secret.take());
+    let existing = all.iter().find(|c| c.id == conn.id).cloned();
     let stored = match password {
         Some(pw) => credentials::save_password(&state.backend, conn, &pw)?,
+        None => carry_over_password(conn, existing.as_ref()),
+    };
+    let stored = match ssh_secret {
+        Some(secret) => credentials::save_ssh_secret(&state.backend, stored, &secret)?,
         None => {
-            let existing = all.iter().find(|c| c.id == conn.id);
-            carry_over_password(conn, existing)
+            let carried = carry_over_ssh_secret(stored, existing.as_ref());
+            // 环境从 local 改成 staging/prod:沿用来的明文密钥转存钥匙串,不留在配置文件里
+            match carried.ssh.as_ref().and_then(|s| s.secret.clone()) {
+                Some(secret) if !carried.env.stores_password_in_plaintext() => {
+                    credentials::save_ssh_secret(&state.backend, carried, &secret)?
+                }
+                _ => carried,
+            }
         }
     };
+    // 去掉了 SSH 配置:顺手清掉钥匙串里的旧 SSH 密钥
+    if stored.ssh.is_none() {
+        if let Some(e) = existing.as_ref().filter(|e| e.ssh.is_some()) {
+            credentials::delete_ssh_secret(&state.backend, e)?;
+        }
+    }
     match all.iter().position(|c| c.id == stored.id) {
         Some(i) => all[i] = stored.clone(),
         None => all.push(stored.clone()),
@@ -105,6 +155,7 @@ pub fn delete_connection(state: &AppState, id: String) -> AppResult<()> {
             AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found"))
         })?;
     credentials::delete_password(&state.backend, &target)?;
+    credentials::delete_ssh_secret(&state.backend, &target)?;
     all.retain(|c| c.id != id);
     state.repo().save(&all)
 }
@@ -118,6 +169,14 @@ pub fn saved_password(state: &AppState, id: &str) -> AppResult<String> {
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
     credentials::load_password(&state.backend, &conn)
+}
+
+/// 已保存连接的 SSH 密钥(编辑表单里没改时,「测试连接」与选库用);不存在的连接返回空。
+pub fn saved_ssh_secret(state: &AppState, id: &str) -> AppResult<String> {
+    match state.repo().load()?.into_iter().find(|c| c.id == id) {
+        Some(conn) => credentials::load_ssh_secret(&state.backend, &conn),
+        None => Ok(String::new()),
+    }
 }
 
 /// 克隆连接的命名/ID:去掉旧「/库名」「@库名」后缀再拼新库名,连环切库不叠加后缀。
@@ -148,10 +207,16 @@ pub fn switch_database(state: &AppState, id: String, database: String) -> AppRes
             && c.uri == src.uri
             && c.auth_source == src.auth_source
             && c.ssl_mode == src.ssl_mode
+            && match (&c.ssh, &src.ssh) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a.same_endpoint(b),
+                _ => false,
+            }
     }) {
         return Ok(sanitize(existing.clone()));
     }
     let password = credentials::load_password(&state.backend, &src)?;
+    let ssh_secret = credentials::load_ssh_secret(&state.backend, &src)?;
     let mut clone = src.clone();
     clone.id = switched_id(&src.id, &database);
     // 派生 id 撞上既有连接(如克隆后被改过 host)时退回随机后缀,保证 id 唯一
@@ -168,6 +233,7 @@ pub fn switch_database(state: &AppState, id: String, database: String) -> AppRes
     clone.name = switched_name(&src.name, &src.database, &database);
     clone.database = database;
     let stored = credentials::save_password(&state.backend, clone, &password)?;
+    let stored = credentials::save_ssh_secret(&state.backend, stored, &ssh_secret)?;
     all.push(stored.clone());
     state.repo().save(&all)?;
     Ok(sanitize(stored))
@@ -176,8 +242,7 @@ pub fn switch_database(state: &AppState, id: String, database: String) -> AppRes
 /// 用表单当前填写的参数(而非已保存配置)做一次真实连通性测试,不缓存、不落盘。
 pub async fn test_connection(
     kind: String,
-    host: String,
-    port: u16,
+    target: crate::ssh::Target,
     user: String,
     password: String,
     database: String,
@@ -186,13 +251,13 @@ pub async fn test_connection(
 ) -> AppResult<()> {
     match kind.as_str() {
         "pg" => {
-            crate::pg::client::test_connect(&host, port, &user, &password, &database, ssl).await
+            crate::pg::client::test_connect(&target, &user, &password, &database, ssl).await
         }
         "mysql" => {
-            crate::my::client::test_connect(&host, port, &user, &password, &database, ssl).await
+            crate::my::client::test_connect(&target, &user, &password, &database, ssl).await
         }
         "redis" => {
-            crate::rds::client::test_connect(&host, port, &user, &password, &database, ssl).await
+            crate::rds::client::test_connect(&target, &user, &password, &database, ssl).await
         }
         "sqlite" => crate::sqlite::client::test_connect(file_path.as_deref().unwrap_or("")),
         _ => Err(AppError::new(
@@ -265,6 +330,7 @@ mod tests {
             ssl_mode: Default::default(),
             uri: None,
             auth_source: None,
+            ssh: None,
         }
     }
 

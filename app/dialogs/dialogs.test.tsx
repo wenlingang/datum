@@ -89,6 +89,49 @@ describe("connection form", () => {
     app.dispose();
   });
 
+  test("SSH 隧道:字段随认证方式切换、校验、预览,保存后密钥不回传", async () => {
+    const app = await start();
+    await app.press("id:dev-new-conn");
+    expect(app.shows("id:conn-ssh-fields")).toBe(false);
+    await app.press("id:conn-ssh");
+    await app.waitFor("id:conn-ssh-fields");
+    // 默认密码认证:有密码框,没有私钥文件框
+    expect(app.shows("id:conn-ssh-secret")).toBe(true);
+    expect(app.shows("id:conn-ssh-key")).toBe(false);
+    await app.type("id:conn-name", "via-bastion");
+    await app.press("id:conn-save");
+    await app.waitFor("text:Enter the SSH host");
+    await app.type("id:conn-ssh-host", "bastion.example.com");
+    await app.press("id:conn-save");
+    await app.waitFor("text:Enter the SSH user");
+    await app.type("id:conn-ssh-user", "ops");
+    await app.waitFor("text:/⇢ ssh ops@bastion\\.example\\.com:22$/");
+    // 私钥:出现私钥文件框;agent:密码框消失
+    await app.press("label:Key");
+    await app.waitFor("id:conn-ssh-key");
+    await app.waitFor("text:Passphrase");
+    await app.press("label:Agent");
+    await app.waitFor("id:conn-ssh-secret", { state: "gone" });
+    await app.press("label:Password");
+    await app.type("id:conn-ssh-secret", "jump-pw");
+    expect(app.texts().some((t) => t.includes("jump-pw"))).toBe(false);
+    await app.press("id:conn-save");
+    await app.waitFor("id:conn-form", { state: "gone" });
+    const saved = (await readJson("connections.json")) as any;
+    const list: any[] = Array.isArray(saved) ? saved : (saved.connections ?? []);
+    const conn = list.find((c) => c.name === "via-bastion");
+    expect(conn?.ssh?.host).toBe("bastion.example.com");
+    expect(conn?.ssh?.port).toBe(22);
+    expect(conn?.ssh?.user).toBe("ops");
+    expect(conn?.ssh?.auth).toBe("password");
+    // local 环境:与数据库密码同样明文存在配置里
+    expect(conn?.ssh?.secret).toBe("jump-pw");
+    // 返回给界面的连接不带 SSH 密钥
+    const listed = Store.connections() as any[];
+    expect(listed.find((c) => c.name === "via-bastion")?.ssh?.secret ?? null).toBe(null);
+    app.dispose();
+  });
+
   test("连接测试失败时完整显示报错", async () => {
     const app = await start();
     await app.press("id:dev-new-conn");

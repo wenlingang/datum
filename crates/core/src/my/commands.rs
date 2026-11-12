@@ -14,18 +14,13 @@ pub async fn my_connect(state: &AppState, id: String) -> AppResult<()> {
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
     let password = credentials::load_password(&state.backend, &conn)?;
+    let (target, tunnel) = crate::ssh::resolve(&conn, &state.ssh_context(&conn)?).await?;
     state
         .my_pool
-        .connect(
-            &id,
-            &conn.host,
-            conn.port,
-            &conn.user,
-            &password,
-            &conn.database,
-            conn.ssl_mode,
-        )
-        .await
+        .connect(&id, &target, &conn.user, &password, &conn.database, conn.ssl_mode)
+        .await?;
+    state.tunnels.set(&id, tunnel).await;
+    Ok(())
 }
 
 pub async fn my_list_objects(state: &AppState, id: String) -> AppResult<Vec<String>> {

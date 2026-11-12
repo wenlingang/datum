@@ -85,6 +85,7 @@ mod tests {
             ssl_mode: Default::default(),
             uri: None,
             auth_source: None,
+            ssh: None,
         }
     }
 

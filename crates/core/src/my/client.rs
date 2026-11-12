@@ -1,6 +1,7 @@
 use crate::core::connection::SslMode;
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::pg::client::QueryResult;
+use crate::ssh::Target;
 use mysql_async::prelude::Queryable;
 use mysql_async::{Opts, OptsBuilder, Pool, Row, SslOpts, TxOpts, Value};
 use rust_i18n::t;
@@ -76,10 +77,18 @@ fn row_to_strings(row: &Row) -> Vec<Option<String>> {
 }
 
 /// 用给定参数尝试建立一次连接以验证可达性与认证(不缓存)。
-fn opts(host: &str, port: u16, user: &str, pass: &str, db: &str, ssl: Option<SslOpts>) -> Opts {
+/// 走 SSH 隧道时连本地转发端口,证书仍按数据库原主机名校验。
+fn opts(target: &Target, user: &str, pass: &str, db: &str, ssl: Option<SslOpts>) -> Opts {
+    let ssl = ssl.map(|o| {
+        if target.tunneled() {
+            o.with_danger_tls_hostname_override(Some(target.tls_host.clone()))
+        } else {
+            o
+        }
+    });
     let mut b = OptsBuilder::default()
-        .ip_or_hostname(host.to_string())
-        .tcp_port(port)
+        .ip_or_hostname(target.host.clone())
+        .tcp_port(target.port)
         .user(Some(user.to_string()))
         .db_name(Some(db.to_string()))
         .ssl_opts(ssl);
@@ -107,8 +116,7 @@ fn ssl_attempts(mode: SslMode) -> Vec<Option<SslOpts>> {
 
 /// 按 SSL 模式建立连接池并试连一次,返回第一个能连上的。
 async fn open_pool(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     db: &str,
@@ -117,7 +125,7 @@ async fn open_pool(
     crate::tls::install_default_provider();
     let mut last_err = None;
     for ssl in ssl_attempts(mode) {
-        let pool = Pool::new(opts(host, port, user, pass, db, ssl));
+        let pool = Pool::new(opts(target, user, pass, db, ssl));
         match pool.get_conn().await {
             Ok(conn) => {
                 drop(conn);
@@ -133,27 +141,25 @@ async fn open_pool(
 }
 
 pub async fn test_connect(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     db: &str,
     ssl: SslMode,
 ) -> AppResult<()> {
-    let pool = open_pool(host, port, user, pass, db, ssl).await?;
+    let pool = open_pool(target, user, pass, db, ssl).await?;
     pool.disconnect().await.ok();
     Ok(())
 }
 
 /// 用给定参数临时连接实例(不指定库),列出库名(新建连接表单里选库用,不缓存)。
 pub async fn probe_databases(
-    host: &str,
-    port: u16,
+    target: &Target,
     user: &str,
     pass: &str,
     ssl: SslMode,
 ) -> AppResult<Vec<String>> {
-    let pool = open_pool(host, port, user, pass, "", ssl).await?;
+    let pool = open_pool(target, user, pass, "", ssl).await?;
     let result = async {
         let mut conn = pool.get_conn().await.map_err(connerr)?;
         let names: Vec<String> = conn
@@ -168,18 +174,16 @@ pub async fn probe_databases(
 }
 
 impl MyPool {
-    #[allow(clippy::too_many_arguments)]
     pub async fn connect(
         &self,
         id: &str,
-        host: &str,
-        port: u16,
+        target: &Target,
         user: &str,
         pass: &str,
         db: &str,
         ssl: SslMode,
     ) -> AppResult<()> {
-        let pool = open_pool(host, port, user, pass, db, ssl).await?;
+        let pool = open_pool(target, user, pass, db, ssl).await?;
         self.pools.lock().await.insert(id.to_string(), pool);
         Ok(())
     }
@@ -337,6 +341,24 @@ impl MyPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tunneled_opts_dial_local_port_but_verify_db_host() {
+        let target = Target {
+            host: "127.0.0.1".into(),
+            port: 50124,
+            tls_host: "db.internal".into(),
+        };
+        for ssl in ssl_attempts(SslMode::VerifyFull).into_iter().chain(ssl_attempts(SslMode::Require)) {
+            let o = opts(&target, "u", "p", "d", ssl);
+            assert_eq!(o.ip_or_hostname(), "127.0.0.1");
+            assert_eq!(o.tcp_port(), 50124);
+            assert_eq!(o.ssl_opts().unwrap().tls_hostname_override(), Some("db.internal"));
+        }
+        let direct = opts(&Target::direct("db.internal", 3306), "u", "p", "d", ssl_attempts(SslMode::VerifyFull).remove(0));
+        assert_eq!(direct.ssl_opts().unwrap().tls_hostname_override(), None);
+    }
+
     fn cfg() -> (String, u16, String, String, String) {
         // DBSTUDIO_TEST_MYSQL=host:port:user:pass:db
         let raw = std::env::var("DBSTUDIO_TEST_MYSQL")
@@ -356,7 +378,7 @@ mod tests {
     async fn connect_query_edit() {
         let (h, port, u, pw, db) = cfg();
         let pool = MyPool::default();
-        pool.connect("t", &h, port, &u, &pw, &db, SslMode::Prefer)
+        pool.connect("t", &Target::direct(&h, port), &u, &pw, &db, SslMode::Prefer)
             .await
             .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS my_test")
@@ -404,7 +426,7 @@ mod tests {
     async fn max_rows_caps_result() {
         let (h, port, u, pw, db) = cfg();
         let pool = MyPool::default();
-        pool.connect("t", &h, port, &u, &pw, &db, SslMode::Prefer)
+        pool.connect("t", &Target::direct(&h, port), &u, &pw, &db, SslMode::Prefer)
             .await
             .unwrap();
         pool.query("t", "DROP TABLE IF EXISTS my_cap_test")

@@ -5,14 +5,14 @@ use crate::error::{AppError, AppResult, ErrorKind};
 use crate::pg::browse::{self, TableDetail};
 use crate::pg::client::QueryResult;
 use crate::pg::edit::{self, CellEdit, RowDelete};
+use crate::ssh::Target;
 use rust_i18n::t;
 
 /// 用显式 setter 构造连接 Config,避免手拼连接串在空密码/特殊字符时丢失 dbname。
-fn build_config(conn: &Connection, password: &str) -> tokio_postgres::Config {
+fn build_config(conn: &Connection, target: &Target, password: &str) -> tokio_postgres::Config {
     let mut cfg = tokio_postgres::Config::new();
-    cfg.host(&conn.host)
-        .port(conn.port)
-        .user(&conn.user)
+    crate::pg::client::apply_target(&mut cfg, target);
+    cfg.user(&conn.user)
         .password(password)
         .dbname(&conn.database);
     crate::pg::client::apply_ssl_mode(&mut cfg, conn.ssl_mode);
@@ -27,8 +27,11 @@ pub async fn pg_connect(state: &AppState, id: String) -> AppResult<()> {
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
     let password = credentials::load_password(&state.backend, &conn)?;
-    let config = build_config(&conn, &password);
-    state.pg_pool.connect(&id, &config, conn.ssl_mode).await
+    let (target, tunnel) = crate::ssh::resolve(&conn, &state.ssh_context(&conn)?).await?;
+    let config = build_config(&conn, &target, &password);
+    state.pg_pool.connect(&id, &config, conn.ssl_mode).await?;
+    state.tunnels.set(&id, tunnel).await;
+    Ok(())
 }
 
 pub async fn pg_list_objects(state: &AppState, id: String) -> AppResult<Vec<String>> {
@@ -98,15 +101,31 @@ mod tests {
             ssl_mode: Default::default(),
             uri: None,
             auth_source: None,
+            ssh: None,
         }
     }
 
     #[test]
     fn build_config_keeps_dbname_with_empty_password() {
         // 回归:空密码不能让 dbname 丢失
-        let cfg = build_config(&conn(), "");
+        let c = conn();
+        let cfg = build_config(&c, &Target::direct(&c.host, c.port), "");
         assert_eq!(cfg.get_dbname(), Some("my-app-dev"));
         assert_eq!(cfg.get_user(), Some("postgres"));
         assert_eq!(cfg.get_password(), Some(&b""[..]));
+        assert!(cfg.get_hostaddrs().is_empty());
+    }
+
+    #[test]
+    fn tunneled_config_dials_local_port_but_keeps_host_for_tls() {
+        let target = Target {
+            host: "127.0.0.1".into(),
+            port: 50123,
+            tls_host: "db.internal".into(),
+        };
+        let cfg = build_config(&conn(), &target, "pw");
+        assert_eq!(cfg.get_hosts(), &[tokio_postgres::config::Host::Tcp("db.internal".into())]);
+        assert_eq!(cfg.get_hostaddrs(), &["127.0.0.1".parse::<std::net::IpAddr>().unwrap()]);
+        assert_eq!(cfg.get_ports(), &[50123]);
     }
 }
