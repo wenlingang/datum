@@ -1215,6 +1215,7 @@ dependencies = [
  "dirs",
  "nsh-base",
  "nsh-core",
+ "objc2-core-foundation",
  "rust-i18n",
  "serde",
  "serde_json",

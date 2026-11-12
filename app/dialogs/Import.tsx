@@ -11,6 +11,7 @@ import { Btn, DbIcon, color } from "../ui/kit";
 import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { DialogFrame, Dropdown, LoadingBtn } from "./controls";
+import { ErrorText } from "../ui/error";
 
 interface Report {
   ok: boolean;
@@ -49,6 +50,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
       text.set(v);
       report.set(null);
     },
+    { sql: true },
   );
   let alive = true;
   cleanup(() => (alive = false));
@@ -159,9 +161,14 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
       <If when={report()}>
         {(r) => (
           <View class="rounded-(--radius-lg) px-3 py-2.5" style={{ backgroundColor: color(r().ok ? "selection" : "deleted") }}>
-            <Text testID="import-report" class={`${FS.sm} ${r().ok ? "text-foreground" : "text-negative"}`}>
-              {r().text}
-            </Text>
+            <If
+              when={r().ok}
+              else={<ErrorText testID="import-report" text={r().text} />}
+            >
+              <Text testID="import-report" class={`${FS.sm} text-foreground`}>
+                {r().text}
+              </Text>
+            </If>
           </View>
         )}
       </If>

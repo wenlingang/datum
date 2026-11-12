@@ -8,6 +8,8 @@ mod ai;
 mod conn;
 mod db;
 mod keys;
+#[cfg(target_os = "macos")]
+mod macos;
 mod dialogs;
 mod prefs;
 mod runtime;
@@ -31,6 +33,8 @@ pub use text::Sql;
 #[native_module("datum/native")]
 fn native(registry: &mut Registry) {
     runtime::init();
+    #[cfg(target_os = "macos")]
+    macos::disable_smart_substitutions();
     registry
         .register::<EditorKeys>()
         .module::<Store>()

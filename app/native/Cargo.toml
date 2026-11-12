@@ -18,3 +18,6 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 rust-i18n = "4"
 uuid = { version = "1", features = ["v4"] }
 dirs = "5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFBase", "CFString", "CFNumber", "CFPreferences", "CFPropertyList"] }

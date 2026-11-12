@@ -14,6 +14,7 @@ import { executeSql, runInEditor, target, undoCard } from "./actions";
 import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmRequest, updateCard } from "./cards";
 import { chatDeps } from "./deps";
 import { ResultTable } from "./ToolCard";
+import { ErrorText } from "../ui/error";
 
 type ImpactState = { state: "loading" } | { state: "ok"; impact: WriteImpact } | { state: "none" } | { state: "error"; error: string };
 
@@ -98,6 +99,7 @@ function SqlEditor(props: {
   const text = editorText(
     () => props.value,
     (v) => props.onChange?.(v),
+    { sql: true },
   );
   return (
     <Editor
@@ -349,7 +351,7 @@ function CardResult(props: { run: ReturnType<typeof cardState>["run"] }) {
       <If when={failed()}>
         {(error) => (
           <View class="border-t border-border px-2.5 py-1.5">
-            <Text class={`${FS.xs} font-mono text-negative`}>{error()}</Text>
+            <ErrorText size="xs" mono text={error()} />
           </View>
         )}
       </If>

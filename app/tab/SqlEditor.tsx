@@ -16,6 +16,7 @@ import { FS } from "../ui/text";
 import { beautify, commit, explain, run, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
 import { primaryRange, rangeOf } from "./textpos";
 import { columnValues, valueInsert } from "./values";
+import { straightenTypedQuote } from "../ui/editor";
 
 const BOUNDARY = /[\s,;()]/;
 
@@ -24,6 +25,8 @@ const BOUNDARY = /[\s,;()]/;
 function onTextChange(m: TabModel, value: string) {
   const prev = m.sql();
   m.sql.set(value);
+  // macOS 智能引号:刚敲的弯引号改回直引号(改完会再回到这里,按直引号继续处理)
+  if (straightenTypedQuote(m.editor, prev, value)) return;
   if (!supportsSql(m.dbKind) || value.length !== prev.length + 1 || !m.editor) return;
   let i = 0;
   while (i < prev.length && prev.charCodeAt(i) === value.charCodeAt(i)) i++;
