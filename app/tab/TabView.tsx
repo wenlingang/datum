@@ -11,6 +11,7 @@ import { CellDialog } from "./CellDialog";
 import { FilterBar } from "./FilterBar";
 import { modelOf, type TabModel } from "./model";
 import { Results, StatusLine } from "./Results";
+import { RedisInsight } from "./RedisInsight";
 import { RiskDialog } from "./RiskDialog";
 import { SqlEditor } from "./SqlEditor";
 import { Toolbar } from "./Toolbar";
@@ -64,6 +65,7 @@ function ModelView(props: { m: TabModel }) {
 
 export function TabBody(props: { tab: WorkTab }) {
   const m = modelOf(props.tab);
+  if (props.tab.kind === "redis") return <RedisInsight connId={props.tab.connId} />;
   if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;
   if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_unsupported")} />;
   return <ModelView m={m} />;

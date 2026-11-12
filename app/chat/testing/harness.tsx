@@ -1,6 +1,6 @@
 // 测试/开发入口的外框:左侧占位、右侧 AI 面板,装上假的依赖后挂载。
 
-import { mount, Text, View } from "nsh";
+import { type JSX, mount, Text, View } from "nsh";
 import { dismissToast, toasts } from "../../store/toast";
 import { FS } from "../../ui/text";
 import { ChatPanel } from "../index";

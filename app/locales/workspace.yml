@@ -24,6 +24,10 @@ workspace:
     en: Relationship Diagram
     zh-CN: 关系图
     zh-TW: 關聯圖
+  redis_insight:
+    en: Redis Analysis
+    zh-CN: Redis 分析
+    zh-TW: Redis 分析
   hide_detail:
     en: Hide Details Panel
     zh-CN: 隐藏详情栏

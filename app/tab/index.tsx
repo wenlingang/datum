@@ -135,6 +135,26 @@ export function openErd(connId: string) {
   });
 }
 
+/** 打开 Redis 分析 tab(每个连接一个,已开则切过去)。 */
+export function openRedisInsight(connId: string) {
+  const conn = conns.get(connId);
+  if (!conn || conn.kind !== "redis") return;
+  const existing = workspace.tabs().find((x) => x.kind === "redis" && x.connId === connId);
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "redis",
+    connId,
+    dbKind: conn.kind,
+    table: null,
+    title: signal(t("rinsight.title")),
+    state: null,
+  });
+}
+
 /** AI 生成的 SQL「编辑器运行」:只在 connId 上执行;`confirmed` 为卡片已做过破坏性确认。
  *  当前查询 tab 属于该连接则复用,否则切到该连接并新开查询 tab,绝不打到别的库。 */
 export function insertAndRun(sql: string, connId: string, confirmed: boolean) {

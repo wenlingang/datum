@@ -334,6 +334,36 @@ pub async fn redis_get_key(
     Ok((value, detail))
 }
 
+/// 连接配置里的 Redis 库号(0–15,解析不了按 0)。
+fn redis_db(state: &AppState, id: &str) -> u8 {
+    crate::core::repository::ConnectionRepo::new(&state.config_dir)
+        .load()
+        .ok()
+        .and_then(|all| all.into_iter().find(|c| c.id == id))
+        .and_then(|c| c.database.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+pub async fn redis_overview(state: &AppState, id: &str) -> AppResult<rds::analysis::Overview> {
+    state.redis_pool.overview(id, redis_db(state, id)).await
+}
+
+pub async fn redis_slowlog(state: &AppState, id: &str) -> AppResult<Vec<rds::analysis::SlowEntry>> {
+    state.redis_pool.slowlog(id, 50).await
+}
+
+pub async fn redis_analysis_start(state: &AppState, id: &str) -> AppResult<()> {
+    state.redis_pool.start_analysis(id).await
+}
+
+pub async fn redis_analysis_report(state: &AppState, id: &str) -> Option<rds::analysis::Report> {
+    state.redis_pool.analysis_report(id).await
+}
+
+pub async fn redis_analysis_cancel(state: &AppState, id: &str) {
+    state.redis_pool.cancel_analysis(id).await
+}
+
 pub async fn redis_exec(state: &AppState, id: &str, command: &str) -> AppResult<String> {
     rds::commands::redis_exec(state, id.to_string(), command.to_string()).await
 }

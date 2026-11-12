@@ -67,6 +67,11 @@ function TabItem(props: { tab: () => WorkTab }) {
           <Icon name="table-2" size={14} color={active() ? "data" : "fg-faint"} />
         </View>
       </If>
+      <If when={tab().kind === "redis"}>
+        <View class="mr-1.5">
+          <Icon name="activity" size={14} color={active() ? "data" : "fg-faint"} />
+        </View>
+      </If>
       {/* 菜单常驻,重命名只换标题区:避免选中「重命名」时卸载正在收起的菜单 */}
       <CtxMenu
         disabled={renaming()}

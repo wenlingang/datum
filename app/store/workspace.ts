@@ -15,7 +15,9 @@ export type TabKind =
   /** SQL / Mongo / Redis 查询工作区(编辑器 + 结果) */
   | "query"
   /** ER 图(TODO:画布暂未移植) */
-  | "erd";
+  | "erd"
+  /** Redis 分析:概览、整库扫描(大 key / 前缀 / TTL / 热 key)、慢日志 */
+  | "redis";
 
 export interface WorkTab {
   /** 稳定 id(标签条 key、记忆激活 tab) */

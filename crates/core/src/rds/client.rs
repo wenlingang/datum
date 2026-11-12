@@ -30,6 +30,8 @@ pub struct KeyDetail {
 #[derive(Default)]
 pub struct RedisPool {
     conns: Mutex<HashMap<String, MultiplexedConnection>>,
+    /// 各连接最近一次的分析(进行中或已结束)
+    analyses: Mutex<HashMap<String, std::sync::Arc<super::analysis::Analysis>>>,
 }
 
 fn qerr(e: redis::RedisError) -> AppError {
@@ -163,6 +165,38 @@ impl RedisPool {
         let con = open_target(target, url, ssl).await?;
         self.conns.lock().await.insert(id.to_string(), con);
         Ok(())
+    }
+
+    /// 概览(INFO);`db` 为当前库号。
+    pub async fn overview(&self, id: &str, db: u8) -> AppResult<super::analysis::Overview> {
+        super::analysis::overview(&mut self.con(id).await?, db).await
+    }
+
+    /// 最近 `count` 条慢日志。
+    pub async fn slowlog(&self, id: &str, count: u32) -> AppResult<Vec<super::analysis::SlowEntry>> {
+        super::analysis::slowlog(&mut self.con(id).await?, count).await
+    }
+
+    /// 开始整库扫描分析(已有进行中的先取消)。多路复用连接:扫描与浏览、命令的请求交错进行,互不阻塞。
+    pub async fn start_analysis(&self, id: &str) -> AppResult<()> {
+        let con = self.con(id).await?;
+        if let Some(old) = self.analyses.lock().await.remove(id) {
+            old.cancel();
+        }
+        let a = super::analysis::start(con).await?;
+        self.analyses.lock().await.insert(id.to_string(), a);
+        Ok(())
+    }
+
+    /// 分析的当前汇总;没开始过为 None。
+    pub async fn analysis_report(&self, id: &str) -> Option<super::analysis::Report> {
+        self.analyses.lock().await.get(id).map(|a| a.report())
+    }
+
+    pub async fn cancel_analysis(&self, id: &str) {
+        if let Some(a) = self.analyses.lock().await.get(id) {
+            a.cancel();
+        }
     }
 
     /// MultiplexedConnection 可廉价 clone,克隆出来避免在 await 期间持锁。

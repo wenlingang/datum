@@ -613,3 +613,220 @@ mongo:
     en: Document deleted
     zh-CN: 文档已删除
     zh-TW: 文件已刪除
+rinsight:
+  title:
+    en: "Redis Analysis"
+    zh-CN: "Redis 分析"
+    zh-TW: "Redis 分析"
+  heading:
+    en: "Redis Analysis · %{name} · db %{db}"
+    zh-CN: "Redis 分析 · %{name} · 库 %{db}"
+    zh-TW: "Redis 分析 · %{name} · 庫 %{db}"
+  refresh:
+    en: "Refresh"
+    zh-CN: "刷新"
+    zh-TW: "重新整理"
+  loading:
+    en: "Loading…"
+    zh-CN: "加载中…"
+    zh-TW: "載入中…"
+  overview:
+    en: "Overview"
+    zh-CN: "概览"
+    zh-TW: "概覽"
+  used_memory:
+    en: "Used Memory"
+    zh-CN: "已用内存"
+    zh-TW: "已用記憶體"
+  peak_memory:
+    en: "Peak Memory"
+    zh-CN: "内存峰值"
+    zh-TW: "記憶體峰值"
+  max_memory:
+    en: "Memory Limit · Eviction"
+    zh-CN: "内存上限 · 淘汰策略"
+    zh-TW: "記憶體上限 · 淘汰策略"
+  unlimited:
+    en: "Unlimited"
+    zh-CN: "不限"
+    zh-TW: "不限"
+  fragmentation:
+    en: "Fragmentation Ratio"
+    zh-CN: "碎片率"
+    zh-TW: "碎片率"
+  hit_rate:
+    en: "Hit Rate"
+    zh-CN: "命中率"
+    zh-TW: "命中率"
+  keys:
+    en: "Keys in This DB"
+    zh-CN: "本库 key 数"
+    zh-TW: "本庫 key 數"
+  keys_value:
+    en: "%{keys} (%{expires} with TTL)"
+    zh-CN: "%{keys}(%{expires} 个有过期时间)"
+    zh-TW: "%{keys}(%{expires} 個有過期時間)"
+  clients:
+    en: "Connected Clients"
+    zh-CN: "客户端连接"
+    zh-TW: "用戶端連線"
+  evicted:
+    en: "Evicted Keys"
+    zh-CN: "已淘汰 key"
+    zh-TW: "已淘汰 key"
+  scan:
+    en: "Key Analysis"
+    zh-CN: "key 分析"
+    zh-TW: "key 分析"
+  scan_hint:
+    en: "Walks the whole database with SCAN and samples each key's memory (MEMORY USAGE). Runs in batches with short pauses, stops after %{max} keys. Prefer off-peak hours on production."
+    zh-CN: "用 SCAN 遍历整个库,逐个取 key 的内存(MEMORY USAGE);分批进行、批间稍停,超过 %{max} 个 key 即停止。生产实例建议在低峰期运行。"
+    zh-TW: "用 SCAN 走訪整個庫,逐一取得 key 的記憶體(MEMORY USAGE);分批進行、批間稍停,超過 %{max} 個 key 即停止。正式環境建議在離峰時段執行。"
+  start:
+    en: "Start Analysis"
+    zh-CN: "开始分析"
+    zh-TW: "開始分析"
+  rescan:
+    en: "Analyze Again"
+    zh-CN: "重新分析"
+    zh-TW: "重新分析"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  scanning:
+    en: "Scanning… %{scanned} / %{total} keys"
+    zh-CN: "扫描中… %{scanned} / %{total} 个 key"
+    zh-TW: "掃描中… %{scanned} / %{total} 個 key"
+  scan_done:
+    en: "Scanned %{scanned} keys, %{bytes} in total"
+    zh-CN: "已扫描 %{scanned} 个 key,共 %{bytes}"
+    zh-TW: "已掃描 %{scanned} 個 key,共 %{bytes}"
+  scan_truncated:
+    en: "Stopped after %{scanned} of %{total} keys: results below are a sample"
+    zh-CN: "扫描 %{scanned} / %{total} 个 key 后停止,以下为抽样结果"
+    zh-TW: "掃描 %{scanned} / %{total} 個 key 後停止,以下為抽樣結果"
+  scan_cancelled:
+    en: "Cancelled after %{scanned} keys: results below are partial"
+    zh-CN: "已取消,共扫描 %{scanned} 个 key,以下为部分结果"
+    zh-TW: "已取消,共掃描 %{scanned} 個 key,以下為部分結果"
+  scan_failed:
+    en: "Analysis failed: %{error}"
+    zh-CN: "分析失败:%{error}"
+    zh-TW: "分析失敗:%{error}"
+  no_memory_usage:
+    en: "This server does not allow MEMORY USAGE; results count keys only"
+    zh-CN: "该实例不允许 MEMORY USAGE,结果只按 key 数统计"
+    zh-TW: "此執行個體不允許 MEMORY USAGE,結果只依 key 數統計"
+  biggest:
+    en: "Biggest Keys"
+    zh-CN: "最大的 key"
+    zh-TW: "最大的 key"
+  prefixes:
+    en: "Memory by Prefix"
+    zh-CN: "按前缀统计"
+    zh-TW: "依前綴統計"
+  no_prefix:
+    en: "(no prefix)"
+    zh-CN: "(无前缀)"
+    zh-TW: "(無前綴)"
+  group_detail:
+    en: "%{keys} keys · %{bytes} · %{pct}%"
+    zh-CN: "%{keys} 个 · %{bytes} · %{pct}%"
+    zh-TW: "%{keys} 個 · %{bytes} · %{pct}%"
+  group_detail_keys:
+    en: "%{keys} keys · %{pct}%"
+    zh-CN: "%{keys} 个 · %{pct}%"
+    zh-TW: "%{keys} 個 · %{pct}%"
+  ttl:
+    en: "TTL Distribution"
+    zh-CN: "TTL 分布"
+    zh-TW: "TTL 分佈"
+  types:
+    en: "Types"
+    zh-CN: "类型分布"
+    zh-TW: "類型分佈"
+  hottest:
+    en: "Hot Keys"
+    zh-CN: "热 key"
+    zh-TW: "熱 key"
+  hot_needs_lfu:
+    en: "Hot keys need an LFU eviction policy (maxmemory-policy allkeys-lfu or volatile-lfu); the access frequency is not tracked otherwise."
+    zh-CN: "统计热 key 需要 LFU 淘汰策略(maxmemory-policy 为 allkeys-lfu 或 volatile-lfu),否则实例不记录访问频度。"
+    zh-TW: "統計熱 key 需要 LFU 淘汰策略(maxmemory-policy 為 allkeys-lfu 或 volatile-lfu),否則執行個體不記錄存取頻度。"
+  slowlog:
+    en: "Slow Log"
+    zh-CN: "慢日志"
+    zh-TW: "慢日誌"
+  slowlog_empty:
+    en: "No slow commands recorded"
+    zh-CN: "没有慢命令记录"
+    zh-TW: "沒有慢指令記錄"
+  slowlog_failed:
+    en: "Couldn't read the slow log: %{error}"
+    zh-CN: "读取慢日志失败:%{error}"
+    zh-TW: "讀取慢日誌失敗:%{error}"
+  col_type:
+    en: "Type"
+    zh-CN: "类型"
+    zh-TW: "類型"
+  col_memory:
+    en: "Memory"
+    zh-CN: "内存"
+    zh-TW: "記憶體"
+  col_freq:
+    en: "Frequency"
+    zh-CN: "访问频度"
+    zh-TW: "存取頻度"
+  col_time:
+    en: "Time"
+    zh-CN: "时间"
+    zh-TW: "時間"
+  col_duration:
+    en: "Duration"
+    zh-CN: "耗时"
+    zh-TW: "耗時"
+  col_command:
+    en: "Command"
+    zh-CN: "命令"
+    zh-TW: "指令"
+  col_client:
+    en: "Client"
+    zh-CN: "客户端"
+    zh-TW: "用戶端"
+  ttl_never:
+    en: "No expiry"
+    zh-CN: "永不过期"
+    zh-TW: "永不過期"
+  ttl_within_hour:
+    en: "Within 1 hour"
+    zh-CN: "1 小时内"
+    zh-TW: "1 小時內"
+  ttl_within_day:
+    en: "Within 1 day"
+    zh-CN: "1 天内"
+    zh-TW: "1 天內"
+  ttl_within_week:
+    en: "Within 7 days"
+    zh-CN: "7 天内"
+    zh-TW: "7 天內"
+  ttl_longer:
+    en: "Longer"
+    zh-CN: "更久"
+    zh-TW: "更久"
+  ttl_s:
+    en: "%{n}s"
+    zh-CN: "%{n} 秒"
+    zh-TW: "%{n} 秒"
+  ttl_m:
+    en: "%{n}m"
+    zh-CN: "%{n} 分钟"
+    zh-TW: "%{n} 分鐘"
+  ttl_h:
+    en: "%{n}h"
+    zh-CN: "%{n} 小时"
+    zh-TW: "%{n} 小時"
+  ttl_d:
+    en: "%{n}d"
+    zh-CN: "%{n} 天"
+    zh-TW: "%{n} 天"

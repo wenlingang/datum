@@ -316,3 +316,64 @@ export interface CompletionResult {
   end: number;
   items: CompletionItem[];
 }
+
+// ---------------------------------------------------------------- Redis 分析
+
+/** INFO 里分析页关心的几项(原样字符串)。 */
+export interface RedisOverview {
+  version: string | null;
+  usedMemory: string | null;
+  usedMemoryPeak: string | null;
+  maxMemory: string | null;
+  maxMemoryPolicy: string | null;
+  fragmentationRatio: string | null;
+  connectedClients: string | null;
+  /** 命中率(%) */
+  hitRate: number | null;
+  evictedKeys: string | null;
+  expiredKeys: string | null;
+  keys: number | null;
+  expires: number | null;
+}
+
+export interface RedisSlowEntry {
+  id: number;
+  /** Unix 秒 */
+  time: number;
+  micros: number;
+  command: string;
+  client: string;
+}
+
+export interface RedisKeyStat {
+  key: string;
+  type: string;
+  bytes: number | null;
+  /** 剩余毫秒;-1 永不过期 */
+  ttlMs: number;
+  freq: number | null;
+}
+
+export interface RedisGroupStat {
+  name: string;
+  keys: number;
+  bytes: number;
+}
+
+export interface RedisReport {
+  scanned: number;
+  total: number;
+  done: boolean;
+  cancelled: boolean;
+  /** 达到上限提前停止:结果是抽样 */
+  truncated: boolean;
+  error: string | null;
+  memorySupported: boolean;
+  lfu: boolean;
+  totalBytes: number;
+  biggest: RedisKeyStat[];
+  hottest: RedisKeyStat[];
+  prefixes: RedisGroupStat[];
+  types: RedisGroupStat[];
+  ttl: { persistent: number; withinHour: number; withinDay: number; withinWeek: number; longer: number };
+}

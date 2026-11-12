@@ -19,6 +19,9 @@ import type {
   RowDelete,
   TableDetail,
   WriteImpact,
+  RedisOverview,
+  RedisReport,
+  RedisSlowEntry,
 } from "./types";
 
 export const store = {
@@ -59,6 +62,11 @@ export const db = {
   exportDatabase: (kind: DbKind, id: string, tables: string[]) => Db.exportDatabase(kind, id, tables),
   redisGetKey: async (id: string, key: string) => (await Db.redisGetKey(id, key)) as [unknown, unknown],
   redisExec: (id: string, command: string) => Db.redisExec(id, command),
+  redisOverview: async (id: string) => (await Db.redisOverview(id)) as RedisOverview,
+  redisSlowlog: async (id: string) => (await Db.redisSlowlog(id)) as RedisSlowEntry[],
+  redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
+  redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
+  redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
 };
 
 export const sql = {

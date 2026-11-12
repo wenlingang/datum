@@ -155,4 +155,39 @@ impl Db {
             .await?
             .map_err(err)
     }
+
+    /// Redis 分析:概览(INFO 里的内存、命中率、key 数等)。
+    pub async fn redis_overview(id: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_overview(&state(), &id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis 分析:最近 50 条慢日志。
+    pub async fn redis_slowlog(id: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_slowlog(&state(), &id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis 分析:开始整库扫描(后台进行,用 `redis_analysis_report` 轮询)。
+    pub async fn redis_analysis_start(id: String) -> Result<(), String> {
+        spawn(async move { service::redis_analysis_start(&state(), &id).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 分析:当前汇总;没开始过为 null。
+    pub async fn redis_analysis_report(id: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_analysis_report(&state(), &id).await })
+            .await
+            .and_then(json)
+    }
+
+    /// Redis 分析:取消进行中的扫描。
+    pub async fn redis_analysis_cancel(id: String) -> Result<(), String> {
+        spawn(async move { service::redis_analysis_cancel(&state(), &id).await }).await
+    }
 }
