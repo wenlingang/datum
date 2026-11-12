@@ -35,6 +35,10 @@ export const chatDeps = {
   refreshTables: (connId: string): void => {
     void refreshTables(connId);
   },
+  /** 执行写语句前的撤销准备。 */
+  undoPrepare: db.undoPrepare,
+  /** 在一个事务里执行若干语句(撤销用)。 */
+  importSql: (kind: DbKind, connId: string, statements: string[]): Promise<unknown> => db.importSql(kind, connId, statements),
   /** 写语句的影响范围预估(执行确认框用);改写不了的语句为 null。 */
   writeImpact: db.writeImpact,
   /** 「在编辑器中打开」:退出对话工作台,在该连接上新开查询 tab 并填入 SQL(不执行)。 */

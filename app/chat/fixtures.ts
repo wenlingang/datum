@@ -1,6 +1,6 @@
 // 测试与开发入口共用的假数据:AI 配置、连接、模拟的流式回复。不碰真实配置、数据库与 AI 服务。
 
-import type { AgentEvent, AiSettings, ChatEvent, Connection, QueryResult, WriteImpact } from "../lib/types";
+import type { AgentEvent, AiSettings, ChatEvent, Connection, QueryResult, UndoPrep, WriteImpact } from "../lib/types";
 import { aiBackend, refreshAi } from "../store/ai";
 import { toast } from "../store/toast";
 import { chatDeps } from "./deps";
@@ -53,6 +53,10 @@ export interface FakeOptions {
   ready?: boolean;
   /** 模拟回复;函数形式可按请求决定事件序列 */
   events?: (messages: { role: string; content: string }[]) => ChatEvent[];
+  /** 执行写语句前的撤销准备;不给则 DROP / TRUNCATE 不能撤销,其余可撤销 2 行 */
+  undo?: (sql: string) => UndoPrep;
+  /** 撤销时执行过的语句 */
+  undone?: string[][];
   /** 写语句的影响范围预估(确认框用);不给则统一回 3 行 */
   impact?: (sql: string) => WriteImpact | null;
   /** 带工具对话的事件序列(含 toolStart / toolEnd);不给则与普通对话相同 */
@@ -128,6 +132,17 @@ export function installFakes(o: FakeOptions = {}) {
       ? o.impact(sql)
       : { count: 3, wholeTable: false, columns: ["id", "name"], rows: [["1", "a"], ["2", "b"], ["3", "c"]] };
   chatDeps.openQuery = (sql, connId) => toast.info(`openQuery ${connId} ${sql}`);
+  const undone = o.undone ?? [];
+  chatDeps.undoPrepare = async (_k, _id, sql) =>
+    o.undo
+      ? o.undo(sql)
+      : /\b(drop|truncate)\b/i.test(sql)
+        ? { statements: [], rows: 0, reason: "TRUNCATE and DROP TABLE can't be undone" }
+        : { statements: ["INSERT INTO orders (id) VALUES ('1')", "INSERT INTO orders (id) VALUES ('2')"], rows: 2, reason: null };
+  chatDeps.importSql = async (_k, _id, statements) => {
+    undone.push(statements);
+    return statements.length;
+  };
   chatDeps.insertAndRun = (sql, connId, confirmed) => {
     inserted.push({ sql, connId, confirmed });
     toast.info(`insertAndRun ${connId} confirmed=${confirmed}`);

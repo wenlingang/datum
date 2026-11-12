@@ -18,8 +18,101 @@ pub struct ImpactQuery {
     pub count_sql: String,
     /// 匹配行的前若干行(`SELECT *`)
     pub rows_sql: String,
+    /// 匹配的全部行(`SELECT *`,不限行数;撤销前抓快照用)
+    pub snapshot_sql: String,
     /// 整表操作(TRUNCATE / DROP TABLE):数的是表里现有的行
     pub whole_table: bool,
+    /// 目标表,照语句原文(可带 schema 与引号,不含别名)
+    pub table: String,
+    pub op: WriteOp,
+}
+
+/// 写语句的种类。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteOp {
+    Delete,
+    /// SET 里赋值的列(去掉别名前缀与引号);解析不了(如 PG 的 `(a, b) = (…)`)为 None
+    Update { set_columns: Option<Vec<String>> },
+    /// TRUNCATE / DROP TABLE
+    WholeTable,
+}
+
+/// 去掉一段标识符的引号(`"x"`、`` `x` ``、`[x]`;成对的引号还原)。
+pub fn unquote(ident: &str) -> String {
+    let t = ident.trim();
+    let inner = |open: char, close: char| {
+        t.strip_prefix(open)
+            .and_then(|r| r.strip_suffix(close))
+            .map(|r| r.replace(&format!("{close}{close}"), &close.to_string()))
+    };
+    inner('"', '"').or_else(|| inner('`', '`')).or_else(|| inner('[', ']')).unwrap_or_else(|| t.to_string())
+}
+
+/// 读一个(可带 schema 前缀、各段可加引号的)标识符,返回 (原文, 剩余部分)。
+fn read_qualified(text: &str) -> Option<(&str, &str)> {
+    let t = text.trim_start();
+    let start = text.len() - t.len();
+    let b = t.as_bytes();
+    let mut i = 0;
+    loop {
+        match b.get(i)? {
+            q @ (b'"' | b'`') => {
+                i += 1;
+                loop {
+                    if *b.get(i)? == *q {
+                        if b.get(i + 1) == Some(q) {
+                            i += 2;
+                            continue;
+                        }
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'[' => i += t[i..].find(']')? + 1,
+            c if c.is_ascii_alphanumeric() || *c == b'_' || *c == b'$' || *c >= 0x80 => {
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'$' || b[i] >= 0x80) {
+                    i += 1;
+                }
+            }
+            _ => return None,
+        }
+        if b.get(i) == Some(&b'.') {
+            i += 1;
+            continue;
+        }
+        return Some((&text[start..start + i], &t[i..]));
+    }
+}
+
+/// `FROM` 部分(`ONLY schema.t AS a`)→ 表名原文。
+fn table_of(from: &str) -> Option<String> {
+    let mut t = from.trim_start();
+    if t.len() >= 5 && t[..5].eq_ignore_ascii_case("only ") {
+        t = &t[5..];
+    }
+    let (name, _) = read_qualified(t)?;
+    Some(name.trim().trim_end_matches('*').trim().to_string())
+}
+
+/// SET 段 → 赋值的列名;遇到元组赋值等解析不了的写法返回 None。
+fn set_columns(set: &str, commas: &[usize], base: usize) -> Option<Vec<String>> {
+    let mut cuts: Vec<usize> = commas.iter().map(|c| c - base).filter(|&c| c < set.len()).collect();
+    cuts.push(set.len());
+    let mut out = Vec::new();
+    let mut from = 0;
+    for cut in cuts {
+        let piece = &set[from..cut];
+        from = cut + 1;
+        let (name, rest) = read_qualified(piece)?;
+        if !rest.trim_start().starts_with('=') {
+            return None;
+        }
+        let last = name.rsplit('.').next().unwrap_or(name);
+        out.push(unquote(last));
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// 顶层(不在括号、字符串、注释、引号标识符里)的一个单词。
@@ -157,13 +250,16 @@ const JOINS: &[&str] = &["JOIN", "STRAIGHT_JOIN"];
 
 /// 生成预估查询:`from` 为表(可带别名),`tail` 为 WHERE / ORDER BY / LIMIT 部分。
 /// 各段之间一律换行:原文里的 `-- 注释` 只能注释到行尾,不能把后面拼上的 WHERE 或右括号吞掉。
-fn queries(from: &str, tail: &str, whole_table: bool) -> ImpactQuery {
+fn queries(from: &str, tail: &str, op: WriteOp) -> Option<ImpactQuery> {
     let inner = format!("SELECT * FROM {}\n{}\n", from.trim(), tail.trim());
-    ImpactQuery {
+    Some(ImpactQuery {
         count_sql: format!("SELECT COUNT(*) FROM ({inner}) AS datum_impact"),
         rows_sql: format!("SELECT * FROM ({inner}) AS datum_impact LIMIT {PREVIEW_ROWS}"),
-        whole_table,
-    }
+        snapshot_sql: inner,
+        whole_table: op == WriteOp::WholeTable,
+        table: table_of(from)?,
+        op,
+    })
 }
 
 /// 改写一条写语句;改写不了返回 None。
@@ -190,7 +286,7 @@ pub fn impact_query(stmt: &str, d: Dialect) -> Option<ImpactQuery> {
                 return None;
             }
             let end = s.find(tail_start, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
-            Some(queries(&sql[table_start..tail_start], &sql[tail_start..end], false))
+            queries(&sql[table_start..tail_start], &sql[tail_start..end], WriteOp::Delete)
         }
         "UPDATE" => {
             // 跳过修饰词:MySQL 的 LOW_PRIORITY / IGNORE,SQLite 的 OR REPLACE 等
@@ -217,7 +313,8 @@ pub fn impact_query(stmt: &str, d: Dialect) -> Option<ImpactQuery> {
             }
             let tail_start = tail.map(|w| w.start).unwrap_or(sql.len());
             let end = s.find(tail_start, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
-            Some(queries(&sql[table_start..set.start], &sql[tail_start..end], false))
+            let set_cols = set_columns(&sql[set.end..tail_start], &s.commas, set.end);
+            queries(&sql[table_start..set.start], &sql[tail_start..end], WriteOp::Update { set_columns: set_cols })
         }
         "TRUNCATE" | "DROP" => {
             let mut idx = 1;
@@ -242,7 +339,7 @@ pub fn impact_query(stmt: &str, d: Dialect) -> Option<ImpactQuery> {
             if s.has_comma_between(table_start, stop) || sql[table_start..stop].trim().is_empty() {
                 return None;
             }
-            Some(queries(&sql[table_start..stop], "", true))
+            queries(&sql[table_start..stop], "", WriteOp::WholeTable)
         }
         _ => None,
     }
@@ -346,5 +443,24 @@ mod tests {
         assert_eq!(q("TRUNCATE a, b", Pg), None);
         assert_eq!(q("DROP TABLE a, b", Mysql), None);
         assert_eq!(q("DROP INDEX idx", Pg), None);
+    }
+
+    #[test]
+    fn table_and_set_columns_are_parsed() {
+        let q = impact_query("UPDATE public.\"Orders\" AS o SET o.status = 'x', \"Total\" = total * 2 WHERE id = 1", Pg).unwrap();
+        assert_eq!(q.table, "public.\"Orders\"");
+        assert_eq!(q.op, WriteOp::Update { set_columns: Some(vec!["status".into(), "Total".into()]) });
+        assert_eq!(squash(&q.snapshot_sql), "SELECT * FROM public.\"Orders\" AS o WHERE id = 1");
+        // 值里的逗号不算列分隔
+        let q = impact_query("UPDATE t SET a = concat('x,y', b), c = 1", Mysql).unwrap();
+        assert_eq!(q.op, WriteOp::Update { set_columns: Some(vec!["a".into(), "c".into()]) });
+        // 元组赋值解析不了
+        let q = impact_query("UPDATE t SET (a, b) = (1, 2) WHERE id = 1", Pg).unwrap();
+        assert_eq!(q.op, WriteOp::Update { set_columns: None });
+        let q = impact_query("DELETE FROM `shop`.`items` i WHERE i.id > 3", Mysql).unwrap();
+        assert_eq!((q.table.as_str(), &q.op), ("`shop`.`items`", &WriteOp::Delete));
+        assert_eq!(impact_query("TRUNCATE ONLY logs", Pg).unwrap().op, WriteOp::WholeTable);
+        assert_eq!(unquote("\"a\"\"b\""), "a\"b");
+        assert_eq!(unquote("[x y]"), "x y");
     }
 }

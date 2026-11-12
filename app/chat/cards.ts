@@ -2,6 +2,7 @@
 // 消息列表是虚拟化的,单元格会被复用到别的消息上。
 
 import { signal } from "nsh";
+import type { UndoPrep } from "../lib/types";
 
 export type CardRun =
   | { kind: "idle" }
@@ -13,6 +14,10 @@ export interface CardState {
   /** 用户编辑后的文本;未编辑时为 undefined(显示 AI 原文) */
   readonly value?: string;
   readonly run: CardRun;
+  /** 执行前准备的撤销(写语句);执行成功后可用 */
+  readonly undo?: UndoPrep | null;
+  /** 撤销的进度:询问确认 / 执行中 / 已撤销 */
+  readonly undoState?: "confirm" | "running" | "done";
 }
 
 const IDLE: CardState = { run: { kind: "idle" } };

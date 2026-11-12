@@ -570,3 +570,28 @@ core:
         en: Aggregation results written to the target collection
         zh-CN: 聚合结果已写入目标集合
         zh-TW: 聚合結果已寫入目標集合
+  undo:
+    unsupported_statement:
+      en: "Undo is only available for single-table UPDATE and DELETE statements"
+      zh-CN: 只有单表的 UPDATE / DELETE 能撤销
+      zh-TW: 只有單表的 UPDATE / DELETE 能復原
+    whole_table:
+      en: "TRUNCATE and DROP TABLE can't be undone"
+      zh-CN: TRUNCATE 与 DROP TABLE 不能撤销
+      zh-TW: TRUNCATE 與 DROP TABLE 無法復原
+    too_many_rows:
+      en: "More than %{max} rows change: too many to keep for undo"
+      zh-CN: 改动超过 %{max} 行,太多了,不提供撤销
+      zh-TW: 變動超過 %{max} 列,太多了,不提供復原
+    no_primary_key:
+      en: "The table has no primary key, so the updated rows can't be found again for undo"
+      zh-CN: 表没有主键,撤销时找不回被更新的行
+      zh-TW: 資料表沒有主鍵,復原時找不回被更新的列
+    changes_primary_key:
+      en: "The UPDATE changes the primary key, so it can't be undone"
+      zh-CN: 这条 UPDATE 改了主键,不能撤销
+      zh-TW: 這條 UPDATE 改了主鍵,無法復原
+    unknown_columns:
+      en: "Couldn't tell which columns the UPDATE changes, so it can't be undone"
+      zh-CN: 看不出这条 UPDATE 改了哪些列,不能撤销
+      zh-TW: 看不出這條 UPDATE 改了哪些欄,無法復原

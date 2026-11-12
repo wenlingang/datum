@@ -13,6 +13,7 @@ import { modelOf, type TabModel } from "./model";
 import { Results, StatusLine } from "./Results";
 import { RedisInsight } from "./RedisInsight";
 import { RiskDialog } from "./RiskDialog";
+import { UndoDialog } from "./UndoDialog";
 import { SqlEditor } from "./SqlEditor";
 import { Toolbar } from "./Toolbar";
 
@@ -58,6 +59,7 @@ function ModelView(props: { m: TabModel }) {
         </If>
       </View>
       <RiskDialog m={m} />
+      <UndoDialog m={m} />
       <CellDialog m={m} />
     </View>
   );

@@ -4,7 +4,7 @@
 import { signal } from "nsh";
 import { t } from "nsh/i18n";
 import { chat as chatNative, errorText, sql as sqlNative } from "../lib/native";
-import { type Connection, supportsSql, type TableDetail, type ToolDetail } from "../lib/types";
+import { type Connection, supportsSql, type TableDetail, type ToolDetail, type UndoPrep } from "../lib/types";
 import {
   aiStore,
   appendMessage,
@@ -168,12 +168,18 @@ function truncateSql(s: string): string {
  * SQL 卡片的执行入口:在会话绑定的连接上预切分逐条执行,任一条失败即中止;
  * 结果以隐藏消息回灌对话。整段只读时走只读会话。返回 (是否成功, 摘要)。
  */
-export async function executeSql(sql: string): Promise<{ ok: boolean; summary: string }> {
+export async function executeSql(sql: string): Promise<{ ok: boolean; summary: string; undo: UndoPrep | null }> {
   const key = convoKey();
   const bound = key ? aiStore.convo(key)?.bound : null;
-  if (!key || !bound) return { ok: false, summary: t("chat.not_bound") };
+  if (!key || !bound) return { ok: false, summary: t("chat.not_bound"), undo: null };
   const stmts = sqlNative.statements(sql);
   const readOnly = sqlNative.isReadOnly(sql);
+  // 写语句:先抓会被改动的原始行,生成撤销用的反向语句
+  const undo: UndoPrep | null = readOnly
+    ? null
+    : await chatDeps
+        .undoPrepare(bound.kind, bound.connId, sql)
+        .catch((e): UndoPrep => ({ statements: [], rows: 0, reason: errorText(e) }));
   const multi = stmts.length > 1;
   const parts: string[] = [];
   let ok = true;
@@ -209,7 +215,22 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
   if (ok && (lower.includes("create") || lower.includes("drop") || lower.includes("alter"))) {
     chatDeps.refreshTables(bound.connId);
   }
-  return { ok, summary };
+  return { ok, summary, undo: ok ? undo : null };
+}
+
+/** 撤销某张卡片执行过的写操作:在一个事务里执行反向语句,并告知 AI。 */
+export async function undoCard(cardKeyValue: string, undo: UndoPrep): Promise<boolean> {
+  const key = convoKey();
+  const bound = key ? aiStore.convo(key)?.bound : null;
+  if (!key || !bound) return false;
+  try {
+    await chatDeps.importSql(bound.kind, bound.connId, undo.statements);
+    appendMessage(key, "user", `${t("chat.undone_tag")} ${t("chat.undone_rows", { rows: undo.rows })}`, true);
+    return true;
+  } catch (e) {
+    toast.error(t("undo.failed", { error: errorText(e) }));
+    return false;
+  }
 }
 
 /** 「编辑器运行」:只在会话绑定的连接上执行。`confirmed` 为卡片已做过破坏性确认。 */

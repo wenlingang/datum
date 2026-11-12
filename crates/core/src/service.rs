@@ -199,6 +199,83 @@ pub async fn write_impact(state: &AppState, kind: &DbKind, id: &str, stmt: &str)
     }))
 }
 
+/// 一段 SQL 的撤销准备:执行前抓快照、生成反向语句。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoPrep {
+    /// 反向语句(按执行顺序;多条写语句时已倒序排好),空表示不能撤销
+    pub statements: Vec<String>,
+    /// 快照里的行数(会被恢复的行)
+    pub rows: usize,
+    /// 不能撤销的原因(给界面显示);能撤销为 None
+    pub reason: Option<String>,
+}
+
+fn unsupported_reason(u: crate::sql::undo::Unsupported) -> String {
+    use crate::sql::undo::Unsupported::*;
+    match u {
+        Statement => t!("core.undo.unsupported_statement"),
+        WholeTable => t!("core.undo.whole_table"),
+        TooManyRows => t!("core.undo.too_many_rows", max = crate::sql::undo::MAX_ROWS),
+        NoPrimaryKey => t!("core.undo.no_primary_key"),
+        ChangesPrimaryKey => t!("core.undo.changes_primary_key"),
+        UnknownColumns => t!("core.undo.unknown_columns"),
+    }
+    .to_string()
+}
+
+/// 撤销查快照的服务端限时。
+const UNDO_TIMEOUT_MS: u32 = 30_000;
+
+/// 执行写语句之前调用:逐条抓取会被改动的原始行,生成反向语句。
+/// 只读语句跳过;有一条写语句不能撤销,整段就不提供撤销(给出原因)。
+pub async fn undo_prepare(state: &AppState, kind: &DbKind, id: &str, sql: &str) -> AppResult<UndoPrep> {
+    use crate::sql::undo::{self, Snapshot, Unsupported};
+    let no = |reason: String| UndoPrep { statements: vec![], rows: 0, reason: Some(reason) };
+    let Some(dialect) = Dialect::from_kind(kind) else {
+        return Ok(no(unsupported_reason(Unsupported::Statement)));
+    };
+    let mut per_statement: Vec<Vec<String>> = Vec::new();
+    let mut rows = 0usize;
+    for stmt in crate::sql::stmt::statements(sql) {
+        if crate::sql::risk::is_read_only(&stmt) {
+            continue;
+        }
+        let Some(q) = crate::sql::impact::impact_query(&stmt, dialect) else {
+            return Ok(no(unsupported_reason(Unsupported::Statement)));
+        };
+        if q.whole_table {
+            return Ok(no(unsupported_reason(Unsupported::WholeTable)));
+        }
+        let max = undo::MAX_ROWS as u32 + 1;
+        let r = query_read_only_timeout(state, kind, id, &q.snapshot_sql, max, UNDO_TIMEOUT_MS).await?;
+        if r.rows.len() > undo::MAX_ROWS {
+            return Ok(no(unsupported_reason(Unsupported::TooManyRows)));
+        }
+        let primary_key = if matches!(q.op, crate::sql::impact::WriteOp::Update { .. }) {
+            let name = crate::sql::impact::unquote(q.table.rsplit('.').next().unwrap_or(&q.table));
+            table_detail(state, kind, id, &name)
+                .await
+                .map(|d| d.columns.into_iter().filter(|c| c.is_pk).map(|c| c.name).collect())
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+        let snap = Snapshot { table: q.table, op: q.op, columns: r.columns, rows: r.rows, primary_key };
+        rows += snap.rows.len();
+        match undo::statements(&snap, dialect) {
+            Ok(s) => per_statement.push(s),
+            Err(u) => return Ok(no(unsupported_reason(u))),
+        }
+    }
+    if per_statement.is_empty() {
+        return Ok(no(unsupported_reason(Unsupported::Statement)));
+    }
+    // 后执行的先撤销
+    let statements = per_statement.into_iter().rev().flatten().collect();
+    Ok(UndoPrep { statements, rows, reason: None })
+}
+
 pub async fn table_detail(
     state: &AppState,
     kind: &DbKind,

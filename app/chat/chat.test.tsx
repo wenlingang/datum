@@ -77,6 +77,8 @@ test("SQL 卡片:风险标记、执行确认、结果回灌、编辑器运行", 
   await app.waitFor("text:/\\[Executed\\] DROP TABLE users;/");
   await app.waitFor("id:sql-card-2:1 >> text:Executed");
   expect(app.enabled("id:sql-run-2:1")).toBe(false);
+  // DROP 不能撤销:卡片上说明原因
+  expect(app.shows("id:sql-card-2:1 >> text:/Can't be undone: TRUNCATE and DROP TABLE/")).toBe(true);
 
   // 查询直接执行:结果在对话里成表
   await app.press("id:sql-run-2:3");
@@ -197,5 +199,24 @@ test("对话工作台里查询结果默认展开,可在编辑器中打开", asyn
   expect(app.shows("text:no such table: nope")).toBe(false);
   await app.press("role:button[Open in Editor]");
   await app.waitFor("text:/openQuery c1 SELECT status/");
+  app.dispose();
+});
+
+test("AI 卡片上执行的写操作可撤销,撤销结果告知 AI", async () => {
+  const app = await open("./testing/agent.tsx", SIZE);
+  await app.type("id:ai-input", "清理取消的订单");
+  await app.press("id:ai-send");
+  await app.waitFor("text:/已支付 42 单/", { timeout: 10_000 });
+  expect(app.texts()).toContain("DELETE FROM orders WHERE status = ");
+  await app.press("role:button[Run]");
+  await app.waitFor("id:sql-confirm");
+  await app.press("id:sql-confirm-ok");
+  await app.waitFor("text:Can be undone: restores the 2 rows as they were before", { timeout: 10_000 });
+  await app.press("role:button[Undo]");
+  await app.waitFor("text:/Restore the 2 rows as they were before\\?/");
+  await app.press("role:button[Undo Changes]");
+  await app.waitFor("text:✓ Undone: 2 rows restored", { timeout: 10_000 });
+  // 撤销以隐藏消息记进对话
+  expect(app.texts().some((x) => x.startsWith("[Undone]"))).toBe(true);
   app.dispose();
 });

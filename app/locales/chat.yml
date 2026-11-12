@@ -253,6 +253,14 @@ chat:
     en: "Open in Editor"
     zh-CN: "在编辑器中打开"
     zh-TW: "在編輯器中開啟"
+  undone_tag:
+    en: "[Undone]"
+    zh-CN: "[已撤销]"
+    zh-TW: "[已復原]"
+  undone_rows:
+    en: "The last change was undone: %{rows} rows restored to their earlier values."
+    zh-CN: "上一次改动已撤销:%{rows} 行恢复成改动前的值。"
+    zh-TW: "上一次變動已復原:%{rows} 列還原成變動前的值。"
   quote:
     en: Quote
     zh-CN: 引用

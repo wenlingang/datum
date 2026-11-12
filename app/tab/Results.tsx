@@ -87,6 +87,20 @@ export function Results(props: { m: TabModel }) {
         <Text testID="exec-ok" class={`${FS.sm} p-3 text-data`}>
           ✓ {okSummary(m)}
         </Text>
+        {/* 没有改到任何行:无需撤销,什么都不显示 */}
+        <If when={m.undo() && (m.undo()!.statements.length > 0 || m.undo()!.reason) ? m.undo() : null}>
+          {(u) => (
+            <If
+              when={u().statements.length > 0}
+              else={<Text testID="undo-unavailable" class={`${FS.xs} px-3 text-fg-faint`}>{t("undo.unavailable", { reason: u().reason ?? "" })}</Text>}
+            >
+              <View class="flex-row items-center gap-2 px-3">
+                <Btn small variant="outline" icon="undo-2" label={t("undo.button")} onPress={() => m.undoOpen.set(true)} testID="undo" />
+                <Text class={`${FS.xs} text-muted-foreground`}>{t("undo.available", { rows: u().rows })}</Text>
+              </View>
+            </If>
+          )}
+        </If>
       </If>
       <If when={body() === "noRows"}>
         <Hint class="p-3">{t("tab.query_ok_no_rows")}</Hint>

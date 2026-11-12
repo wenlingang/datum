@@ -394,3 +394,10 @@ export interface RedisReport {
   types: RedisGroupStat[];
   ttl: { persistent: number; withinHour: number; withinDay: number; withinWeek: number; longer: number };
 }
+
+/** 写语句的撤销准备:反向语句(空则不能撤销)、会恢复的行数、不能撤销的原因。 */
+export interface UndoPrep {
+  statements: string[];
+  rows: number;
+  reason: string | null;
+}

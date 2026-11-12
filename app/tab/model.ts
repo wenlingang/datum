@@ -23,6 +23,7 @@ import {
   type RiskFinding,
   type RowDelete,
   type TableDetail,
+  type UndoPrep,
   type WriteImpact,
   supportsSql,
 } from "../lib/types";
@@ -140,6 +141,10 @@ export interface TabModel {
   readonly cell: Signal<CellDialogState | null>;
   /** 编辑器里最近一次执行(运行 / Explain)的 SQL:报错时「让 AI 修复」、Explain 后「让 AI 解读」用 */
   readonly lastRun: Signal<{ sql: string; explain: boolean } | null>;
+  /** 最近一次写操作的撤销(执行前抓的快照生成);下一次执行即失效 */
+  readonly undo: Signal<UndoPrep | null>;
+  /** 撤销确认框是否打开 */
+  readonly undoOpen: Signal<boolean>;
 
   /** 结果区实测宽度(列宽铺满用) */
   readonly gridWidth: Signal<number>;
@@ -186,6 +191,8 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     risk: signal<RiskGate | null>(null),
     cell: signal<CellDialogState | null>(null),
     lastRun: signal<{ sql: string; explain: boolean } | null>(null),
+    undo: signal<UndoPrep | null>(null),
+    undoOpen: signal(false),
     gridWidth: signal(0),
     token: 0,
     filterSeq: 0,
@@ -395,18 +402,53 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
   }
   const query = sqlText.isQuery(sql);
   m.lastRun.set({ sql, explain: false });
-  void spawnQuery(m, sql, (r, elapsed) => {
-    m.browseTable.set(null);
-    m.page.set(0);
-    m.resultIsQuery.set(query);
-    m.sort.set(null);
-    resetFilter(m);
-    m.elapsedMs.set(elapsed);
-    setResult(m, r);
-    // 非查询语句可能改变表结构:刷新表列表
-    if (!query && conns.tables(m.connId)) void refreshTables(m.connId);
-    if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null));
-  });
+  m.undo.set(null);
+  const go = (undo: UndoPrep | null) =>
+    spawnQuery(m, sql, (r, elapsed) => {
+      m.browseTable.set(null);
+      m.page.set(0);
+      m.resultIsQuery.set(query);
+      m.sort.set(null);
+      resetFilter(m);
+      m.elapsedMs.set(elapsed);
+      setResult(m, r);
+      m.undo.set(undo);
+      // 非查询语句可能改变表结构:刷新表列表
+      if (!query && conns.tables(m.connId)) void refreshTables(m.connId);
+      if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null));
+    });
+  // 写语句:先抓会被改动的原始行,生成撤销用的反向语句,再执行
+  if (supportsSql(m.dbKind) && !sqlText.isReadOnly(sql)) {
+    const token = m.token;
+    m.running.set(true);
+    void db
+      .undoPrepare(m.dbKind, m.connId, sql)
+      .catch((e): UndoPrep => ({ statements: [], rows: 0, reason: errorText(e) }))
+      .then((undo) => {
+        // 等待期间又执行了别的(或标签页被重用):放弃这次
+        if (m.token !== token) return;
+        void go(undo);
+      });
+    return;
+  }
+  void go(null);
+}
+
+/** 撤销最近一次写操作:在一个事务里执行反向语句。 */
+export async function undoLast(m: TabModel) {
+  const undo = m.undo();
+  if (!undo || undo.statements.length === 0) return;
+  try {
+    await db.importSql(m.dbKind, m.connId, undo.statements);
+    batch(() => {
+      m.undo.set(null);
+      m.undoOpen.set(false);
+    });
+    toast.success(t("undo.done", { rows: undo.rows }));
+  } catch (e) {
+    m.undoOpen.set(false);
+    toast.error(t("undo.failed", { error: errorText(e) }));
+  }
 }
 
 async function runRedis(m: TabModel, cmd: string, skipHistory: boolean) {

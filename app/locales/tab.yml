@@ -830,3 +830,52 @@ rinsight:
     en: "%{n}d"
     zh-CN: "%{n} 天"
     zh-TW: "%{n} 天"
+undo:
+  button:
+    en: "Undo"
+    zh-CN: "撤销"
+    zh-TW: "復原"
+  available:
+    en: "Can be undone: restores the %{rows} rows as they were before"
+    zh-CN: "可撤销:恢复执行前的 %{rows} 行"
+    zh-TW: "可復原:還原執行前的 %{rows} 列"
+  unavailable:
+    en: "Can't be undone: %{reason}"
+    zh-CN: "不能撤销:%{reason}"
+    zh-TW: "無法復原:%{reason}"
+  title:
+    en: "Undo the Last Change"
+    zh-CN: "撤销上一次改动"
+    zh-TW: "復原上一次變動"
+  body:
+    en: "These %{count} statements restore the %{rows} rows as they were before the change, in one transaction:"
+    zh-CN: "以下 %{count} 条语句会在一个事务里把 %{rows} 行恢复成改动前的样子:"
+    zh-TW: "以下 %{count} 條陳述式會在一個交易中把 %{rows} 列還原成變動前的樣子:"
+  more:
+    en: "%{count} statements in all; showing the first %{shown}"
+    zh-CN: "共 %{count} 条,只显示前 %{shown} 条"
+    zh-TW: "共 %{count} 條,只顯示前 %{shown} 條"
+  concurrent_warning:
+    en: "The rows were captured just before the change. If someone else changed the same rows since, undo overwrites their changes too."
+    zh-CN: "原始行是在改动前一刻抓取的;如果之后别人又改了同样的行,撤销会把他们的改动一并覆盖。"
+    zh-TW: "原始資料列是在變動前一刻擷取的;如果之後別人又改了同樣的列,復原會把他們的變動一併覆蓋。"
+  confirm:
+    en: "Undo Changes"
+    zh-CN: "执行撤销"
+    zh-TW: "執行復原"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  done:
+    en: "Undone: %{rows} rows restored"
+    zh-CN: "已撤销:恢复了 %{rows} 行"
+    zh-TW: "已復原:還原了 %{rows} 列"
+  failed:
+    en: "Undo failed, nothing was changed: %{error}"
+    zh-CN: "撤销失败,数据未改动:%{error}"
+    zh-TW: "復原失敗,資料未變動:%{error}"
+  card_confirm:
+    en: "Restore the %{rows} rows as they were before? Changes made to them since are overwritten."
+    zh-CN: "把这 %{rows} 行恢复成执行前的样子?之后对它们的改动会被覆盖。"
+    zh-TW: "把這 %{rows} 列還原成執行前的樣子?之後對它們的變動會被覆蓋。"

@@ -9,7 +9,7 @@ import type { DbKind, WriteImpact } from "../lib/types";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
-import { executeSql, runInEditor, target } from "./actions";
+import { executeSql, runInEditor, target, undoCard } from "./actions";
 import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmRequest, updateCard } from "./cards";
 import { chatDeps } from "./deps";
 import { ResultTable } from "./ToolCard";
@@ -252,7 +252,77 @@ export function SqlCard(props: {
         </If>
       </View>
       <CardResult run={run()} />
+      <CardUndo cardKey={props.cardKey} />
     </View>
+  );
+}
+
+/** 执行成功后的撤销:按钮 → 卡片内确认 → 事务里执行反向语句。不能撤销时说明原因。 */
+function CardUndo(props: { cardKey: string }) {
+  const st = () => cardState(props.cardKey);
+  // 没有改到任何行(无反向语句、也无原因):无需撤销,什么都不显示
+  const undo = () => {
+    const u = st().run.kind === "done" ? (st().undo ?? null) : null;
+    return u && (u.statements.length > 0 || u.reason) ? u : null;
+  };
+  const confirm = async () => {
+    const u = undo();
+    if (!u) return;
+    updateCard(props.cardKey, { undoState: "running" });
+    const ok = await undoCard(props.cardKey, u);
+    updateCard(props.cardKey, { undoState: ok ? "done" : undefined });
+    if (ok) toast.success(t("undo.done", { rows: u.rows }));
+  };
+  return (
+    <If when={undo()}>
+      {(u) => (
+        <View class="border-t border-border px-2.5 py-1.5">
+          <If
+            when={u().statements.length > 0}
+            else={<Text class={`${FS.xs} text-fg-faint`}>{t("undo.unavailable", { reason: u().reason ?? "" })}</Text>}
+          >
+            <If
+              when={st().undoState === "done"}
+              else={
+                <If
+                  when={st().undoState === "confirm" || st().undoState === "running"}
+                  else={
+                    <View class="flex-row items-center gap-2">
+                      <Btn
+                        small
+                        variant="outline"
+                        icon="undo-2"
+                        label={t("undo.button")}
+                        testID={`sql-undo-${props.cardKey}`}
+                        onPress={() => updateCard(props.cardKey, { undoState: "confirm" })}
+                      />
+                      <Text class={`${FS.xs} text-muted-foreground`}>{t("undo.available", { rows: u().rows })}</Text>
+                    </View>
+                  }
+                >
+                  <View class="gap-1.5">
+                    <Text class={`${FS.xs} text-foreground`}>{t("undo.card_confirm", { rows: u().rows })}</Text>
+                    <View class="flex-row gap-2">
+                      <Btn
+                        small
+                        variant="primary"
+                        label={t("undo.confirm")}
+                        disabled={st().undoState === "running"}
+                        testID={`sql-undo-ok-${props.cardKey}`}
+                        onPress={() => void confirm()}
+                      />
+                      <Btn small variant="ghost" label={t("undo.cancel")} onPress={() => updateCard(props.cardKey, { undoState: undefined })} />
+                    </View>
+                  </View>
+                </If>
+              }
+            >
+              <Text class={`${FS.xs} text-data`}>{`✓ ${t("undo.done", { rows: u().rows })}`}</Text>
+            </If>
+          </If>
+        </View>
+      )}
+    </If>
   );
 }
 
@@ -287,8 +357,8 @@ async function confirmed(req: ConfirmRequest) {
     return;
   }
   updateCard(req.cardKey, { run: { kind: "running" } });
-  const { ok, summary } = await executeSql(req.sql);
-  updateCard(req.cardKey, { run: ok ? { kind: "done", summary } : { kind: "failed", error: summary } });
+  const { ok, summary, undo } = await executeSql(req.sql);
+  updateCard(req.cardKey, { run: ok ? { kind: "done", summary } : { kind: "failed", error: summary }, undo });
 }
 
 /** 执行前的确认框:目标连接、语句全文(只读)、破坏性警告。挂在面板上。 */

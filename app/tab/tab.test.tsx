@@ -103,6 +103,44 @@ test("报错可交给 AI 修复;Explain 显示执行计划并可交给 AI 解读
   app.dispose();
 });
 
+test("写操作可撤销:执行后撤销把数据恢复原样;不能撤销时说明原因", async () => {
+  const app = await start();
+  await replaceSql(app, "UPDATE products SET origin = 'Undo test' WHERE id <= 3");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "✓ Executed successfully · 3 rows affected"), { timeout: 15000 });
+  await app.waitFor("text:Can be undone: restores the 3 rows as they were before");
+  await app.press("id:undo");
+  await app.waitFor("id:undo-dialog");
+  expect(app.texts().some((x) => x.includes("These 3 statements restore the 3 rows"))).toBe(true);
+  await app.press("id:undo-confirm");
+  await app.waitFor("text:Undone: 3 rows restored", { timeout: 15000 });
+  expect(app.shows("id:undo")).toBe(false);
+  // 数据回到原样:没有一行还是 'Undo test'
+  await app.press("text:UPDATE products SET origin = 'Undo test' WHERE id <= 3");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT COUNT(*) AS n FROM products WHERE origin = 'Undo test'");
+  await app.press("id:run");
+  await app.waitFor("id:result-grid", { timeout: 15000 });
+  expect(app.texts()).toContain("0");
+  // 没有改到任何行:不显示撤销,也不说「不能撤销」
+  await app.press("text:SELECT COUNT(*) AS n FROM products WHERE origin = 'Undo test'");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "UPDATE products SET origin = 'x' WHERE id < 0");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "✓ Executed successfully"), { timeout: 15000 });
+  expect(app.shows("id:undo")).toBe(false);
+  expect(app.shows("id:undo-unavailable")).toBe(false);
+  // DDL 不能撤销:执行照常,并说明原因(用一张临时表,不动其他测试用的数据)
+  await app.press("text:UPDATE products SET origin = 'x' WHERE id < 0");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "CREATE TABLE undo_scratch (id INTEGER)");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "✓ Executed successfully"), { timeout: 15000 });
+  await app.waitFor("id:undo-unavailable");
+  expect(hasText(app, "Can't be undone: Undo is only available for single-table UPDATE and DELETE")).toBe(true);
+  app.dispose();
+});
+
 test("破坏性语句先审查:取消不执行,确认才执行", async () => {
   const app = await start();
   await replaceSql(app, "DELETE FROM orders");
