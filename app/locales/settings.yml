@@ -46,6 +46,10 @@ menu:
     en: Toggle AI Assistant
     zh-CN: 显示/隐藏 AI 助手
     zh-TW: 顯示/隱藏 AI 助理
+  ai_workbench:
+    en: AI Workbench (Full Screen)
+    zh-CN: AI 对话工作台(全屏)
+    zh-TW: AI 對話工作台(全螢幕)
   erd:
     en: Relationship Diagram
     zh-CN: 关系图

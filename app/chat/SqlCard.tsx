@@ -1,17 +1,86 @@
 // AI 回复里的 SQL 卡片:可编辑(还原/格式化)、直接执行(结果回灌 AI)、编辑器运行、复制;
 // 破坏性语句标红并在执行前确认。对应 GPUI 版 chat/sql_card.rs。
 
-import { Text, View } from "nsh";
+import { cleanup, signal, Text, View } from "nsh";
 import { Dialog, Editor } from "nsh/base";
 import { t } from "nsh/i18n";
-import { sql as sqlNative } from "../lib/native";
-import type { DbKind } from "../lib/types";
+import { errorText, sql as sqlNative } from "../lib/native";
+import type { DbKind, WriteImpact } from "../lib/types";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
-import { executeSql, runInEditor } from "./actions";
+import { executeSql, runInEditor, target } from "./actions";
 import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmRequest, updateCard } from "./cards";
 import { chatDeps } from "./deps";
+import { ResultTable } from "./ToolCard";
+
+type ImpactState = { state: "loading" } | { state: "ok"; impact: WriteImpact } | { state: "none" } | { state: "error"; error: string };
+
+/** 确认框里预览的行数。 */
+const PREVIEW_ROWS = 5;
+
+/**
+ * 执行前预估各条写语句的影响范围(与编辑器的确认框同一套:改写成只读的 COUNT 与预览,
+ * 在数据库强制只读的会话里执行)。只读语句不列出。
+ */
+function ImpactPreview(props: { sql: string }) {
+  const to = target();
+  const writes = sqlNative.statements(props.sql).filter((s) => !sqlNative.isReadOnly(s));
+  const states = signal<ImpactState[]>(writes.map(() => ({ state: "loading" })));
+  let alive = true;
+  cleanup(() => {
+    alive = false;
+  });
+  void (async () => {
+    for (let i = 0; i < writes.length; i++) {
+      let next: ImpactState;
+      try {
+        const impact = to ? await chatDeps.writeImpact(to.kind, to.connId, writes[i]) : null;
+        next = impact ? { state: "ok", impact } : { state: "none" };
+      } catch (e) {
+        next = { state: "error", error: errorText(e) };
+      }
+      if (!alive) return;
+      states.update((l) => l.map((x, j) => (j === i ? next : x)));
+    }
+  })();
+  const line = (s: ImpactState) => {
+    if (s.state === "loading") return t("risk.impact_loading");
+    if (s.state === "none") return t("risk.impact_none");
+    if (s.state === "error") return t("risk.impact_failed", { error: s.error });
+    const n = s.impact.count.toLocaleString();
+    if (s.impact.count === 0) return s.impact.wholeTable ? t("risk.impact_table_empty") : t("risk.impact_zero");
+    return s.impact.wholeTable ? t("risk.impact_table", { count: n }) : t("risk.impact_rows", { count: n });
+  };
+  return (
+    <If when={writes.length > 0}>
+      <View testID="sql-confirm-impact" class="gap-2">
+        <Each of={states()}>
+          {(s, i) => (
+            <View class="gap-1.5 rounded-(--radius) border border-border bg-background px-3 py-2">
+              <Text
+                class={`${FS.xs}`}
+                classList={{
+                  "font-bold text-foreground": s().state === "ok" && (s() as { impact: WriteImpact }).impact.count > 0,
+                  "text-negative": s().state === "error",
+                  "text-muted-foreground": s().state !== "error" && !(s().state === "ok" && (s() as { impact: WriteImpact }).impact.count > 0),
+                }}
+              >
+                {writes.length > 1 ? `${t("chat.stmt_n", { n: i() + 1 })} · ${line(s())}` : line(s())}
+              </Text>
+              <If when={s().state === "ok" && (s() as { impact: WriteImpact }).impact.rows.length > 0}>
+                <ResultTable
+                  columns={(s() as { impact: WriteImpact }).impact.columns}
+                  rows={(s() as { impact: WriteImpact }).impact.rows.slice(0, PREVIEW_ROWS)}
+                />
+              </If>
+            </View>
+          )}
+        </Each>
+      </View>
+    </If>
+  );
+}
 
 /** 卡片内容高度自适应,超过约 14 行后内部滚动。 */
 const MAX_LINES = 14;
@@ -251,6 +320,7 @@ export function SqlConfirmDialog() {
             <View class="overflow-hidden rounded-(--radius) border border-border bg-editor">
               <SqlEditor value={req().sql} readOnly maxRows={16} />
             </View>
+            <ImpactPreview sql={req().sql} />
             <If when={req().destructive}>
               <View class="flex-row items-center gap-1.5">
                 <Icon name="triangle-alert" size={14} color="destructive" />

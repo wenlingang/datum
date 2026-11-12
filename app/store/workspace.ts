@@ -55,6 +55,8 @@ const activeByConn = signal<Record<string, string>>({});
 const sidebarOpen = signal(true);
 const detailOpen = signal(false);
 const aiOpen = signal(false);
+/** AI 对话铺满主区域(对话工作台):编辑器、标签页与右侧面板收起,侧栏保留 */
+const aiFullscreen = signal(false);
 const renamingId = signal<string | null>(null);
 const sidebarWidth = signal<number>(PANEL.sidebar.size);
 const detailWidth = signal<number>(PANEL.detail.size);
@@ -84,6 +86,7 @@ export const workspace = {
   sidebarOpen: () => sidebarOpen(),
   detailOpen: () => detailOpen(),
   aiOpen: () => aiOpen(),
+  aiFullscreen: () => aiFullscreen(),
   /** 正在双击重命名的 tab id。 */
   renamingId: () => renamingId(),
   sidebarWidth: () => sidebarWidth(),
@@ -188,8 +191,24 @@ export function cancelRename() {
 export const toggleSidebar = () => sidebarOpen.update((v) => !v);
 export const toggleDetail = () => detailOpen.update((v) => !v);
 export const setDetailOpen = (open: boolean) => detailOpen.set(open);
-export const toggleAi = () => aiOpen.update((v) => !v);
+/** 开关 AI 面板;全屏时关面板即退出全屏。 */
+export const toggleAi = () => {
+  if (aiFullscreen()) {
+    batch(() => {
+      aiFullscreen.set(false);
+      aiOpen.set(false);
+    });
+  } else aiOpen.update((v) => !v);
+};
 export const setAiOpen = (open: boolean) => aiOpen.set(open);
+/** 切换对话工作台(全屏对话);进入时顺带打开面板,退出后面板仍在右侧。 */
+export const toggleAiFullscreen = () =>
+  batch(() => {
+    const next = !aiFullscreen();
+    aiFullscreen.set(next);
+    if (next) aiOpen.set(true);
+  });
+export const setAiFullscreen = (on: boolean) => aiFullscreen.set(on);
 
 /** 拖动分隔条后记住宽度(面板收起再展开时保持)。 */
 export function setPanelWidth(panel: "sidebar" | "detail" | "ai", width: number) {

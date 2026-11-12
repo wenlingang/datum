@@ -2,6 +2,7 @@
 //! (system prompt 拼装、命中表名、回复分段、服务商预设)。
 
 use crate::runtime::{from, json, spawn, state};
+use datum_core::ai::agent::{AgentEvent, Cancel};
 use datum_core::ai::chat::{ChatEvent, ChatMessage};
 use datum_core::ai::commands as ai_cmd;
 use datum_core::ai::markdown::{Segment, parse_segments};
@@ -16,6 +17,11 @@ use nsh_core::JsonValue;
 use nsh_core::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+
+/// 当前在跑的对话:「停止生成」用。工具对话协作式取消(查库跑完再停),普通对话直接中止。
+static CURRENT_CANCEL: Mutex<Option<Cancel>> = Mutex::new(None);
+static CURRENT_ABORT: Mutex<Option<tokio::task::AbortHandle>> = Mutex::new(None);
 
 /// `Ai.systemPrompt` 的入参(TSX 侧收集的上下文)。
 #[derive(Deserialize)]
@@ -156,6 +162,7 @@ impl Ai {
                 let _ = tx.send(ChatEvent::Error { message: e });
             }
         });
+        *CURRENT_ABORT.lock().unwrap() = Some(done.abort_handle());
         while let Some(event) = rx.recv().await {
             let payload = match event {
                 ChatEvent::Delta { text } => serde_json::json!({ "type": "delta", "text": text }),
@@ -166,7 +173,54 @@ impl Ai {
             };
             on_event.post(payload);
         }
+        CURRENT_ABORT.lock().unwrap().take();
+        match done.await {
+            Ok(()) => Ok(()),
+            // 用户停止:不算错误
+            Err(e) if e.is_cancelled() => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// 带工具的流式对话(AI 自己查数据):在连接 `id`(类型 `kind`)上可列表、看表结构、跑只读查询。
+    /// `on_event` 收到 delta / toolStart `{ id, name, args }` / toolEnd `{ id, ok, summary, detail }` /
+    /// done / error。
+    pub async fn agent_chat(
+        kind: String,
+        id: String,
+        messages: JsonValue,
+        #[args(event)] on_event: Callback<JsonValue>,
+    ) -> Result<(), String> {
+        let wire: Vec<ChatMessage> = from(messages, "messages")?;
+        let kind: DbKind = from(JsonValue::String(kind), "kind")?;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AgentEvent>();
+        let cancel = Cancel::default();
+        *CURRENT_CANCEL.lock().unwrap() = Some(cancel.clone());
+        let done = background(async move {
+            let tx2 = tx.clone();
+            let result = ai_cmd::ai_agent_chat(&state(), kind, id, wire, cancel, move |e| {
+                let _ = tx2.send(e);
+            })
+            .await;
+            if let Err(e) = result {
+                let _ = tx.send(AgentEvent::Error { message: e });
+            }
+        });
+        while let Some(event) = rx.recv().await {
+            on_event.post(serde_json::to_value(&event).unwrap_or(JsonValue::Null));
+        }
+        CURRENT_CANCEL.lock().unwrap().take();
         done.await.map_err(|e| e.to_string())
+    }
+
+    /// 停止当前对话(回复以已收到的内容结束)。
+    pub fn stop_chat() {
+        if let Some(c) = CURRENT_CANCEL.lock().unwrap().take() {
+            c.cancel();
+        }
+        if let Some(a) = CURRENT_ABORT.lock().unwrap().take() {
+            a.abort();
+        }
     }
 }
 

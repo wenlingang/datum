@@ -142,16 +142,28 @@ async fn read_only_bounded(
     sql: &str,
     max_rows: u32,
 ) -> AppResult<QueryResult> {
+    query_read_only_timeout(state, kind, id, sql, max_rows, IMPACT_TIMEOUT_MS).await
+}
+
+/// 只读会话 + 服务端限时(PG / MySQL;SQLite 本地执行不限时),超时报 `impact_timeout` 文案。
+pub async fn query_read_only_timeout(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    max_rows: u32,
+    timeout_ms: u32,
+) -> AppResult<QueryResult> {
     let r = match kind {
-        DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(IMPACT_TIMEOUT_MS)).await,
-        DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(IMPACT_TIMEOUT_MS)).await,
+        DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
+        DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, Some(max_rows)),
         DbKind::Redis | DbKind::Mongo => return Err(unsupported()),
     };
     r.map_err(|e| {
         let text = e.display().to_ascii_lowercase();
         if text.contains("statement timeout") || text.contains("maximum statement execution time") {
-            AppError::new(ErrorKind::Query, t!("core.err.impact_timeout", secs = IMPACT_TIMEOUT_MS / 1000))
+            AppError::new(ErrorKind::Query, t!("core.err.impact_timeout", secs = timeout_ms / 1000))
         } else {
             e
         }

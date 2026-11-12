@@ -11,7 +11,7 @@ use std::time::Duration;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// 整个流式响应的上限:长回复也应在几分钟内完成。
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// 「测试」与拉取模型列表用的短超时:只是验证连通性,不该让用户等一分钟。
 const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -128,7 +128,7 @@ fn is_chat_model(id: &str) -> bool {
     .any(|k| l.contains(k))
 }
 
-fn http(timeout: Duration) -> Result<reqwest::Client, String> {
+pub(crate) fn http(timeout: Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .connect_timeout(CONNECT_TIMEOUT)
         .timeout(timeout)

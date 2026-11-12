@@ -149,6 +149,110 @@ chat:
     en: The SQL is quoted in the AI panel. Send it once the AI is configured or has finished replying.
     zh-CN: 已把 SQL 引用到 AI 面板;AI 配置好或上一条回复结束后再发送。
     zh-TW: 已把 SQL 引用到 AI 面板;AI 設定好或上一則回覆結束後再傳送。
+  tool_list_tables:
+    en: List tables
+    zh-CN: 列出表
+    zh-TW: 列出資料表
+  tool_describe_table:
+    en: Table structure
+    zh-CN: 查看表结构
+    zh-TW: 查看資料表結構
+  tool_run_query:
+    en: Query
+    zh-CN: 查询
+    zh-TW: 查詢
+  tool_running:
+    en: Running…
+    zh-CN: 查询中…
+    zh-TW: 查詢中…
+  tool_failed:
+    en: Failed
+    zh-CN: 失败
+    zh-TW: 失敗
+  tool_shown:
+    en: "Showing the first %{rows} rows and %{cols} columns"
+    zh-CN: "显示前 %{rows} 行、%{cols} 列"
+    zh-TW: "顯示前 %{rows} 列、%{cols} 欄"
+  empty_title:
+    en: "Ask about this database"
+    zh-CN: "问问这个库"
+    zh-TW: "問問這個資料庫"
+  empty_sub:
+    en: "I can look up tables and run read-only queries myself to answer, or write SQL for you to review."
+    zh-CN: "我可以自己查表结构、跑只读查询来回答,也可以写好 SQL 给你核对后执行。"
+    zh-TW: "我可以自己查資料表結構、跑唯讀查詢來回答,也可以寫好 SQL 給你核對後執行。"
+  suggest_tables:
+    en: "What is in here"
+    zh-CN: "这个库里有什么"
+    zh-TW: "這個庫裡有什麼"
+  suggest_tables_prompt:
+    en: "What tables does this database have, and what does each one store?"
+    zh-CN: "这个库里有哪些表?分别存什么数据?"
+    zh-TW: "這個資料庫有哪些資料表?分別存什麼資料?"
+  suggest_biggest:
+    en: "Biggest tables"
+    zh-CN: "数据量最大的表"
+    zh-TW: "資料量最大的表"
+  suggest_biggest_prompt:
+    en: "Which tables have the most rows? List the top 5 with their row counts."
+    zh-CN: "哪几张表数据量最大?列出前 5 张及行数。"
+    zh-TW: "哪幾張資料表資料量最大?列出前 5 張及列數。"
+  suggest_quality:
+    en: "Check data quality"
+    zh-CN: "检查数据质量"
+    zh-TW: "檢查資料品質"
+  suggest_quality_prompt:
+    en: "Look for data quality problems: duplicates, orphaned foreign keys, or unexpected NULLs."
+    zh-CN: "检查有没有数据质量问题:重复数据、孤儿外键、不该为空的空值。"
+    zh-TW: "檢查有沒有資料品質問題:重複資料、孤兒外鍵、不該為空的空值。"
+  suggest_create:
+    en: "Design a table"
+    zh-CN: "设计一张表"
+    zh-TW: "設計一張資料表"
+  suggest_create_prompt:
+    en: "Create a users table with id, name, email and created_at, following this database's conventions."
+    zh-CN: "按这个库现有的风格,新建一张 users 表,含 id、name、email、created_at。"
+    zh-TW: "依照這個資料庫現有的風格,建立一張 users 資料表,包含 id、name、email、created_at。"
+  thinking_for:
+    en: "Thinking… %{n}s"
+    zh-CN: "思考中… %{n} 秒"
+    zh-TW: "思考中… %{n} 秒"
+  retry:
+    en: "Retry"
+    zh-CN: "重试"
+    zh-TW: "重試"
+  stopped:
+    en: "Stopped"
+    zh-CN: "已停止"
+    zh-TW: "已停止"
+  regenerate:
+    en: "Regenerate"
+    zh-CN: "重新生成"
+    zh-TW: "重新產生"
+  stop:
+    en: "Stop"
+    zh-CN: "停止"
+    zh-TW: "停止"
+  jump_latest:
+    en: "Jump to the latest message"
+    zh-CN: "回到最新消息"
+    zh-TW: "回到最新訊息"
+  workbench:
+    en: "Full Screen"
+    zh-CN: "全屏"
+    zh-TW: "全螢幕"
+  exit_workbench:
+    en: "Exit Full Screen"
+    zh-CN: "退出全屏"
+    zh-TW: "結束全螢幕"
+  workbench_tooltip:
+    en: "AI workbench: chat fills the window — query, view results and change data in the conversation (⌘J)"
+    zh-CN: "AI 对话工作台:对话铺满窗口,在对话里查询、看结果、改数据(⌘J)"
+    zh-TW: "AI 對話工作台:對話佔滿視窗,在對話裡查詢、看結果、改資料(⌘J)"
+  open_in_editor:
+    en: "Open in Editor"
+    zh-CN: "在编辑器中打开"
+    zh-TW: "在編輯器中開啟"
   quote:
     en: Quote
     zh-CN: 引用

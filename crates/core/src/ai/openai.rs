@@ -1,5 +1,6 @@
 //! OpenAI Chat Completions(及兼容端点):`POST {base}/chat/completions`,Bearer 鉴权。
 
+use crate::ai::agent::{CallAcc, Item, ToolSpec, TurnOut};
 use crate::ai::chat::{
     debug_log, get_json, read_sse, send, truncate, ChatEvent, ChatMessage, Mode,
 };
@@ -56,6 +57,133 @@ pub(crate) async fn stream(
         }
         None => Err(t!("ai.err.unparsable_response", body = truncate(&body, 300)).to_string()),
     }
+}
+
+/// 带工具的一轮:记录转成 Chat Completions 的 messages(assistant 带 tool_calls、结果用 tool 角色),
+/// 流式解析 `delta.content` 与 `delta.tool_calls` 片段。
+pub(crate) async fn turn(
+    client: &reqwest::Client,
+    ep: &Endpoint,
+    system: &str,
+    items: &[Item],
+    tools: &[ToolSpec],
+    allow_tools: bool,
+    on_delta: &(dyn Fn(String) + Send + Sync),
+) -> Result<TurnOut, String> {
+    let body = turn_body(ep, system, items, tools, allow_tools);
+    let resp = send(
+        client
+            .post(format!("{}/chat/completions", ep.base_url))
+            .bearer_auth(&ep.api_key)
+            .json(&body),
+    )
+    .await?;
+    let mut out = TurnOut::default();
+    let mut acc = CallAcc::default();
+    let mut any = false;
+    let raw = read_sse(resp, |data| {
+        if data == "[DONE]" {
+            return Ok(true);
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else {
+            return Ok(false);
+        };
+        let Some(delta) = v.pointer("/choices/0/delta") else {
+            return Ok(false);
+        };
+        any = true;
+        if let Some(t) = delta.get("content").and_then(|c| c.as_str()).filter(|t| !t.is_empty()) {
+            out.text.push_str(t);
+            on_delta(t.to_string());
+        }
+        for c in delta.get("tool_calls").and_then(|c| c.as_array()).into_iter().flatten() {
+            let index = c.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
+            acc.push(
+                index,
+                c.get("id").and_then(|x| x.as_str()),
+                c.pointer("/function/name").and_then(|x| x.as_str()),
+                c.pointer("/function/arguments").and_then(|x| x.as_str()),
+            );
+        }
+        Ok(false)
+    })
+    .await?;
+    if !any {
+        // 网关无视 stream:true:按整段 JSON 解析
+        let body = String::from_utf8_lossy(&raw);
+        let v: serde_json::Value = serde_json::from_str(body.trim())
+            .map_err(|_| t!("ai.err.unparsable_response", body = truncate(&body, 300)).to_string())?;
+        let msg = v.pointer("/choices/0/message").cloned().unwrap_or_default();
+        if let Some(t) = msg.get("content").and_then(|c| c.as_str()).filter(|t| !t.is_empty()) {
+            out.text.push_str(t);
+            on_delta(t.to_string());
+        }
+        for (i, c) in msg.get("tool_calls").and_then(|c| c.as_array()).into_iter().flatten().enumerate() {
+            acc.push(
+                i,
+                c.get("id").and_then(|x| x.as_str()),
+                c.pointer("/function/name").and_then(|x| x.as_str()),
+                c.pointer("/function/arguments").and_then(|x| x.as_str()),
+            );
+        }
+    }
+    out.calls = acc.finish();
+    Ok(out)
+}
+
+fn turn_body(ep: &Endpoint, system: &str, items: &[Item], tools: &[ToolSpec], allow_tools: bool) -> serde_json::Value {
+    let mut messages = Vec::new();
+    if !system.is_empty() {
+        messages.push(serde_json::json!({ "role": "system", "content": system }));
+    }
+    for item in items {
+        match item {
+            Item::User(text) => messages.push(serde_json::json!({ "role": "user", "content": text })),
+            Item::Assistant { text, calls } => {
+                let mut m = serde_json::json!({ "role": "assistant", "content": text });
+                if !calls.is_empty() {
+                    m["tool_calls"] = calls
+                        .iter()
+                        .map(|c| {
+                            serde_json::json!({
+                                "id": c.id,
+                                "type": "function",
+                                "function": { "name": c.name, "arguments": c.args.to_string() },
+                            })
+                        })
+                        .collect();
+                }
+                messages.push(m);
+            }
+            Item::Results(results) => {
+                for (call, content) in results {
+                    messages.push(serde_json::json!({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": content,
+                    }));
+                }
+            }
+        }
+    }
+    let mut body = serde_json::json!({
+        "model": ep.model,
+        "messages": messages,
+        "stream": true,
+    });
+    if !tools.is_empty() {
+        body["tools"] = tools
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": { "name": t.name, "description": t.description, "parameters": t.parameters },
+                })
+            })
+            .collect();
+        body["tool_choice"] = if allow_tools { "auto" } else { "none" }.into();
+    }
+    body
 }
 
 pub(crate) async fn list_models(

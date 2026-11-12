@@ -1,6 +1,8 @@
+pub mod agent;
 pub mod anthropic;
 pub mod chat;
 pub mod commands;
+pub mod db_tools;
 pub mod gemini;
 pub mod markdown;
 pub mod openai;

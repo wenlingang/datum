@@ -26,9 +26,11 @@ export function mountChat(options: FakeOptions = {}, before?: () => void, left?:
   before?.();
   mount(() => (
     <View class="flex-1 flex-row bg-background">
-      <View class="flex-1">{left?.()}</View>
-      <View class="w-[380px]">
-        <ChatPanel />
+      <If when={!options.wide}>
+        <View class="flex-1">{left?.()}</View>
+      </If>
+      <View class={options.wide ? "flex-1" : "w-[380px]"}>
+        <ChatPanel wide={options.wide} />
       </View>
       <Toasts />
     </View>

@@ -199,6 +199,23 @@ export type ChatEvent =
   | { type: "done"; full: string }
   | { type: "error"; message: string };
 
+/** 带工具的对话(AI 自己查数据)的事件:在 ChatEvent 之外多了工具开始 / 结束。 */
+export type AgentEvent =
+  | ChatEvent
+  | { type: "toolStart"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "toolEnd"; id: string; ok: boolean; summary: string; detail: ToolDetail };
+
+/** 工具结果的展示数据:查询给 sql / columns / rows,表结构给 table / columns,出错给 error。 */
+export interface ToolDetail {
+  sql?: string;
+  columns?: unknown[];
+  rows?: (string | null)[][];
+  capped?: boolean;
+  table?: string;
+  tables?: string[];
+  error?: string;
+}
+
 // ==== chat ====
 
 /** AI 回复的一段:普通文本(Markdown)或 SQL 代码块。 */

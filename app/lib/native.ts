@@ -3,6 +3,7 @@
 
 import { Ai, Db, Prefs as NativePrefs, Sql, Store } from "datum/native";
 import type {
+  AgentEvent,
   AiSettings,
   AiStatus,
   CellEdit,
@@ -101,6 +102,11 @@ export const ai = {
   knowledge: () => Ai.knowledge() as KnowledgeDoc,
   chat: (messages: { role: string; content: string }[], onEvent: (e: ChatEvent) => void) =>
     Ai.chat(messages, (e) => onEvent(e as ChatEvent)),
+  /** 停止当前对话(回复以已收到的内容结束)。 */
+  stopChat: () => Ai.stopChat(),
+  /** 带工具的对话:AI 可在连接 `id` 上列表、看表结构、跑只读查询。 */
+  agentChat: (kind: DbKind, id: string, messages: { role: string; content: string }[], onEvent: (e: AgentEvent) => void) =>
+    Ai.agentChat(kind, id, messages, (e) => onEvent(e as AgentEvent)),
 };
 
 /** 原生调用抛出的错误 → 给用户看的文案。 */

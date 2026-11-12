@@ -4,7 +4,7 @@
 import { signal } from "nsh";
 import { t } from "nsh/i18n";
 import { chat as chatNative, errorText, sql as sqlNative } from "../lib/native";
-import { type Connection, supportsSql, type TableDetail } from "../lib/types";
+import { type Connection, supportsSql, type TableDetail, type ToolDetail } from "../lib/types";
 import {
   aiStore,
   appendMessage,
@@ -13,12 +13,15 @@ import {
   clearConvo,
   sendMessage,
   setPendingRef,
+  takeLastUserTurn,
 } from "../store/ai";
 import { toast } from "../store/toast";
 import { setAiOpen } from "../store/workspace";
 import { clearCards } from "./cards";
 import { chatDeps } from "./deps";
 
+/** 执行结果在对话里保留的行数。 */
+const RESULT_ROWS = 200;
 /** 按需拉取过的表结构(key = connId:table),对话期间复用;清空对话时丢弃。 */
 const details = new Map<string, TableDetail>();
 /** 发送前在拉表结构:此时不允许再发。 */
@@ -117,7 +120,19 @@ async function prepareAndSend(key: string, to: BoundConn, text: string) {
     toast.error(errorText(e));
     return;
   }
-  await sendMessage(key, prompt, text);
+  // 关系库:AI 可以自己列表、看表结构、跑只读查询
+  await sendMessage(key, prompt, text, supportsSql(to.kind) ? { kind: to.kind, connId: to.connId } : undefined);
+}
+
+/** 「重新生成」/「重试」:去掉最后一轮,原样重发那条用户消息(引用的 SQL 已在正文里)。 */
+export function regenerate() {
+  const key = convoKey();
+  const to = target();
+  if (!key || !to || !canSend()) return;
+  const text = takeLastUserTurn(key);
+  if (text === null) return;
+  preparing.set(true);
+  void prepareAndSend(key, to, text).finally(() => preparing.set(false));
 }
 
 /** 清空当前会话(连同表结构缓存与卡片状态)。 */
@@ -162,6 +177,8 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
   const multi = stmts.length > 1;
   const parts: string[] = [];
   let ok = true;
+  /** 最后一条带结果集的查询:在对话里直接显示成表 */
+  let table: ToolDetail | undefined;
   for (let i = 0; i < stmts.length; i++) {
     const stmt = stmts[i];
     const label = multi ? t("chat.stmt_n", { n: i + 1 }) : "";
@@ -169,6 +186,7 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
       const r = readOnly
         ? await chatDeps.queryReadOnly(bound.kind, bound.connId, stmt)
         : await chatDeps.query(bound.kind, bound.connId, stmt);
+      if (r.columns.length > 0) table = { sql: stmt, columns: r.columns, rows: r.rows.slice(0, RESULT_ROWS) };
       const brief = sqlNative.isQuery(stmt)
         ? t("chat.returned_rows", { count: r.rows.length })
         : `${t("chat.succeeded")}${r.affected ? t("chat.affected_rows", { count: r.affected }) : ""}`;
@@ -185,6 +203,7 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
     "user",
     `${t("chat.executed_tag")} ${truncateSql(sql)}\n${t("chat.result_label")}${ok ? "✓" : "✗"} ${summary}`,
     true,
+    table ? { table } : undefined,
   );
   const lower = sql.toLowerCase();
   if (ok && (lower.includes("create") || lower.includes("drop") || lower.includes("alter"))) {

@@ -1,6 +1,6 @@
 // 测试与开发入口共用的假数据:AI 配置、连接、模拟的流式回复。不碰真实配置、数据库与 AI 服务。
 
-import type { AiSettings, ChatEvent, Connection, QueryResult } from "../lib/types";
+import type { AgentEvent, AiSettings, ChatEvent, Connection, QueryResult, WriteImpact } from "../lib/types";
 import { aiBackend, refreshAi } from "../store/ai";
 import { toast } from "../store/toast";
 import { chatDeps } from "./deps";
@@ -48,9 +48,17 @@ export function chunks(text: string, size = 12): string[] {
 }
 
 export interface FakeOptions {
+  /** 以对话工作台(铺满)的方式挂载面板 */
+  wide?: boolean;
   ready?: boolean;
   /** 模拟回复;函数形式可按请求决定事件序列 */
   events?: (messages: { role: string; content: string }[]) => ChatEvent[];
+  /** 写语句的影响范围预估(确认框用);不给则统一回 3 行 */
+  impact?: (sql: string) => WriteImpact | null;
+  /** 带工具对话的事件序列(含 toolStart / toolEnd);不给则与普通对话相同 */
+  agentEvents?: (messages: { role: string; content: string }[]) => AgentEvent[];
+  /** 带工具对话直接报错(模拟模型不支持工具):给出错误文本 */
+  agentError?: string;
   /** 事件间隔(毫秒) */
   delay?: number;
   queries?: string[];
@@ -73,20 +81,34 @@ export function installFakes(o: FakeOptions = {}) {
     settings = s;
     return s;
   };
-  aiBackend.chat = (messages, onEvent) => {
-    sent.push(messages);
-    const events = o.events
-      ? o.events(messages)
-      : [...chunks(REPLY).map((text) => ({ type: "delta" as const, text })), { type: "done" as const, full: REPLY }];
-    return new Promise<void>((resolve) => {
+  // 「停止」:正在播放的流不再推事件、直接结束(同原生侧中止)
+  let stopped = false;
+  aiBackend.stop = () => {
+    stopped = true;
+  };
+  const play = <E,>(events: E[], onEvent: (e: E) => void) =>
+    new Promise<void>((resolve) => {
+      stopped = false;
       let i = 0;
       const step = () => {
-        if (i >= events.length) return resolve();
+        if (stopped || i >= events.length) return resolve();
         onEvent(events[i++]);
         setTimeout(step, o.delay ?? 10);
       };
       setTimeout(step, o.delay ?? 10);
     });
+  const plainEvents = (messages: { role: string; content: string }[]): ChatEvent[] =>
+    o.events
+      ? o.events(messages)
+      : [...chunks(REPLY).map((text) => ({ type: "delta" as const, text })), { type: "done" as const, full: REPLY }];
+  aiBackend.chat = (messages, onEvent) => {
+    sent.push(messages);
+    return play(plainEvents(messages), onEvent);
+  };
+  aiBackend.agentChat = (_kind, _id, messages, onEvent) => {
+    sent.push(messages);
+    if (o.agentError) return play([{ type: "error" as const, message: o.agentError }], onEvent);
+    return play(o.agentEvents ? o.agentEvents(messages) : plainEvents(messages), onEvent);
   };
   chatDeps.headConn = () => FAKE_CONN;
   chatDeps.currentTable = () => null;
@@ -101,6 +123,11 @@ export function installFakes(o: FakeOptions = {}) {
   chatDeps.query = (_k, _id, sql) => run(sql);
   chatDeps.queryReadOnly = (_k, _id, sql) => run(sql);
   chatDeps.refreshTables = () => {};
+  chatDeps.writeImpact = async (_k, _id, sql) =>
+    o.impact
+      ? o.impact(sql)
+      : { count: 3, wholeTable: false, columns: ["id", "name"], rows: [["1", "a"], ["2", "b"], ["3", "c"]] };
+  chatDeps.openQuery = (sql, connId) => toast.info(`openQuery ${connId} ${sql}`);
   chatDeps.insertAndRun = (sql, connId, confirmed) => {
     inserted.push({ sql, connId, confirmed });
     toast.info(`insertAndRun ${connId} confirmed=${confirmed}`);

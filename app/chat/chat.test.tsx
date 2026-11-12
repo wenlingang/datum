@@ -18,7 +18,7 @@ test("未配置 AI 时引导去设置", async () => {
 
 test("发送后流式拼接回复,并渲染 SQL 卡片", async () => {
   const app = await open("./testing/streaming.tsx", SIZE);
-  await app.waitFor("text:Generate SQL with natural language, for example:");
+  await app.waitFor("text:Ask about this database");
   expect(app.shows("text:gpt-4o")).toBe(true);
   expect(app.enabled("id:ai-send")).toBe(false);
   await app.type("id:ai-input", "建一张 users 表");
@@ -35,7 +35,7 @@ test("发送后流式拼接回复,并渲染 SQL 卡片", async () => {
   // 绑定连接显示在标题栏,清空按钮出现
   expect(app.shows("text:local / shop")).toBe(true);
   await app.press("id:ai-clear");
-  await app.waitFor("text:Generate SQL with natural language, for example:");
+  await app.waitFor("text:Ask about this database");
   app.dispose();
 });
 
@@ -60,10 +60,11 @@ test("SQL 卡片:风险标记、执行确认、结果回灌、编辑器运行", 
   expect(app.shows("id:sql-card-2:1 >> text:Destructive")).toBe(true);
   expect(app.shows("id:sql-card-2:3 >> text:Destructive")).toBe(false);
 
-  // 直接执行:先弹确认框(含破坏性警告),取消不执行
+  // 直接执行:先弹确认框(含破坏性警告与影响范围预估),取消不执行
   await app.press("id:sql-run-2:1");
   await app.waitFor("id:sql-confirm");
   expect(app.shows("text:/Contains destructive statements/")).toBe(true);
+  await app.waitFor("id:sql-confirm-impact >> text:The table currently has 7 rows; all of them will be removed");
   expect(app.shows("text:The following statement will run on local / shop:")).toBe(true);
   await app.press("id:sql-confirm-cancel");
   await app.waitFor("id:sql-confirm", { state: "gone" });
@@ -76,6 +77,15 @@ test("SQL 卡片:风险标记、执行确认、结果回灌、编辑器运行", 
   await app.waitFor("text:/\\[Executed\\] DROP TABLE users;/");
   await app.waitFor("id:sql-card-2:1 >> text:Executed");
   expect(app.enabled("id:sql-run-2:1")).toBe(false);
+
+  // 查询直接执行:结果在对话里成表
+  await app.press("id:sql-run-2:3");
+  await app.waitFor("id:sql-confirm");
+  // 只读语句没有影响范围一栏
+  expect(app.shows("id:sql-confirm-impact")).toBe(false);
+  await app.press("id:sql-confirm-ok");
+  await app.waitFor("id:ai-result");
+  expect(app.shows("id:ai-result >> text:12")).toBe(true);
 
   // 只读语句「编辑器运行」免确认
   await app.press("id:sql-card-2:3 >> role:button[Run in Editor]");
@@ -93,7 +103,7 @@ test("SQL 卡片:风险标记、执行确认、结果回灌、编辑器运行", 
 
 test("编辑器报错 / Explain 交给 AI:引用 SQL、附报错或执行计划,自动发出", async () => {
   const app = await open("./testing/ask.tsx", SIZE);
-  await app.waitFor("text:Generate SQL with natural language, for example:");
+  await app.waitFor("text:Ask about this database");
   await app.press("id:trigger-fix");
   // 发出的消息:提问 + 报错原文 + 引用的 SQL
   await app.waitUntil(() => app.texts().some((x) => x.includes('column "nme" does not exist')), { timeout: 10_000 });
@@ -105,5 +115,87 @@ test("编辑器报错 / Explain 交给 AI:引用 SQL、附报错或执行计划,
   await app.waitUntil(() => app.texts().some((x) => x.includes("Seq Scan on orders")), { timeout: 10_000 });
   expect(app.texts().some((x) => x.includes("CREATE INDEX"))).toBe(true);
   expect(app.texts().some((x) => x.includes("SELECT * FROM orders WHERE total > 10"))).toBe(true);
+  app.dispose();
+});
+
+test("AI 自己查数据:工具步骤按顺序显示,可展开看 SQL 与结果;写语句仍是待确认卡片", async () => {
+  const app = await open("./testing/agent.tsx", SIZE);
+  await app.type("id:ai-input", "订单状态分布怎样?");
+  await app.press("id:ai-send");
+  await app.waitFor("text:/已支付 42 单/", { timeout: 10_000 });
+  expect(app.shows("text:我先查一下订单状态分布。")).toBe(true);
+  // 两个工具步骤:成功的显示摘要,失败的标红
+  expect(app.shows("id:ai-tool-1")).toBe(true);
+  expect(app.shows("id:ai-tool-1 >> text:2 行")).toBe(true);
+  expect(app.shows("id:ai-tool-2 >> text:Failed")).toBe(true);
+  // 默认收起;点开看完整 SQL 与结果表
+  expect(app.shows("text:cancelled")).toBe(false);
+  await app.press("id:ai-tool-1 >> label:Query");
+  await app.waitFor("text:cancelled");
+  expect(app.shows("text:42")).toBe(true);
+  // 写语句不会被自动执行:以 SQL 卡片出现,等用户点「Run」
+  expect(app.texts()).toContain("DELETE FROM orders WHERE status = ");
+  expect(app.texts()).toContain("Run");
+  app.dispose();
+});
+
+test("模型不支持工具:自动改用普通对话", async () => {
+  const app = await open("./testing/notools.tsx", SIZE);
+  await app.type("id:ai-input", "建一张 users 表");
+  await app.press("id:ai-send");
+  await app.waitFor("text:/然后初始化几条数据/", { timeout: 10_000 });
+  expect(app.texts().some((x) => x.includes("tools are not supported"))).toBe(false);
+  app.dispose();
+});
+
+test("停止、重新生成:停止后保留已收到的内容;重新生成替换最后一轮", async () => {
+  // 手动时钟:回复只在测试推进时间时流出,才能在中途点停止
+  const app = await open("./testing/slow.tsx", { ...SIZE, clock: {} });
+  const clock = app.clock!;
+  await app.type("id:ai-input", "讲讲这个库");
+  await app.press("id:ai-send");
+  await clock.runFor(300);
+  // 回复进行中:发送按钮换成停止,「思考中」已被文字取代
+  expect(app.shows("id:ai-stop")).toBe(true);
+  await app.press("id:ai-stop");
+  await clock.runFor(500);
+  await app.waitFor("id:ai-stopped");
+  expect(app.shows("id:ai-send")).toBe(true);
+  // 完整回复是「第 1 次回答:」+ 40 个「内容」;停止后只剩一部分
+  const partial = app.texts().find((x) => x.startsWith("第 1 次")) ?? "";
+  expect(partial.length).toBeGreaterThan(0);
+  expect(partial.length).toBeLessThan("第 1 次回答:".length + 80);
+  // 重新生成:同一个问题再问一次,旧回复被替换,用户消息不重复
+  await app.press("label:Regenerate");
+  await clock.runFor(5_000);
+  await app.waitFor("text:/第 2 次回答/");
+  expect(app.texts().some((x) => x.startsWith("第 1 次"))).toBe(false);
+  expect(app.texts().filter((x) => x === "讲讲这个库").length).toBe(1);
+  app.dispose();
+});
+
+test("出错可重试;空会话的建议点一下就发出", async () => {
+  const app = await open("./testing/error.tsx", SIZE);
+  await app.press("id:ai-suggestion-0");
+  await app.waitFor("text:What tables does this database have, and what does each one store?", { timeout: 5_000 });
+  await app.waitFor("id:ai-error", { timeout: 10_000 });
+  expect(app.shows("id:ai-retry")).toBe(true);
+  await app.press("id:ai-retry");
+  await app.waitFor("id:ai-error", { timeout: 10_000 });
+  // 重试没有重复堆出用户消息
+  expect(app.texts().filter((x) => x.startsWith("What tables does this database have")).length).toBe(1);
+  app.dispose();
+});
+
+test("对话工作台里查询结果默认展开,可在编辑器中打开", async () => {
+  const app = await open("./testing/agent-wide.tsx", SIZE);
+  await app.type("id:ai-input", "订单状态分布怎样?");
+  await app.press("id:ai-send");
+  await app.waitFor("text:/已支付 42 单/", { timeout: 10_000 });
+  // 成功的查询默认展开,失败的不展开
+  expect(app.shows("text:cancelled")).toBe(true);
+  expect(app.shows("text:no such table: nope")).toBe(false);
+  await app.press("role:button[Open in Editor]");
+  await app.waitFor("text:/openQuery c1 SELECT status/");
   app.dispose();
 });

@@ -5,10 +5,10 @@ import { Clipboard } from "nsh";
 import { openSettings } from "../dialogs/index";
 import { chat as chatNative, db } from "../lib/native";
 import type { ColumnsByTable, Connection, DbKind, QueryResult, TableDetail } from "../lib/types";
-import { conns, loadTables, refreshTables } from "../store/conns";
+import { activate, conns, loadTables, refreshTables } from "../store/conns";
 import { maxRows } from "../store/prefs";
-import { workspace } from "../store/workspace";
-import { activeSelectionText, insertAndRun } from "../tab/index";
+import { setAiFullscreen, workspace } from "../store/workspace";
+import { activeSelectionText, insertAndRun, newQueryTab } from "../tab/index";
 
 export const chatDeps = {
   /** 当前连接(当前 tab 的连接,否则侧栏聚焦的连接)。 */
@@ -34,6 +34,14 @@ export const chatDeps = {
   /** 表结构变更后刷新对象列表。 */
   refreshTables: (connId: string): void => {
     void refreshTables(connId);
+  },
+  /** 写语句的影响范围预估(执行确认框用);改写不了的语句为 null。 */
+  writeImpact: db.writeImpact,
+  /** 「在编辑器中打开」:退出对话工作台,在该连接上新开查询 tab 并填入 SQL(不执行)。 */
+  openQuery: (sql: string, connId: string): void => {
+    setAiFullscreen(false);
+    activate(connId);
+    newQueryTab(sql);
   },
   systemPrompt: chatNative.systemPrompt,
   insertAndRun,

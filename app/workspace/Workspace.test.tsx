@@ -80,3 +80,25 @@ test("表右键:查看建表语句弹窗", async () => {
   await app.press("id:ddl-copy");
   await app.waitUntil(() => (app.clipboard() ?? "").includes("CREATE TABLE"));
 });
+
+test("AI 对话工作台:对话铺满主区域、侧栏保留;再按一次或 ⌘J 回到编辑布局", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("label:products");
+  await app.press("id:toggle-ai");
+  await app.waitFor("id:ai-panel");
+  await app.press("id:ai-fullscreen");
+  await app.waitFor("id:ai-workbench");
+  // 标签页区域与右侧面板收起,侧栏还在
+  expect(app.shows("id:ai-panel")).toBe(false);
+  expect(app.shows("id:table-search")).toBe(true);
+  expect(app.shows("text:Exit Full Screen")).toBe(true);
+  await app.press("id:ai-fullscreen");
+  await app.waitFor("id:ai-workbench", { state: "gone" });
+  // 退出后 AI 面板仍在右侧
+  expect(app.shows("id:ai-panel")).toBe(true);
+  // ⌘J 切换
+  await app.keyboard.press("mod+j");
+  await app.waitFor("id:ai-workbench");
+  await app.keyboard.press("mod+j");
+  await app.waitFor("id:ai-workbench", { state: "gone" });
+});

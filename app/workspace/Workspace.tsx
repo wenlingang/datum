@@ -33,51 +33,81 @@ function Center() {
   );
 }
 
+/** 侧栏面板(普通布局与对话工作台共用)。 */
+function SidebarPanel() {
+  return (
+    <ResizablePanel
+      visible={workspace.sidebarOpen()}
+      size={workspace.sidebarWidth()}
+      minSize={PANEL.sidebar.min}
+      maxSize={PANEL.sidebar.max}
+      fixed
+      onResize={({ size }) => setPanelWidth("sidebar", size)}
+    >
+      <Sidebar />
+    </ResizablePanel>
+  );
+}
+
+/** 普通布局:侧栏 | 标签页 | 详情 | AI 面板。 */
+function Editing() {
+  return (
+    <ResizablePanelGroup handleClass="bg-border" handleAccessibilityLabel="resize">
+      <SidebarPanel />
+      <ResizablePanel minSize={240}>
+        <Center />
+      </ResizablePanel>
+      <ResizablePanel
+        visible={workspace.detailOpen()}
+        size={workspace.detailWidth()}
+        minSize={PANEL.detail.min}
+        maxSize={PANEL.detail.max}
+        fixed
+        onResize={({ size }) => setPanelWidth("detail", size)}
+      >
+        <View class="flex-1 bg-background" testID="detail-panel">
+          <DetailPanel />
+        </View>
+      </ResizablePanel>
+      <ResizablePanel
+        visible={workspace.aiOpen()}
+        size={workspace.aiWidth()}
+        minSize={PANEL.ai.min}
+        maxSize={PANEL.ai.max}
+        fixed
+        onResize={({ size }) => setPanelWidth("ai", size)}
+      >
+        <View class="flex-1 bg-background" testID="ai-panel">
+          <ChatPanel />
+        </View>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+/** 对话工作台:侧栏 | 铺满的 AI 对话(查询、结果、改数据都在对话里完成)。 */
+function Conversing() {
+  return (
+    <ResizablePanelGroup handleClass="bg-border" handleAccessibilityLabel="resize">
+      <SidebarPanel />
+      <ResizablePanel minSize={360}>
+        <View class="flex-1 bg-background" testID="ai-workbench">
+          <ChatPanel wide />
+        </View>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
 export function Workspace() {
   installAppCommands();
   return (
     <View class="flex-1 bg-background">
       <TopBar />
       <View class="min-h-0 flex-1">
-        <ResizablePanelGroup handleClass="bg-border" handleAccessibilityLabel="resize">
-          <ResizablePanel
-            visible={workspace.sidebarOpen()}
-            size={workspace.sidebarWidth()}
-            minSize={PANEL.sidebar.min}
-            maxSize={PANEL.sidebar.max}
-            fixed
-            onResize={({ size }) => setPanelWidth("sidebar", size)}
-          >
-            <Sidebar />
-          </ResizablePanel>
-          <ResizablePanel minSize={240}>
-            <Center />
-          </ResizablePanel>
-          <ResizablePanel
-            visible={workspace.detailOpen()}
-            size={workspace.detailWidth()}
-            minSize={PANEL.detail.min}
-            maxSize={PANEL.detail.max}
-            fixed
-            onResize={({ size }) => setPanelWidth("detail", size)}
-          >
-            <View class="flex-1 bg-background" testID="detail-panel">
-              <DetailPanel />
-            </View>
-          </ResizablePanel>
-          <ResizablePanel
-            visible={workspace.aiOpen()}
-            size={workspace.aiWidth()}
-            minSize={PANEL.ai.min}
-            maxSize={PANEL.ai.max}
-            fixed
-            onResize={({ size }) => setPanelWidth("ai", size)}
-          >
-            <View class="flex-1 bg-background" testID="ai-panel">
-              <ChatPanel />
-            </View>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+        <If when={workspace.aiFullscreen()} else={<Editing />}>
+          <Conversing />
+        </If>
       </View>
       <StatusBar />
       <DdlDialog />

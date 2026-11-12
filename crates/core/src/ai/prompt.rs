@@ -253,6 +253,43 @@ pub struct PromptContext<'a> {
     pub knowledge: Option<(&'a str, &'a str)>,
 }
 
+/// 带工具的对话(AI 自己查数据)追加在 system prompt 末尾的规则。
+pub fn agent_rules_in(locale: &str) -> String {
+    match Lang::from_locale(locale) {
+        Lang::En => [
+            "Tools:",
+            "You can query this database yourself with tools: list_tables, describe_table, and run_query (read-only).",
+            "- For questions about the data, run the queries yourself instead of asking the user to run SQL. Check table and column names with describe_table when unsure.",
+            "- Keep results small: aggregate, filter and LIMIT; avoid SELECT * on large tables. You may run several queries step by step.",
+            "- Then answer concisely with the actual numbers and findings; briefly mention how you got them when it helps.",
+            "- Never try to change data with tools. For INSERT / UPDATE / DELETE / DDL, put the statement in a ```sql code block in your reply; the user reviews and runs it.",
+        ]
+        .join("\n"),
+        Lang::ZhCn => [
+            "工具:",
+            "你可以用工具自己查询这个库:list_tables(列出表)、describe_table(查看表结构)、run_query(只读查询)。",
+            "- 关于数据的问题,自己执行查询得出答案,不要让用户去跑 SQL;不确定表名、列名时先用 describe_table 核实。",
+            "- 查询结果要小:用聚合、过滤和 LIMIT,不要对大表 SELECT *;可以分几步多次查询。",
+            "- 然后用实际的数字和发现简洁作答;有帮助时简要说明是怎么查出来的。",
+            "- 不要试图用工具修改数据。需要 INSERT / UPDATE / DELETE / DDL 时,把语句放进回复里的 ```sql 代码块,由用户核对后执行。",
+        ]
+        .join("\n"),
+        Lang::ZhTw => [
+            "工具:",
+            "你可以用工具自己查詢這個資料庫:list_tables(列出資料表)、describe_table(查看資料表結構)、run_query(唯讀查詢)。",
+            "- 關於資料的問題,自己執行查詢得出答案,不要請使用者去跑 SQL;不確定資料表或欄位名稱時先用 describe_table 核實。",
+            "- 查詢結果要小:使用彙總、篩選與 LIMIT,不要對大型資料表 SELECT *;可以分幾步多次查詢。",
+            "- 然後用實際的數字與發現簡潔作答;有幫助時簡要說明是怎麼查出來的。",
+            "- 不要試圖用工具修改資料。需要 INSERT / UPDATE / DELETE / DDL 時,把陳述式放進回覆裡的 ```sql 程式碼區塊,由使用者核對後執行。",
+        ]
+        .join("\n"),
+    }
+}
+
+pub fn agent_rules() -> String {
+    agent_rules_in(&current_locale())
+}
+
 /// 按当前界面语言(全局 `rust_i18n::locale()`)拼 system prompt。
 pub fn build_system_prompt(ctx: &PromptContext) -> String {
     build_system_prompt_in(ctx, &current_locale())
@@ -506,5 +543,16 @@ mod tests {
     fn mentioned_tables_case_insensitive() {
         let tables = vec!["Users".to_string(), "orders".to_string()];
         assert_eq!(mentioned_tables("给 users 加一列", &tables), vec!["Users"]);
+    }
+
+    #[test]
+    fn agent_rules_aligned_across_locales() {
+        for locale in ["en", "zh-CN", "zh-TW"] {
+            let r = agent_rules_in(locale);
+            assert_eq!(r.lines().count(), 6, "{locale}");
+            for tool in ["list_tables", "describe_table", "run_query", "```sql"] {
+                assert!(r.contains(tool), "{locale} missing {tool}");
+            }
+        }
     }
 }

@@ -151,3 +151,32 @@ pub async fn ai_chat(
     }
     Ok(())
 }
+
+/// 带工具的对话:模型可自行列表、看表结构、跑只读查询(在 `id` 这个连接上),
+/// 直到给出回答。事件依次推给 `on_event`;出错时同时推 Error 并返回。
+pub async fn ai_agent_chat(
+    state: &AppState,
+    kind: crate::core::connection::DbKind,
+    id: String,
+    messages: Vec<ChatMessage>,
+    cancel: crate::ai::agent::Cancel,
+    on_event: impl Fn(crate::ai::agent::AgentEvent) + Send + Sync,
+) -> Result<(), String> {
+    use crate::ai::agent::{self, AgentEvent};
+    let mut messages = messages;
+    // 工具规则追加到 system prompt 末尾(没有 system 就新加一条)
+    let rules = crate::ai::prompt::agent_rules();
+    match messages.iter_mut().find(|m| m.role == "system") {
+        Some(m) => m.content = format!("{}\n\n{rules}", m.content),
+        None => messages.insert(0, ChatMessage { role: "system".into(), content: rules }),
+    }
+    let settings = repo(state).load();
+    let ep = provider::resolve(&settings)?;
+    let tools = crate::ai::db_tools::specs();
+    let runner = crate::ai::db_tools::DbTools { state, kind, id };
+    if let Err(e) = agent::run(&ep, &messages, &tools, &runner, &cancel, &on_event).await {
+        on_event(AgentEvent::Error { message: e.clone() });
+        return Err(e);
+    }
+    Ok(())
+}

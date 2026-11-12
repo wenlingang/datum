@@ -1,5 +1,34 @@
 _version: 2
 ai:
+  tool:
+    tables:
+      en: "%{n} tables"
+      zh-CN: "%{n} 张表"
+      zh-TW: "%{n} 個資料表"
+    columns:
+      en: "%{table}: %{n} columns"
+      zh-CN: "%{table}:%{n} 列"
+      zh-TW: "%{table}:%{n} 欄"
+    rows:
+      en: "%{n} rows"
+      zh-CN: "%{n} 行"
+      zh-TW: "%{n} 列"
+    rows_capped:
+      en: "%{n}+ rows (capped)"
+      zh-CN: "%{n}+ 行(已截断)"
+      zh-TW: "%{n}+ 列(已截斷)"
+    missing_arg:
+      en: "Missing argument: %{arg}"
+      zh-CN: "缺少参数:%{arg}"
+      zh-TW: "缺少參數:%{arg}"
+    not_read_only:
+      en: Rejected — only read-only queries run automatically
+      zh-CN: 已拒绝:只有只读查询会自动执行
+      zh-TW: 已拒絕:只有唯讀查詢會自動執行
+    unknown:
+      en: "Unknown tool: %{name}"
+      zh-CN: "未知工具:%{name}"
+      zh-TW: "未知工具:%{name}"
   protocol:
     openai_compatible:
       en: OpenAI Compatible
