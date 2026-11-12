@@ -11,7 +11,7 @@
 import { batch, signal, type Signal } from "nsh";
 import type { EditorRef, EditorSelection } from "nsh/base";
 import { t } from "nsh/i18n";
-import { sendToAi } from "../chat/index";
+import { askAiExplainPlan, askAiFixError, planText, sendToAi } from "../chat/index";
 import { db, errorText, grid, redisKey, sql as sqlText } from "../lib/native";
 import {
   type CellEdit,
@@ -138,6 +138,8 @@ export interface TabModel {
   readonly historyOpen: Signal<boolean>;
   readonly risk: Signal<RiskGate | null>;
   readonly cell: Signal<CellDialogState | null>;
+  /** 编辑器里最近一次执行(运行 / Explain)的 SQL:报错时「让 AI 修复」、Explain 后「让 AI 解读」用 */
+  readonly lastRun: Signal<{ sql: string; explain: boolean } | null>;
 
   /** 结果区实测宽度(列宽铺满用) */
   readonly gridWidth: Signal<number>;
@@ -183,6 +185,7 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     historyOpen: signal(false),
     risk: signal<RiskGate | null>(null),
     cell: signal<CellDialogState | null>(null),
+    lastRun: signal<{ sql: string; explain: boolean } | null>(null),
     gridWidth: signal(0),
     token: 0,
     filterSeq: 0,
@@ -391,6 +394,7 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   const query = sqlText.isQuery(sql);
+  m.lastRun.set({ sql, explain: false });
   void spawnQuery(m, sql, (r, elapsed) => {
     m.browseTable.set(null);
     m.page.set(0);
@@ -443,7 +447,10 @@ export function explain(m: TabModel) {
     m.err.set(t("tab.empty_sql"));
     return;
   }
-  void spawnQuery(m, `EXPLAIN ${sql}`, (r, elapsed) => {
+  m.lastRun.set({ sql, explain: true });
+  // SQLite 的 EXPLAIN 输出虚拟机字节码,看不出查询计划;要用 EXPLAIN QUERY PLAN
+  const prefix = m.dbKind === "sqlite" ? "EXPLAIN QUERY PLAN" : "EXPLAIN";
+  void spawnQuery(m, `${prefix} ${sql}`, (r, elapsed) => {
     m.browseTable.set(null);
     m.page.set(0);
     m.resultIsQuery.set(true);
@@ -746,6 +753,22 @@ export function filterPreviewCount(m: TabModel): number {
 }
 
 // ------------------------------------------------------------ AI
+
+/** 最近一次执行报错:把 SQL 与报错交给 AI 修正。 */
+export function aiFixError(m: TabModel) {
+  const last = m.lastRun();
+  const err = m.err();
+  if (!last || err === null) return;
+  askAiFixError(last.sql, err);
+}
+
+/** 最近一次是 Explain 且有结果:把执行计划交给 AI 解读。 */
+export function aiExplainPlan(m: TabModel) {
+  const last = m.lastRun();
+  const r = m.result();
+  if (!last?.explain || !r) return;
+  askAiExplainPlan(last.sql, planText(r.columns, r.rows));
+}
 
 /** ⌘⇧A / 划词按钮:把选中的 SQL 作为引用发给 AI 助手。 */
 export function sendSelectionToAi(m: TabModel) {

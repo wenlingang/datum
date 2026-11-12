@@ -20,12 +20,13 @@ function Toasts() {
   );
 }
 
-export function mountChat(options: FakeOptions = {}, before?: () => void) {
+/** `left`:左侧占位区里放的内容(模拟编辑器一侧的入口)。 */
+export function mountChat(options: FakeOptions = {}, before?: () => void, left?: () => JSX.Element) {
   const record = installFakes(options);
   before?.();
   mount(() => (
     <View class="flex-1 flex-row bg-background">
-      <View class="flex-1" />
+      <View class="flex-1">{left?.()}</View>
       <View class="w-[380px]">
         <ChatPanel />
       </View>

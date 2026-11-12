@@ -208,3 +208,37 @@ export function runInEditor(sql: string, confirmed: boolean) {
 export function askFix() {
   sendText(t("chat.fix_prompt"));
 }
+
+/** 交给 AI 的执行计划最多带多少字符(过长截断,避免撑爆上下文)。 */
+const PLAN_MAX_CHARS = 8000;
+
+/**
+ * 把一段 SQL 作为引用、连同一段提问发给 AI(编辑器里的「让 AI 修复 / 解读」)。
+ * 发不出去(未配置 AI、上一条还在回复等)时保留引用并打开面板,让用户自己发。
+ */
+function askAiAbout(sql: string, prompt: string) {
+  setPendingRef(sql);
+  setAiOpen(true);
+  if (!sendText(prompt)) toast.info(t("chat.ask_not_sent"));
+}
+
+/** 编辑器执行报错:请 AI 说明原因并给出修正后的 SQL。 */
+export function askAiFixError(sql: string, error: string) {
+  askAiAbout(sql, `${t("chat.fix_error_prompt")}\n\n${t("chat.error_label")}\n\`\`\`\n${error}\n\`\`\``);
+}
+
+/** 执行计划(EXPLAIN 的结果表)转成文本:单列计划(PG / SQLite)逐行拼接,多列(MySQL)按表格。 */
+export function planText(columns: string[], rows: (string | null)[][]): string {
+  const cell = (v: string | null) => v ?? "NULL";
+  let text =
+    columns.length === 1
+      ? rows.map((r) => cell(r[0])).join("\n")
+      : [columns.join(" | "), ...rows.map((r) => r.map(cell).join(" | "))].join("\n");
+  if (text.length > PLAN_MAX_CHARS) text = `${text.slice(0, PLAN_MAX_CHARS)}\n…`;
+  return text;
+}
+
+/** Explain 的结果:请 AI 解读瓶颈并给出索引等改进建议。 */
+export function askAiExplainPlan(sql: string, plan: string) {
+  askAiAbout(sql, `${t("chat.explain_plan_prompt")}\n\n${t("chat.plan_label")}\n\`\`\`\n${plan}\n\`\`\``);
+}

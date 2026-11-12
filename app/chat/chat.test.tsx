@@ -90,3 +90,20 @@ test("SQL 卡片:风险标记、执行确认、结果回灌、编辑器运行", 
   await app.waitFor("text:insertAndRun c1 confirmed=true");
   app.dispose();
 });
+
+test("编辑器报错 / Explain 交给 AI:引用 SQL、附报错或执行计划,自动发出", async () => {
+  const app = await open("./testing/ask.tsx", SIZE);
+  await app.waitFor("text:Generate SQL with natural language, for example:");
+  await app.press("id:trigger-fix");
+  // 发出的消息:提问 + 报错原文 + 引用的 SQL
+  await app.waitUntil(() => app.texts().some((x) => x.includes('column "nme" does not exist')), { timeout: 10_000 });
+  expect(app.texts().some((x) => x.includes("This SQL failed to run"))).toBe(true);
+  expect(app.texts().some((x) => x.includes("SELECT nme FROM users"))).toBe(true);
+  // 等回复结束再发下一条
+  await app.waitFor("text:/然后初始化几条数据/", { timeout: 10_000 });
+  await app.press("id:trigger-plan");
+  await app.waitUntil(() => app.texts().some((x) => x.includes("Seq Scan on orders")), { timeout: 10_000 });
+  expect(app.texts().some((x) => x.includes("CREATE INDEX"))).toBe(true);
+  expect(app.texts().some((x) => x.includes("SELECT * FROM orders WHERE total > 10"))).toBe(true);
+  app.dispose();
+});

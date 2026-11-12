@@ -305,6 +305,18 @@ tab:
     en: "Running…"
     zh-CN: "执行中…"
     zh-TW: "執行中…"
+  ai_fix_error:
+    en: Ask AI to Fix
+    zh-CN: 让 AI 修复
+    zh-TW: 讓 AI 修正
+  plan_title:
+    en: Execution Plan
+    zh-CN: 执行计划
+    zh-TW: 執行計畫
+  ai_explain_plan:
+    en: Ask AI to Explain
+    zh-CN: 让 AI 解读
+    zh-TW: 讓 AI 解讀
   query_error:
     en: "Query failed"
     zh-CN: "查询出错"

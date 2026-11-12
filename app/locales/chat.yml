@@ -127,6 +127,28 @@ chat:
     en: The previous SQL failed. Please fix it based on the error message and provide it again.
     zh-CN: 上一条 SQL 执行失败了,请根据错误信息修正后重新给出。
     zh-TW: 上一段 SQL 執行失敗了,請根據錯誤訊息修正後重新提供。
+  # 编辑器里「让 AI 修复」发给 AI 的消息(后面附报错原文与出错的 SQL)
+  fix_error_prompt:
+    en: This SQL failed to run. Briefly explain the cause, then give the corrected SQL. Check table and column names against the schema.
+    zh-CN: 这条 SQL 执行失败了。请先简要说明原因,再给出修正后的 SQL;表名、列名请对照表结构核实。
+    zh-TW: 這段 SQL 執行失敗了。請先簡要說明原因,再提供修正後的 SQL;資料表與欄位名稱請對照結構核實。
+  error_label:
+    en: "Error:"
+    zh-CN: "报错:"
+    zh-TW: "錯誤:"
+  # 编辑器里「让 AI 解读执行计划」发给 AI 的消息(后面附执行计划与 SQL)
+  explain_plan_prompt:
+    en: Here is the execution plan of the SQL below. Point out the main bottlenecks (full table scans, unused or missing indexes, costly sorts or temporary tables, poor join order) and suggest concrete improvements. If an index would help, give the CREATE INDEX statement; if the query should be rewritten, give the rewritten SQL.
+    zh-CN: 下面是这条 SQL 的执行计划。请指出主要瓶颈(全表扫描、没用上或缺少的索引、代价高的排序或临时表、连接顺序不佳等),并给出具体的改进建议:需要加索引就给出 CREATE INDEX 语句,需要改写就给出改写后的 SQL。
+    zh-TW: 下面是這段 SQL 的執行計畫。請指出主要瓶頸(全表掃描、沒用到或缺少的索引、成本高的排序或暫存表、連接順序不佳等),並提供具體的改進建議:需要加索引就提供 CREATE INDEX 陳述式,需要改寫就提供改寫後的 SQL。
+  plan_label:
+    en: "Execution plan:"
+    zh-CN: "执行计划:"
+    zh-TW: "執行計畫:"
+  ask_not_sent:
+    en: The SQL is quoted in the AI panel. Send it once the AI is configured or has finished replying.
+    zh-CN: 已把 SQL 引用到 AI 面板;AI 配置好或上一条回复结束后再发送。
+    zh-TW: 已把 SQL 引用到 AI 面板;AI 設定好或上一則回覆結束後再傳送。
   quote:
     en: Quote
     zh-CN: 引用

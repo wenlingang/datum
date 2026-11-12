@@ -4,10 +4,11 @@
 import { Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { maxRows } from "../store/prefs";
-import { Dot, Hint } from "../ui/kit";
+import { supportsSql } from "../lib/types";
+import { Btn, Dot, Hint } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
-import { viewIndices, type TabModel } from "./model";
+import { aiExplainPlan, aiFixError, viewIndices, type TabModel } from "./model";
 
 function okSummary(m: TabModel): string {
   const r = m.result();
@@ -67,12 +68,20 @@ export function Results(props: { m: TabModel }) {
   const body = () => bodyOf(m);
   const limited = () =>
     m.browseTable() === null && m.resultIsQuery() && (m.result()?.rows.length ?? 0) >= maxRows();
+  // 只对编辑器里自己写的 SQL 提供:表浏览拼出来的分页查询报错,交给 AI 也修不了什么
+  const aiReady = () => supportsSql(m.dbKind) && m.kind === "query" && m.browseTable() === null && m.lastRun() !== null;
+  const explained = () => aiReady() && m.lastRun()?.explain === true;
   return (
     <View class="min-h-0 flex-1 bg-background">
       <If when={body() === "error"}>
         <Text testID="query-error" class={`${FS.sm} p-3 font-mono text-destructive`}>
           {m.err() ?? ""}
         </Text>
+        <If when={aiReady()}>
+          <View class="flex-row px-3">
+            <Btn testID="ai-fix-error" small icon="sparkles" label={t("tab.ai_fix_error")} onPress={() => aiFixError(m)} />
+          </View>
+        </If>
       </If>
       <If when={body() === "execOk"}>
         <Text testID="exec-ok" class={`${FS.sm} p-3 text-data`}>
@@ -92,6 +101,18 @@ export function Results(props: { m: TabModel }) {
       </If>
       <If when={body() === "grid"}>
         <View class="min-h-0 flex-1">
+          <If when={explained()}>
+            <View class="flex-row items-center gap-2 border-b border-border px-3 py-1.5">
+              <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("tab.plan_title")}</Text>
+              <Btn
+                testID="ai-explain-plan"
+                small
+                icon="sparkles"
+                label={t("tab.ai_explain_plan")}
+                onPress={() => aiExplainPlan(m)}
+              />
+            </View>
+          </If>
           <If when={limited()}>
             <Text class={`${FS.xs} border-b border-border px-3 py-1.5 text-warning`}>
               {t("tab.row_limit_reached", { n: maxRows() })}

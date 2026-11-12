@@ -79,6 +79,30 @@ test("编辑暂存后 ⌘S 一次提交", async () => {
   await app.waitUntil(() => app.texts().includes("Edited Coffee 1"), { timeout: 15000 });
 });
 
+test("报错可交给 AI 修复;Explain 显示执行计划并可交给 AI 解读", async () => {
+  const app = await start();
+  await replaceSql(app, "SELECT nme FROM products");
+  await app.press("id:run");
+  await app.waitFor("id:query-error", { timeout: 15000 });
+  expect(app.shows("id:ai-fix-error")).toBe(true);
+  // 没配置 AI:SQL 引用到面板并提示,不报错
+  await app.press("id:ai-fix-error");
+  await app.waitUntil(() => hasText(app, "The SQL is quoted in the AI panel"), { timeout: 5000 });
+  // Explain:SQLite 走 EXPLAIN QUERY PLAN,输出查询计划而不是字节码
+  await app.press("text:SELECT nme FROM products");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT * FROM products WHERE origin = 'Kenya'");
+  await app.press("text:Explain");
+  await app.waitFor("text:Execution Plan", { timeout: 15000 });
+  expect(app.shows("id:ai-explain-plan")).toBe(true);
+  expect(app.texts().some((x) => x.startsWith("SCAN") || x.startsWith("SEARCH"))).toBe(true);
+  expect(app.shows("id:ai-fix-error")).toBe(false);
+  // 普通查询的结果不显示执行计划栏
+  await app.press("id:run");
+  await app.waitFor("text:Execution Plan", { state: "gone", timeout: 15000 });
+  app.dispose();
+});
+
 test("破坏性语句先审查:取消不执行,确认才执行", async () => {
   const app = await start();
   await replaceSql(app, "DELETE FROM orders");
