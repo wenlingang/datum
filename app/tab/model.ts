@@ -149,14 +149,30 @@ export interface TabModel {
   /** 撤销确认框是否打开 */
   readonly undoOpen: Signal<boolean>;
 
+  /** 一次执行多条语句时每条的结果(两条以上才有);结果区上方按条切换 */
+  readonly multi: Signal<StmtResult[] | null>;
+  readonly multiIndex: Signal<number>;
+
   /** 结果区实测宽度(列宽铺满用) */
   readonly gridWidth: Signal<number>;
 
 
+  /** 恢复会话得到的表浏览 tab:第一次显示且连接就绪时再加载数据 */
+  pendingLoad: boolean;
   /** 递增:只有最新一次异步执行的结果生效 */
   token: number;
   filterSeq: number;
   viewCache: { result: QueryResult | null; applied: FilterRow[]; conj: Conj; out: number[] } | null;
+}
+
+/** 多语句执行里的一条:结果或错误;前面出错后没执行的标为 skipped。 */
+export interface StmtResult {
+  sql: string;
+  result: QueryResult | null;
+  error: string | null;
+  elapsedMs: number | null;
+  isQuery: boolean;
+  skipped: boolean;
 }
 
 export function createModel(kind: "table" | "query", connId: string, dbKind: DbKind, table: string | null): TabModel {
@@ -198,7 +214,10 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     lastRun: signal<{ sql: string; explain: boolean } | null>(null),
     undo: signal<UndoPrep | null>(null),
     undoOpen: signal(false),
+    multi: signal<StmtResult[] | null>(null),
+    multiIndex: signal(0),
     gridWidth: signal(0),
+    pendingLoad: false,
     token: 0,
     filterSeq: 0,
     viewCache: null,
@@ -336,6 +355,7 @@ function record(m: TabModel, sql: string, elapsed: number, rowCount: number | nu
 /** 执行一条 SQL;成功走 `onOk`,失败把错误挂到结果区。 */
 async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elapsed: number) => void) {
   const token = ++m.token;
+  m.multi.set(null);
   // 一次性标记:只作用于紧接着的这一次执行
   const readOnly = m.readOnlyNext;
   m.readOnlyNext = false;
@@ -412,6 +432,12 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     void runRedis(m, sql, skipHistory);
     return;
   }
+  // 多条语句:逐条执行,每条一个结果
+  const statements = sqlText.statements(sql);
+  if (statements.length > 1) {
+    void runMany(m, statements, skipHistory);
+    return;
+  }
   const query = sqlText.isQuery(sql);
   m.lastRun.set({ sql, explain: false });
   m.undo.set(null);
@@ -444,6 +470,78 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   void go(null);
+}
+
+/** 运行编辑器里的全部语句(⌘⇧↵)。 */
+export function runAll(m: TabModel) {
+  if (m.kind !== "query") return;
+  run(m, m.sql());
+}
+
+/** 逐条执行多条语句:遇到错误即停,后面的标为未执行。撤销只支持单条写语句,这里不准备。 */
+async function runMany(m: TabModel, statements: string[], skipHistory: boolean) {
+  const token = ++m.token;
+  const readOnly = m.readOnlyNext;
+  m.readOnlyNext = false;
+  batch(() => {
+    m.running.set(true);
+    m.undo.set(null);
+    m.lastRun.set({ sql: statements.join(";\n"), explain: false });
+  });
+  const out: StmtResult[] = [];
+  let failed = false;
+  let wrote = false;
+  for (const sql of statements) {
+    const isQuery = sqlText.isQuery(sql);
+    if (failed) {
+      out.push({ sql, result: null, error: null, elapsedMs: null, isQuery, skipped: true });
+      continue;
+    }
+    const started = Date.now();
+    try {
+      const r = readOnly
+        ? await db.queryReadOnly(m.dbKind, m.connId, sql, maxRows())
+        : await db.query(m.dbKind, m.connId, sql, maxRows());
+      if (token !== m.token) return;
+      const elapsed = Date.now() - started;
+      out.push({ sql, result: r, error: null, elapsedMs: elapsed, isQuery, skipped: false });
+      if (!isQuery) wrote = true;
+      if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null));
+    } catch (e) {
+      if (token !== m.token) return;
+      out.push({ sql, result: null, error: errorText(e), elapsedMs: null, isQuery, skipped: false });
+      failed = true;
+    }
+  }
+  if (token !== m.token) return;
+  // 默认显示出错的那条,否则最后一条
+  const errorAt = out.findIndex((x) => x.error !== null);
+  batch(() => {
+    m.running.set(false);
+    m.multi.set(out);
+    selectResult(m, errorAt >= 0 ? errorAt : out.length - 1);
+  });
+  if (wrote && conns.tables(m.connId)) void refreshTables(m.connId);
+}
+
+/** 切换多语句结果里的第 i 条:结果区、状态行、筛选与排序都跟着换。 */
+export function selectResult(m: TabModel, i: number) {
+  const item = m.multi()?.[i];
+  if (!item) return;
+  batch(() => {
+    m.multiIndex.set(i);
+    m.browseTable.set(null);
+    m.page.set(0);
+    m.sort.set(null);
+    resetFilter(m);
+    m.resultIsQuery.set(item.isQuery);
+    m.elapsedMs.set(item.elapsedMs);
+    m.err.set(item.error);
+    m.result.set(item.result);
+    // 「让 AI 修复」针对的是这一条
+    m.lastRun.set({ sql: item.sql, explain: false });
+    m.selectedRow.set(null);
+  });
 }
 
 /** 撤销最近一次写操作:在一个事务里执行反向语句。 */

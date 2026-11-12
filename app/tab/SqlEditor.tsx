@@ -13,7 +13,7 @@ import { supportsSql } from "../lib/types";
 import { conns } from "../store/conns";
 import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
-import { beautify, commit, explain, run, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
+import { beautify, commit, explain, run, runAll, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
 import { primaryRange, rangeOf } from "./textpos";
 import { columnValues, valueInsert } from "./values";
 import { straightenTypedQuote } from "../ui/editor";
@@ -131,11 +131,13 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
   // 编辑器内的快捷键:压过 Editor 自带的 mod+enter(下方插入新行)/ cmd+e 等键位。
   // 必须用原生组件 EditorKeys 绑:TSX 的 keymap.bind 永远排在 Rust 组件的绑定之前,赢不了 Editor。
   // ⌘Y / ⌘F / ⌘S 平时由外壳全局绑定;Windows / Linux 上 Editor 占用 ctrl+y / ctrl+f 等,聚焦时一并接管。
-  const EDITOR_KEYS = ["mod+enter", "mod+shift+f", "mod+e", "mod+shift+a", "mod+y", "mod+f", "mod+s"];
+  const EDITOR_KEYS = ["mod+enter", "mod+shift+enter", "mod+shift+f", "mod+e", "mod+shift+a", "mod+y", "mod+f", "mod+s"];
   const onEditorKey = (keystroke: string) => {
     switch (keystroke) {
       case "mod+enter":
         return run(m);
+      case "mod+shift+enter":
+        return runAll(m);
       case "mod+shift+f":
         return beautify(m);
       case "mod+e":

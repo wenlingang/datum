@@ -9,7 +9,7 @@ import { MAX_ROWS_OPTIONS, maxRows, normalizeMaxRows, updatePrefs } from "../sto
 import { Btn, Icon, TextField, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { HistoryPanel } from "./History";
-import { beautify, explain, run, type TabModel } from "./model";
+import { beautify, explain, run, runAll, type TabModel } from "./model";
 
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
 
@@ -21,7 +21,19 @@ function LimitMenu(props: { m: TabModel }) {
     m.limitOpen.set(false);
   };
   return (
-    <View class="w-[160px] gap-0.5 p-1.5">
+    <View class="w-[180px] gap-0.5 p-1.5">
+      <Button
+        testID="run-all"
+        onPress={() => {
+          m.limitOpen.set(false);
+          runAll(m);
+        }}
+        class="h-[26px] flex-row items-center gap-2 rounded-(--radius) px-2.5 hover:bg-list-hover"
+      >
+        <Text class={`${FS.xs} flex-1 text-foreground`}>{t("toolbar.run_all")}</Text>
+        <Text class={`${FS.xs} text-fg-faint`}>⌘⇧↵</Text>
+      </Button>
+      <View class="my-1 border-t border-border" />
       <Text class={`${FS.xs} px-2 pb-1 font-bold text-fg-faint`}>{t("toolbar.limit_title")}</Text>
       <Each of={MAX_ROWS_OPTIONS}>
         {(n) => (

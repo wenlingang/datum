@@ -1,14 +1,15 @@
 // 结果区:状态行(执行中 / 出错 / 成功 · 行数 · 耗时)与结果主体(错误、执行成功、空结果、
 // 筛选无命中、行数上限提示、网格)。对应 GPUI 版 tab/mod.rs 的 render_status_line / render_results。
 
-import { Text, View } from "nsh";
+import { Scroll, Text, View } from "nsh";
+import { Button } from "nsh/base";
 import { t } from "nsh/i18n";
 import { maxRows } from "../store/prefs";
 import { supportsSql } from "../lib/types";
-import { Btn, Dot, Hint } from "../ui/kit";
+import { Btn, Dot, Hint, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
-import { aiExplainPlan, aiFixError, viewIndices, type TabModel } from "./model";
+import { aiExplainPlan, aiFixError, selectResult, type StmtResult, viewIndices, type TabModel } from "./model";
 import { ErrorText } from "../ui/error";
 
 function okSummary(m: TabModel): string {
@@ -63,6 +64,48 @@ function bodyOf(m: TabModel): Body {
   return m.running() ? "running" : "none";
 }
 
+/** 多语句结果的一个标签:序号 + 行数 / 影响行数 / 错误 / 未执行。 */
+function stmtLabel(x: StmtResult, i: number): string {
+  const n = i + 1;
+  if (x.skipped) return t("tab.stmt_tab_skipped", { n });
+  if (x.error !== null) return t("tab.stmt_tab_error", { n });
+  if (x.isQuery) return t("tab.stmt_tab_rows", { n, rows: x.result?.rows.length ?? 0 });
+  return t("tab.stmt_tab_affected", { n, rows: x.result?.affected ?? 0 });
+}
+
+/** 一次执行多条语句时,结果区上方按条切换。 */
+function StmtTabs(props: { m: TabModel; list: StmtResult[] }) {
+  const m = props.m;
+  return (
+    <Scroll horizontal class="shrink-0 border-b border-border bg-panel">
+      <View testID="stmt-tabs" class="flex-row items-center gap-1 px-2 py-1">
+        <Each of={props.list}>
+          {(x, i) => (
+            <Button
+              testID={`stmt-tab:${i() + 1}`}
+              selected={m.multiIndex() === i()}
+              onPress={() => selectResult(m, i())}
+              tooltip={tip(x().sql.replace(/\s+/g, " ").slice(0, 200))}
+              class="h-6 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover selected:bg-raised"
+            >
+              <Dot color={x().error !== null ? "destructive" : x().skipped ? "fg-faint" : "data"} />
+              <Text
+                class={`${FS.xs}`}
+                classList={{
+                  "font-bold text-foreground": m.multiIndex() === i(),
+                  "text-muted-foreground": m.multiIndex() !== i(),
+                }}
+              >
+                {stmtLabel(x(), i())}
+              </Text>
+            </Button>
+          )}
+        </Each>
+      </View>
+    </Scroll>
+  );
+}
+
 /** 结果主体。 */
 export function Results(props: { m: TabModel }) {
   const m = props.m;
@@ -74,6 +117,10 @@ export function Results(props: { m: TabModel }) {
   const explained = () => aiReady() && m.lastRun()?.explain === true;
   return (
     <View class="min-h-0 flex-1 bg-background">
+      <If when={(m.multi()?.length ?? 0) > 1 ? m.multi() : null}>{(list) => <StmtTabs m={m} list={list()} />}</If>
+      <If when={m.multi()?.[m.multiIndex()]?.skipped}>
+        <Hint class="p-3">{t("tab.stmt_skipped")}</Hint>
+      </If>
       <If when={body() === "error"}>
         <ErrorText testID="query-error" mono tone="text-destructive" class="p-3" text={m.err() ?? ""} />
         <If when={aiReady()}>

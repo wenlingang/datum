@@ -265,3 +265,26 @@ test("系统智能引号:编辑器里敲出的弯引号改回直引号,SQL 照�
   await app.waitFor("id:query-error", { timeout: 15000 });
   expect(app.shows("id:query-error-copy")).toBe(true);
 });
+
+test("一次执行多条语句:每条一个结果标签,出错即停,后面的标为未执行", async () => {
+  const app = await start();
+  await replaceSql(app, "SELECT id FROM categories;\nSELECT name FROM categories WHERE id < 3");
+  await app.keyboard.press("mod+shift+enter");
+  await app.waitFor("id:stmt-tabs", { timeout: 15000 });
+  // 默认显示最后一条
+  expect(app.texts()).toContain("Result 1 · 4 rows");
+  expect(app.texts()).toContain("Result 2 · 2 rows");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 2 rows returned"), { timeout: 5000 });
+  await app.press("id:stmt-tab:1");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 4 rows returned"), { timeout: 5000 });
+  // 中间一条出错:停在出错的那条,第三条未执行
+  await app.press("text:SELECT id FROM categories;");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT 1;\nSELECT nope FROM categories;\nSELECT 2");
+  await app.keyboard.press("mod+shift+enter");
+  await app.waitUntil(() => app.texts().includes("Result 3 · Not run"), { timeout: 15000 });
+  expect(app.texts()).toContain("Result 2 · Error");
+  expect(app.shows("id:query-error")).toBe(true);
+  await app.press("id:stmt-tab:3");
+  await app.waitUntil(() => hasText(app, "Not run: an earlier statement failed."), { timeout: 5000 });
+});

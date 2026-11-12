@@ -126,6 +126,10 @@ filter:
       zh-CN: 非空
       zh-TW: 非空
 toolbar:
+  run_all:
+    en: Run All Statements
+    zh-CN: 运行全部语句
+    zh-TW: 執行全部語句
   limit_custom:
     en: "Custom"
     zh-CN: "自定义"
@@ -261,6 +265,26 @@ tab:
     en: "db.users.find({ age: { $gt: 18 } })"
     zh-CN: "db.users.find({ age: { $gt: 18 } })"
     zh-TW: "db.users.find({ age: { $gt: 18 } })"
+  stmt_tab_rows:
+    en: "Result %{n} · %{rows} rows"
+    zh-CN: "结果 %{n} · %{rows} 行"
+    zh-TW: "結果 %{n} · %{rows} 列"
+  stmt_tab_affected:
+    en: "Result %{n} · %{rows} affected"
+    zh-CN: "结果 %{n} · 影响 %{rows} 行"
+    zh-TW: "結果 %{n} · 影響 %{rows} 列"
+  stmt_tab_error:
+    en: "Result %{n} · Error"
+    zh-CN: "结果 %{n} · 出错"
+    zh-TW: "結果 %{n} · 出錯"
+  stmt_tab_skipped:
+    en: "Result %{n} · Not run"
+    zh-CN: "结果 %{n} · 未执行"
+    zh-TW: "結果 %{n} · 未執行"
+  stmt_skipped:
+    en: "Not run: an earlier statement failed."
+    zh-CN: "未执行:前面的语句出错了。"
+    zh-TW: "未執行:前面的語句出錯了。"
   completion_value:
     en: "Value in %{column}"
     zh-CN: "%{column} 的取值"
