@@ -90,7 +90,28 @@ impl Store {
     pub fn config_dir() -> String {
         state().config_dir.display().to_string()
     }
+
+    /// 上次退出时的会话(打开的标签与内容);没有或读不了为 null。
+    pub fn load_session() -> JsonValue {
+        std::fs::read(state().config_dir.join(SESSION_FILE))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or(JsonValue::Null)
+    }
+
+    /// 保存会话:先写临时文件再改名,写到一半崩溃也不会留下坏文件。
+    pub fn save_session(session: JsonValue) -> Result<(), String> {
+        let dir = state().config_dir.clone();
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let tmp = dir.join(format!("{SESSION_FILE}.tmp"));
+        let bytes = serde_json::to_vec(&session).map_err(|e| e.to_string())?;
+        std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, dir.join(SESSION_FILE)).map_err(|e| e.to_string())
+    }
 }
+
+/// 会话文件名(在配置目录下)。
+const SESSION_FILE: &str = "session.json";
 
 /// 表单参数建隧道的上下文:SSH 密钥取表单里填的,没填(null)则用已保存的。
 pub fn ssh_context(conn: &Connection) -> service::SshContext {

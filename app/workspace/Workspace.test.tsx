@@ -102,3 +102,27 @@ test("AI 对话工作台:对话铺满主区域、侧栏保留;再按一次或 �
   await app.keyboard.press("mod+j");
   await app.waitFor("id:ai-workbench", { state: "gone" });
 });
+
+// 放在最后:它会留下会话文件,之后打开的应用都会恢复这些标签
+test("重启后恢复上次打开的标签与内容(不自动执行)", async () => {
+  const first = await open("../App.tsx", desktop);
+  await first.press("id:rail-c-roastery");
+  await first.waitFor("label:products");
+  await first.press("label:products");
+  await first.waitFor("text:Boquete", { timeout: 10_000 });
+  await first.keyboard.press("mod+t");
+  await first.waitFor("id:sql-editor");
+  await first.type("id:sql-editor", "SELECT 42 AS answer");
+  // 等防抖写盘
+  await first.wait(1500);
+  first.dispose();
+
+  const second = await open("../App.tsx", desktop);
+  await second.waitUntil(() => second.texts().includes("SELECT 42 AS answer"), { timeout: 10_000 });
+  // 查询 tab 是当前 tab,内容恢复但没有执行
+  expect(second.texts()).not.toContain("answer");
+  expect(second.shows("id:empty-workspace")).toBe(false);
+  // 表浏览 tab 还在:切过去后自动加载数据
+  await second.press("text:products");
+  await second.waitFor("text:Boquete", { timeout: 10_000 });
+});

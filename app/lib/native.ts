@@ -46,6 +46,9 @@ export const store = {
   clearHistory: (connId: string | null) => Store.clearHistory(connId) as HistoryEntry[],
   readSqlFile: (path: string) => Store.readSqlFile(path),
   writeTextFile: (path: string, contents: string) => Store.writeTextFile(path, contents),
+  /** 上次退出时的会话(标签与内容);没有为 null。 */
+  loadSession: () => Store.loadSession() as unknown,
+  saveSession: (session: unknown) => Store.saveSession(session),
 };
 
 export const db = {

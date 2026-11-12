@@ -1,7 +1,7 @@
 // 标签页主体:查询 tab(编辑器 + 工具条 / 状态行 + 结果,上下可拖动)、表浏览 tab(纯网格)、
 // ER 图占位;MongoDB 不支持,只显示一句提示。对应 GPUI 版 tab/mod.rs 的 Render。
 
-import { Text, View } from "nsh";
+import { effect, Text, untracked, View } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { WorkTab } from "../store/workspace";
@@ -9,7 +9,8 @@ import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
 import { CellDialog } from "./CellDialog";
 import { FilterBar } from "./FilterBar";
-import { modelOf, type TabModel } from "./model";
+import { conns } from "../store/conns";
+import { modelOf, refresh, type TabModel } from "./model";
 import { Results, StatusLine } from "./Results";
 import { Diagnostics } from "./Diagnostics";
 import { RedisInsight } from "./RedisInsight";
@@ -49,6 +50,12 @@ function QueryBody(props: { m: TabModel }) {
 
 function ModelView(props: { m: TabModel }) {
   const m = props.m;
+  // 恢复会话的表浏览 tab:显示出来且连接就绪后才去查数据
+  effect(() => {
+    if (!m.pendingLoad || !conns.isConnected(m.connId)) return;
+    m.pendingLoad = false;
+    untracked(() => refresh(m));
+  });
   return (
     <View testID="work-tab" class="flex-1 bg-background">
       <If when={m.filterOpen() && m.result() !== null}>

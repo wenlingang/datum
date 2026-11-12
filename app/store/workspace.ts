@@ -117,6 +117,17 @@ export function addTab(tab: WorkTab) {
   });
 }
 
+/** 各连接记住的激活 tab(id),会话保存用。 */
+export const activeTabIds = () => activeByConn();
+
+/** 恢复上次的会话:一次放回全部 tab 与各连接记住的激活 tab(不切换当前连接)。 */
+export function restoreTabs(list: WorkTab[], active: Record<string, string>) {
+  batch(() => {
+    tabs.set(list);
+    activeByConn.set(active);
+  });
+}
+
 export function focusTab(tab: WorkTab) {
   activeByConn.update((m) => ({ ...m, [tab.connId]: tab.id }));
 }
