@@ -137,6 +137,34 @@ impl Db {
             .map_err(err)
     }
 
+    /// SQLite 导入 CSV / JSON:预览文件开头 `{ format, delimiter, jsonLines, columns, rows, tableName, badEncoding, … }`。
+    pub async fn sqlite_import_preview(source: JsonValue) -> Result<JsonValue, String> {
+        let src = from(source, "source")?;
+        spawn(async move { service::sqlite_import_preview(&src) })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// SQLite 导入 CSV / JSON:后台开始(建表或追加,单事务),用 `sqlite_import_progress` 轮询。
+    pub async fn sqlite_import_start(id: String, plan: JsonValue) -> Result<(), String> {
+        let plan = from(plan, "plan")?;
+        spawn(async move { service::sqlite_import_start(&state(), &id, plan) })
+            .await?
+            .map_err(err)
+    }
+
+    /// SQLite 导入的进度 `{ rows, bytes, totalBytes, done, cancelled, error, skipped }`;没开始过为 null。
+    pub fn sqlite_import_progress(id: String) -> Result<JsonValue, String> {
+        json(service::sqlite_import_progress(&state(), &id))
+    }
+
+    /// 取消进行中的 SQLite 导入(整体回滚)。
+    pub fn sqlite_import_cancel(id: String) -> Result<(), String> {
+        service::sqlite_import_cancel(&state(), &id);
+        Ok(())
+    }
+
     /// 建表语句(DDL)。
     pub async fn create_table_ddl(kind: String, id: String, table: String) -> Result<String, String> {
         let k = kind_of(&kind)?;

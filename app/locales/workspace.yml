@@ -205,6 +205,10 @@ sidebar:
     en: "Import Database (SQL)"
     zh-CN: "导入数据库(SQL)"
     zh-TW: "匯入資料庫(SQL)"
+  import_data:
+    en: "Import CSV / JSON…"
+    zh-CN: "导入 CSV / JSON…"
+    zh-TW: "匯入 CSV / JSON…"
   export_database:
     en: Export Database
     zh-CN: 导出数据库

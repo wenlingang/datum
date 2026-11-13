@@ -32,6 +32,10 @@ import type {
   ValueContext,
   Plan,
   DiffReport,
+  ImportPlan,
+  ImportPreview,
+  ImportProgress,
+  ImportSource,
 } from "./types";
 
 export const store = {
@@ -78,6 +82,13 @@ export const db = {
   commitEdits: (kind: DbKind, id: string, edits: CellEdit[], deletes: RowDelete[]) =>
     Db.commitEdits(kind, id, edits, deletes),
   importSql: (kind: DbKind, id: string, statements: string[]) => Db.importSql(kind, id, statements),
+  /** SQLite 导入 CSV / JSON:预览文件开头(列、推断类型、样例行)。 */
+  sqliteImportPreview: async (source: ImportSource) => (await Db.sqliteImportPreview(source)) as ImportPreview,
+  /** 后台开始导入(单事务);用 sqliteImportProgress 轮询。 */
+  sqliteImportStart: (id: string, plan: ImportPlan) => Db.sqliteImportStart(id, plan) as Promise<void>,
+  sqliteImportProgress: (id: string) => Db.sqliteImportProgress(id) as ImportProgress | null,
+  /** 取消导入:整体回滚。 */
+  sqliteImportCancel: (id: string) => Db.sqliteImportCancel(id),
   createTableDdl: (kind: DbKind, id: string, table: string) => Db.createTableDdl(kind, id, table),
   exportDatabase: (kind: DbKind, id: string, tables: string[]) => Db.exportDatabase(kind, id, tables),
   redisGetKey: async (id: string, key: string) => (await Db.redisGetKey(id, key)) as [unknown, unknown],

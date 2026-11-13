@@ -185,6 +185,62 @@ core:
       en: Failed to open SQLite database
       zh-CN: 打开 SQLite 数据库失败
       zh-TW: 開啟 SQLite 資料庫失敗
+    import_open_failed:
+      en: Couldn't read the file
+      zh-CN: 读取文件失败
+      zh-TW: 讀取檔案失敗
+    import_parse_failed:
+      en: Couldn't parse the file
+      zh-CN: 解析文件失败
+      zh-TW: 解析檔案失敗
+    import_bad_line:
+      en: "Line %{n}: %{error}"
+      zh-CN: "第 %{n} 行:%{error}"
+      zh-TW: "第 %{n} 行:%{error}"
+    import_not_object:
+      en: "Record %{n} isn't a JSON object"
+      zh-CN: "第 %{n} 条记录不是 JSON 对象"
+      zh-TW: "第 %{n} 筆記錄不是 JSON 物件"
+    import_no_table:
+      en: Enter a table name
+      zh-CN: 请填写表名
+      zh-TW: 請填寫資料表名稱
+    import_no_columns:
+      en: Choose at least one column to import
+      zh-CN: 至少选一列导入
+      zh-TW: 至少選一欄匯入
+    import_empty_column:
+      en: Column names can't be empty
+      zh-CN: 列名不能为空
+      zh-TW: 欄位名稱不能為空
+    import_duplicate_column:
+      en: "Duplicate column name: %{name}"
+      zh-CN: "列名重复:%{name}"
+      zh-TW: "欄位名稱重複:%{name}"
+    import_create_failed:
+      en: Failed to create the table
+      zh-CN: 建表失败
+      zh-TW: 建立資料表失敗
+    import_table_missing:
+      en: "Table %{table} doesn't exist"
+      zh-CN: "表 %{table} 不存在"
+      zh-TW: "資料表 %{table} 不存在"
+    import_no_matching_columns:
+      en: None of the file's columns match the table's columns
+      zh-CN: 文件里没有和表中列名对得上的列
+      zh-TW: 檔案裡沒有和資料表欄位名稱對得上的欄
+    import_row_failed:
+      en: "Row %{n} failed; nothing was imported"
+      zh-CN: "第 %{n} 行导入失败,已全部回滚"
+      zh-TW: "第 %{n} 列匯入失敗,已全部復原"
+    import_cancelled:
+      en: Import cancelled
+      zh-CN: 导入已取消
+      zh-TW: 匯入已取消
+    import_running:
+      en: An import is already running on this connection
+      zh-CN: 这个连接上已有导入在进行
+      zh-TW: 這個連線上已有匯入在進行
     keychain_password_not_found:
       en: Password for this connection not found in Keychain
       zh-CN: 钥匙串中未找到该连接的密码

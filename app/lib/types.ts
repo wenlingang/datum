@@ -520,3 +520,61 @@ export interface DiffReport {
   same: number;
   sql: string;
 }
+
+/** SQLite 导入 CSV / JSON 的列类型。 */
+export type ImportColType = "INTEGER" | "REAL" | "TEXT";
+export type ImportDelimiter = "auto" | "comma" | "tab" | "semicolon";
+export type ImportQuote = "double" | "single" | "none";
+export type ImportEncoding = "utf8" | "gbk";
+
+/** 读哪个文件、怎么解析(CSV 选项对 JSON 无效)。 */
+export interface ImportSource {
+  path: string;
+  format: "csv" | "json";
+  delimiter: ImportDelimiter;
+  quote: ImportQuote;
+  encoding: ImportEncoding;
+  hasHeader: boolean;
+}
+
+/** 预览:列(来源键、建议列名、推断类型)与前若干行。 */
+export interface ImportPreview {
+  format: "csv" | "json";
+  /** CSV 实际用的分隔符(自动时为探测结果) */
+  delimiter: Exclude<ImportDelimiter, "auto"> | null;
+  jsonLines: boolean;
+  columns: { key: string; name: string; type: ImportColType }[];
+  rows: (string | null)[][];
+  sampled: number;
+  tableName: string;
+  /** 解码遇到非法字节:多半选错了编码 */
+  badEncoding: boolean;
+  fileSize: number;
+}
+
+/** 确认后的一列;index / key 原样取自预览。 */
+export interface ImportColumnSpec {
+  index: number;
+  key: string;
+  name: string;
+  type: ImportColType;
+  include: boolean;
+}
+
+export interface ImportPlan {
+  source: ImportSource;
+  table: string;
+  mode: "create" | "append";
+  columns: ImportColumnSpec[];
+}
+
+export interface ImportProgress {
+  rows: number;
+  bytes: number;
+  totalBytes: number;
+  done: boolean;
+  cancelled: boolean;
+  error: string | null;
+  /** 追加时表里没有、被跳过的列 */
+  skipped: string[];
+}

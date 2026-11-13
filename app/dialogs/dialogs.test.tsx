@@ -3,7 +3,7 @@
 // 配置目录里要先放一个 SQLite 文件 test.db(测试连接、保存、导入都只用它)。
 // (TSX 读不到未声明的环境变量,配置目录经原生模块取得。)
 
-import { Store } from "datum/native";
+import { Db, Store } from "datum/native";
 import { describe, expect, open, test } from "nsh/test";
 
 const CONFIG = Store.configDir();
@@ -211,6 +211,59 @@ describe("import", () => {
     await app.waitFor("text:2 statements");
     await app.press("id:import-run");
     await app.waitFor("text:/^Import complete: 2 statements/", { timeout: 15_000 });
+    app.dispose();
+  });
+
+  test("CSV 导入成新表:预览推断列、改表名、单事务插入;重名表报错", async () => {
+    const csv = `${CONFIG}/people list.csv`;
+    Store.writeTextFile(csv, "﻿id;name;score;zip\n1;Ann;3.5;007\n2;Bob;4;010\n");
+    const app = await start();
+    await app.waitFor("text:temp-sqlite");
+    await app.press("id:dev-import-data");
+    await app.waitFor("id:import-data-path");
+    await app.type("id:import-data-path", csv);
+    // 分号由自动探测得出;四列,按 2 行推断
+    await app.waitFor("text:/^CSV · Semicolon \\( ; \\) \\(detected\\) · 4 columns · types inferred from 2 rows/");
+    await app.press("id:import-col-include-3");
+    await app.clear("id:import-data-table");
+    await app.type("id:import-data-table", "people_imp");
+    await app.press("id:import-data-run");
+    await app.waitFor("text:Import complete: 2 rows into people_imp", { timeout: 15_000 });
+    const conn = (Store.connections() as any[]).find((c) => c.name === "temp-sqlite");
+    const r = (await Db.query("sqlite", conn.id, "select typeof(id), name, score from people_imp order by id", null)) as any;
+    expect(r.columns).toEqual(["typeof(id)", "name", "score"]);
+    expect(r.rows).toEqual([
+      ["integer", "Ann", "3.5"],
+      ["integer", "Bob", "4"],
+    ]);
+    // 再导一次同名新表:建表失败,整体回滚
+    await app.press("id:import-data-run");
+    await app.waitFor("text:/^Import failed: Failed to create the table/", { timeout: 15_000 });
+    app.dispose();
+  });
+
+  test("JSON Lines 追加到已有表:按列名对齐,表里没有的列跳过", async () => {
+    const jsonl = `${CONFIG}/more.jsonl`;
+    Store.writeTextFile(jsonl, '{"ID":3,"Name":"Cy","extra":{"a":1}}\n{"ID":4,"Name":"Di"}\n');
+    const app = await start();
+    await app.waitFor("text:temp-sqlite");
+    await app.press("id:dev-import-data");
+    await app.type("id:import-data-path", jsonl);
+    await app.waitFor("text:/^JSON Lines · 3 columns/");
+    await app.press("label:Existing Table");
+    await app.press("label:Table");
+    await app.press("text:people_imp");
+    await app.waitFor("text:Not in the table; skipped");
+    await app.press("id:import-data-run");
+    await app.waitFor("text:/^Import complete: 2 rows into people_imp Skipped columns not in the table: extra$/", {
+      timeout: 15_000,
+    });
+    const conn = (Store.connections() as any[]).find((c) => c.name === "temp-sqlite");
+    const r = (await Db.query("sqlite", conn.id, "select id, name, score from people_imp where id > 2 order by id", null)) as any;
+    expect(r.rows).toEqual([
+      ["3", "Cy", null],
+      ["4", "Di", null],
+    ]);
     app.dispose();
   });
 });

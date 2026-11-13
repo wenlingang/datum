@@ -747,6 +747,189 @@ import:
     zh-CN: 开始导入
     zh-TW: 開始匯入
 
+# 导入 CSV / JSON 成 SQLite 表(dialogs/ImportData.tsx)
+import_data:
+  title:
+    en: "Import CSV / JSON"
+    zh-CN: "导入 CSV / JSON"
+    zh-TW: "匯入 CSV / JSON"
+  mode_sql:
+    en: "SQL"
+    zh-CN: "SQL"
+    zh-TW: "SQL"
+  mode_data:
+    en: "CSV / JSON"
+    zh-CN: "CSV / JSON"
+    zh-TW: "CSV / JSON"
+  choose_file:
+    en: "Choose CSV / JSON File"
+    zh-CN: "选择 CSV / JSON 文件"
+    zh-TW: "選擇 CSV / JSON 檔案"
+  choose_sqlite:
+    en: "Choose a SQLite database…"
+    zh-CN: "选择 SQLite 数据库…"
+    zh-TW: "選擇 SQLite 資料庫…"
+  file:
+    en: "File"
+    zh-CN: "文件"
+    zh-TW: "檔案"
+  file_placeholder:
+    en: "Path to a .csv / .json / .jsonl file"
+    zh-CN: ".csv / .json / .jsonl 文件路径"
+    zh-TW: ".csv / .json / .jsonl 檔案路徑"
+  delimiter:
+    en: "Delimiter"
+    zh-CN: "分隔符"
+    zh-TW: "分隔符號"
+  delimiter_auto:
+    en: "Auto-detect"
+    zh-CN: "自动探测"
+    zh-TW: "自動偵測"
+  delimiter_comma:
+    en: "Comma ( , )"
+    zh-CN: "逗号( , )"
+    zh-TW: "逗號( , )"
+  delimiter_tab:
+    en: "Tab"
+    zh-CN: "制表符"
+    zh-TW: "定位字元"
+  delimiter_semicolon:
+    en: "Semicolon ( ; )"
+    zh-CN: "分号( ; )"
+    zh-TW: "分號( ; )"
+  detected:
+    en: "detected"
+    zh-CN: "自动探测"
+    zh-TW: "自動偵測"
+  quote:
+    en: "Quote"
+    zh-CN: "引号"
+    zh-TW: "引號"
+  quote_double:
+    en: "Double ( \" )"
+    zh-CN: "双引号( \" )"
+    zh-TW: "雙引號( \" )"
+  quote_single:
+    en: "Single ( ' )"
+    zh-CN: "单引号( ' )"
+    zh-TW: "單引號( ' )"
+  quote_none:
+    en: "None"
+    zh-CN: "不识别引号"
+    zh-TW: "不辨識引號"
+  encoding:
+    en: "Encoding"
+    zh-CN: "编码"
+    zh-TW: "編碼"
+  encoding_utf8:
+    en: "UTF-8 (with or without BOM)"
+    zh-CN: "UTF-8(含 BOM)"
+    zh-TW: "UTF-8(含 BOM)"
+  encoding_gbk:
+    en: "GBK"
+    zh-CN: "GBK"
+    zh-TW: "GBK"
+  has_header:
+    en: "First row is header"
+    zh-CN: "首行是表头"
+    zh-TW: "首列是標題"
+  into:
+    en: "Import Into"
+    zh-CN: "导入到"
+    zh-TW: "匯入到"
+  mode_create:
+    en: "New Table"
+    zh-CN: "新表"
+    zh-TW: "新資料表"
+  mode_append:
+    en: "Existing Table"
+    zh-CN: "已有表"
+    zh-TW: "既有資料表"
+  table:
+    en: "Table"
+    zh-CN: "表名"
+    zh-TW: "資料表"
+  choose_table:
+    en: "Choose a table…"
+    zh-CN: "选择表…"
+    zh-TW: "選擇資料表…"
+  table_placeholder:
+    en: "Name of the new table"
+    zh-CN: "新表的名字"
+    zh-TW: "新資料表的名稱"
+  columns:
+    en: "Columns"
+    zh-CN: "列"
+    zh-TW: "欄位"
+  loading:
+    en: "Reading the file…"
+    zh-CN: "正在读取文件…"
+    zh-TW: "正在讀取檔案…"
+  json_lines:
+    en: "JSON Lines"
+    zh-CN: "JSON Lines"
+    zh-TW: "JSON Lines"
+  json_array:
+    en: "JSON array of objects"
+    zh-CN: "JSON 对象数组"
+    zh-TW: "JSON 物件陣列"
+  columns_n:
+    en: "%{count} columns"
+    zh-CN: "%{count} 列"
+    zh-TW: "%{count} 欄"
+  sampled:
+    en: "types inferred from %{count} rows"
+    zh-CN: "按 %{count} 行推断类型"
+    zh-TW: "依 %{count} 列推斷型別"
+  bad_encoding:
+    en: "Some characters couldn't be decoded as UTF-8; the file may be GBK"
+    zh-CN: "部分字符无法按 UTF-8 解码,文件可能是 GBK 编码"
+    zh-TW: "部分字元無法以 UTF-8 解碼,檔案可能是 GBK 編碼"
+  empty:
+    en: "Choose a file to preview its first rows and column types"
+    zh-CN: "选择文件后在这里预览前几行与列类型"
+    zh-TW: "選擇檔案後在這裡預覽前幾列與欄位型別"
+  include_column:
+    en: "Import column %{name}"
+    zh-CN: "导入列 %{name}"
+    zh-TW: "匯入欄位 %{name}"
+  column_type:
+    en: "Type of %{name}"
+    zh-CN: "%{name} 的类型"
+    zh-TW: "%{name} 的型別"
+  not_in_table:
+    en: "Not in the table; skipped"
+    zh-CN: "表里没有,将跳过"
+    zh-TW: "資料表裡沒有,將略過"
+  from_key:
+    en: "from %{key}"
+    zh-CN: "来自 %{key}"
+    zh-TW: "來自 %{key}"
+  progress:
+    en: "%{rows} rows · %{percent}%"
+    zh-CN: "已导入 %{rows} 行 · %{percent}%"
+    zh-TW: "已匯入 %{rows} 列 · %{percent}%"
+  single_tx:
+    en: "One transaction: a failure or cancel rolls everything back"
+    zh-CN: "单事务:出错或取消都会整体回滚"
+    zh-TW: "單一交易:出錯或取消都會整體復原"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  cancelled:
+    en: "Import cancelled; nothing was written"
+    zh-CN: "导入已取消,没有写入任何数据"
+    zh-TW: "匯入已取消,沒有寫入任何資料"
+  done:
+    en: "Import complete: %{count} rows into %{table}"
+    zh-CN: "导入完成:%{count} 行已写入 %{table}"
+    zh-TW: "匯入完成:%{count} 列已寫入 %{table}"
+  skipped:
+    en: "Skipped columns not in the table: %{columns}"
+    zh-CN: "跳过了表里没有的列:%{columns}"
+    zh-TW: "略過了資料表裡沒有的欄位:%{columns}"
+
 # 破坏性语句审查(dialogs/risk.rs)
 risk:
   title:

@@ -511,6 +511,27 @@ pub async fn redis_analysis_cancel(state: &AppState, id: &str) {
     state.redis_pool.cancel_analysis(id).await
 }
 
+/// SQLite 导入 CSV / JSON:预览文件开头(列、推断类型、样例行)。
+pub fn sqlite_import_preview(src: &sqlite::import_data::SourceOptions) -> AppResult<sqlite::import_data::Preview> {
+    sqlite::import_data::preview(src)
+}
+
+/// SQLite 导入 CSV / JSON:后台开始导入(用 `sqlite_import_progress` 轮询)。
+pub fn sqlite_import_start(state: &AppState, id: &str, plan: sqlite::import_data::ImportPlan) -> AppResult<()> {
+    let path = sqlite::commands::sqlite_file_path(state, id)?;
+    state.sqlite_imports.start(id, &path, plan)
+}
+
+/// SQLite 导入的当前进度;没开始过为 None。
+pub fn sqlite_import_progress(state: &AppState, id: &str) -> Option<sqlite::import_data::Progress> {
+    state.sqlite_imports.progress(id)
+}
+
+/// 取消进行中的导入(事务回滚,表也不会留下)。
+pub fn sqlite_import_cancel(state: &AppState, id: &str) {
+    state.sqlite_imports.cancel(id)
+}
+
 /// 查看分析排行榜里的 key(集群模式下 `node` 是它所在的主节点)。
 pub async fn redis_key_on(state: &AppState, id: &str, node: Option<&str>, key: &str) -> AppResult<rds::client::KeyValue> {
     state.redis_pool.get_value_on(id, node, key).await

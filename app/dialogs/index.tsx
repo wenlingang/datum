@@ -40,6 +40,11 @@ export function openImport(connId: string) {
   showImport(connId);
 }
 
+/** 导入 CSV / JSON 文件成表(仅 SQLite)。 */
+export function openImportData(connId: string) {
+  showImport(connId, "data");
+}
+
 /** 挂在根部的对话框宿主(各对话框的 Dialog 在这里渲染)。 */
 export function DialogHost(): JSX.Element {
   return (
@@ -51,7 +56,7 @@ export function DialogHost(): JSX.Element {
         {(r) => <SettingsDialog open section={r().section} onClose={closeSettings} />}
       </Each>
       <Each of={dialogState.import() ? [dialogState.import()!] : []} key={(r) => r.key}>
-        {(r) => <ImportDialog open connId={r().connId} onClose={closeImport} />}
+        {(r) => <ImportDialog open connId={r().connId} mode={r().mode} onClose={closeImport} />}
       </Each>
     </>
   );

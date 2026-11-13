@@ -5,17 +5,21 @@ use crate::sqlite::client::QueryResult;
 use crate::sqlite::edit::{self, CellEdit, RowDelete};
 use rust_i18n::t;
 
-/// 用连接 id 找到配置中的文件路径,打开 SQLite 数据库。
-pub async fn sqlite_connect(state: &AppState, id: String) -> AppResult<()> {
+/// 连接配置里的 SQLite 文件路径。
+pub fn sqlite_file_path(state: &AppState, id: &str) -> AppResult<String> {
     let conns = crate::core::repository::ConnectionRepo::new(&state.config_dir).load()?;
     let conn = conns
         .into_iter()
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.connection_not_found")))?;
-    let path = conn
-        .file_path
+    conn.file_path
         .filter(|p| !p.is_empty())
-        .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.sqlite_path_missing")))?;
+        .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.sqlite_path_missing")))
+}
+
+/// 用连接 id 找到配置中的文件路径,打开 SQLite 数据库。
+pub async fn sqlite_connect(state: &AppState, id: String) -> AppResult<()> {
+    let path = sqlite_file_path(state, &id)?;
     state.sqlite_pool.connect(&id, &path)
 }
 

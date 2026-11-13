@@ -17,9 +17,13 @@ export interface SettingsRequest {
   section: SettingsSection;
 }
 
+/** 导入对话框的页:SQL 语句,或 CSV / JSON 数据文件(仅 SQLite)。 */
+export type ImportMode = "sql" | "data";
+
 export interface ImportRequest {
   key: number;
   connId: string;
+  mode: ImportMode;
 }
 
 let nextKey = 1;
@@ -44,7 +48,7 @@ export function showSettings(section: SettingsSection) {
 }
 export const closeSettings = () => settings.set(null);
 
-export function showImport(connId: string) {
-  importReq.set({ key: nextKey++, connId });
+export function showImport(connId: string, mode: ImportMode = "sql") {
+  importReq.set({ key: nextKey++, connId, mode });
 }
 export const closeImport = () => importReq.set(null);

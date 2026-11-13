@@ -1,5 +1,6 @@
 // 导入数据库:选择目标库,从 .sql 文件读入或直接粘贴 SQL,单事务执行
 // (全成功提交,任一失败回滚并报告第几条)。对应 GPUI 版 dialogs/import.rs。
+// SQLite 连接多一个「CSV / JSON」页(ImportData.tsx),把数据文件导入成表。
 
 import { cleanup, signal, Text, View, type Signal } from "nsh";
 import { Editor } from "nsh/base";
@@ -10,28 +11,50 @@ import { conns, refreshTables } from "../store/conns";
 import { Btn, DbIcon, color } from "../ui/kit";
 import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
-import { DialogFrame, Dropdown, LoadingBtn } from "./controls";
+import { DialogFrame, Dropdown, LoadingBtn, Segmented } from "./controls";
 import { ErrorText } from "../ui/error";
+import { ImportDataView } from "./ImportData";
+import type { ImportMode } from "./state";
 
 interface Report {
   ok: boolean;
   text: string;
 }
 
-export function ImportDialog(props: { connId: string; open: boolean; onClose: () => void }) {
+export function ImportDialog(props: { connId: string; mode: ImportMode; open: boolean; onClose: () => void }) {
   const running = signal(false);
+  const mode = signal<ImportMode>(props.mode);
+  // 导入 CSV / JSON 只对 SQLite 开放:从 SQLite 连接打开时才有切换
+  const sqlite = conns.get(props.connId)?.kind === "sqlite";
   return (
     <DialogFrame
       open={props.open}
       onClose={() => {
         if (!running()) props.onClose();
       }}
-      title={t("import.title")}
-      width={640}
+      title={mode() === "data" ? t("import_data.title") : t("import.title")}
+      width={mode() === "data" ? 860 : 640}
       closeOnBackdrop={false}
       testID="import"
     >
-      <ImportView connId={props.connId} running={running} onClose={props.onClose} />
+      <If when={sqlite}>
+        <View style={{ width: 300 }}>
+          <Segmented
+            testID="import-mode"
+            options={[
+              { value: "sql", label: t("import_data.mode_sql") },
+              { value: "data", label: t("import_data.mode_data") },
+            ]}
+            value={mode()}
+            onChange={(m) => {
+              if (!running()) mode.set(m);
+            }}
+          />
+        </View>
+      </If>
+      <If when={mode() === "data"} else={<ImportView connId={props.connId} running={running} onClose={props.onClose} />}>
+        <ImportDataView connId={props.connId} running={running} onClose={props.onClose} />
+      </If>
     </DialogFrame>
   );
 }

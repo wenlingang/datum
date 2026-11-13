@@ -9,13 +9,13 @@ import { apply as applyPrefs, currentPrefs, updatePrefs } from "../../store/pref
 import { hasUpdate } from "../../store/update";
 import { Btn, DbIcon, EnvBadge } from "../../ui/kit";
 import { FS } from "../../ui/text";
-import { DialogHost, openConnectionForm, openImport, openSettings } from "../index";
+import { DialogHost, openConnectionForm, openImport, openImportData, openSettings } from "../index";
 
 /** 启动:应用偏好、读连接列表(与 App.tsx 相同)。 */
 export function bootDev() {
   applyPrefs();
   reloadConnections();
-  // 截图用:往配置目录的 dev-cmd.txt 写 conn|edit|settings|general|about|import|light|dark
+  // 截图用:往配置目录的 dev-cmd.txt 写 conn|edit|settings|general|about|import|import-data|light|dark
   // 即打开对应对话框 / 切换明暗(每 500ms 读一次;同一行不重复执行,可加 `#n` 区分)
   const cmdFile = `${Store.configDir()}/dev-cmd.txt`;
   let last = "";
@@ -40,6 +40,7 @@ function runDevCommand(which: string) {
   else if (which === "general") openSettings("general");
   else if (which === "about") openSettings("about");
   else if (which === "import" && first) openImport(first.id);
+  else if (which === "import-data" && first) openImportData(first.id);
   else if (which === "light" || which === "dark") updatePrefs({ theme: which });
 }
 
@@ -59,6 +60,12 @@ export function Dev() {
         <Btn testID="dev-settings-general" label="Settings · general" onPress={() => openSettings("general")} />
         <Btn testID="dev-settings-about" label="Settings · about" onPress={() => openSettings("about")} />
         <Btn testID="dev-import" label="Import" disabled={!first()} onPress={() => openImport(first()!.id)} />
+        <Btn
+          testID="dev-import-data"
+          label="Import CSV / JSON"
+          disabled={!first()}
+          onPress={() => openImportData(first()!.id)}
+        />
         <Btn
           testID="dev-theme"
           label="Toggle theme"
