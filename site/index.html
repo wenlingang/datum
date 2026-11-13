@@ -98,7 +98,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 .lang { font-size: 15px; color: var(--night-muted); cursor: pointer; background: none; border: 1px solid var(--night-line); border-radius: 6px; padding: 3px 10px; }
 .lang:hover { color: var(--night-ink); border-color: var(--night-muted); }
 
-.hero { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 48px; align-items: start; padding-top: 36px; padding-bottom: 96px; }
+/* fill the first screen (minus the 64px nav) so the light sections never peek in under the fold */
+.hero { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 48px; align-items: start; align-content: center; min-height: calc(100vh - 64px); min-height: calc(100svh - 64px); padding-top: 36px; padding-bottom: 96px; }
 .hero-copy { padding-top: 28px; }
 h1 {
   font-stretch: 78%; font-weight: 650; font-size: clamp(48px, 6.4vw, 88px); line-height: .94; letter-spacing: -0.02em;
