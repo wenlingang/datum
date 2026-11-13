@@ -296,6 +296,66 @@ core:
       zh-CN: 或
       zh-TW: 或
   diff:
+    view:
+      en: "View"
+      zh-CN: "视图"
+      zh-TW: "檢視"
+    view_added:
+      en: "View only in the source"
+      zh-CN: "只在源库有的视图"
+      zh-TW: "只在來源庫有的檢視"
+    view_removed:
+      en: "View only in the target"
+      zh-CN: "只在目标库有的视图"
+      zh-TW: "只在目標庫有的檢視"
+    view_changed:
+      en: "View definition differs"
+      zh-CN: "视图定义不同"
+      zh-TW: "檢視定義不同"
+    trigger:
+      en: "Trigger"
+      zh-CN: "触发器"
+      zh-TW: "觸發器"
+    trigger_added:
+      en: "Trigger only in the source"
+      zh-CN: "只在源库有的触发器"
+      zh-TW: "只在來源庫有的觸發器"
+    trigger_removed:
+      en: "Trigger only in the target"
+      zh-CN: "只在目标库有的触发器"
+      zh-TW: "只在目標庫有的觸發器"
+    trigger_changed:
+      en: "Trigger definition differs"
+      zh-CN: "触发器定义不同"
+      zh-TW: "觸發器定義不同"
+    trigger_manual:
+      en: "The trigger body has several statements (BEGIN … END), so it is commented out; run it by hand in a client that supports DELIMITER"
+      zh-CN: "触发器体里有多条语句(BEGIN … END),已注释;请在支持 DELIMITER 的客户端里手动执行"
+      zh-TW: "觸發器本體有多條語句(BEGIN … END),已註解;請在支援 DELIMITER 的用戶端手動執行"
+    col_comment:
+      en: "Column %{col} comment: %{from} → %{to}"
+      zh-CN: "列 %{col} 的注释:%{from} → %{to}"
+      zh-TW: "欄位 %{col} 的註解:%{from} → %{to}"
+    table_comment:
+      en: "Table comment: %{from} → %{to}"
+      zh-CN: "表注释:%{from} → %{to}"
+      zh-TW: "資料表註解:%{from} → %{to}"
+    fk_added:
+      en: "Foreign key added %{fk}"
+      zh-CN: "新增外键 %{fk}"
+      zh-TW: "新增外鍵 %{fk}"
+    fk_removed:
+      en: "Foreign key only in the target %{fk}"
+      zh-CN: "只在目标库有的外键 %{fk}"
+      zh-TW: "只在目標庫有的外鍵 %{fk}"
+    sqlite_fk:
+      en: "SQLite can't add or drop foreign keys on an existing table; rebuild %{table} to change them"
+      zh-CN: "SQLite 不能给已有的表增删外键,需要重建 %{table} 才能修改"
+      zh-TW: "SQLite 無法為既有資料表增刪外鍵,需要重建 %{table} 才能修改"
+    new_fks:
+      en: "Foreign keys of the new tables (added last, after every table exists)"
+      zh-CN: "新表的外键(放在最后,等所有表都建好再加)"
+      zh-TW: "新資料表的外鍵(放在最後,等所有資料表都建好再加)"
     suspicious:
       en: "The definition below contains unusual characters, so it is commented out; check it by hand"
       zh-CN: "下面这条的定义里有异常字符,已注释,请手工检查"

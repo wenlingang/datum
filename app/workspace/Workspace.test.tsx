@@ -117,7 +117,10 @@ test("结构对比:roastery 对比 shop,列出差异并生成迁移脚本", asyn
   // roastery 的表在 shop 里都没有;shop 独有的 items 只会生成注释掉的 DROP
   expect(app.shows("id:sdiff-table:products")).toBe(true);
   expect(app.shows("id:sdiff-table:items")).toBe(true);
-  expect(app.texts().some((s) => s.startsWith("9 new"))).toBe(true);
+  expect(app.texts().some((s) => s.startsWith("11 new"))).toBe(true);
+  // 视图与触发器也参与对比;SQLite 的触发器体有多条语句,整段注释等人工执行
+  expect(app.shows("id:sdiff-view:v_kenya")).toBe(true);
+  expect(app.shows("id:sdiff-trigger:trg_review")).toBe(true);
   app.dispose();
 });
 

@@ -1734,13 +1734,21 @@ sdiff:
     zh-CN: 选一个目标库,再点「开始对比」
     zh-TW: 選一個目標庫,再點「開始比對」
   identical:
-    en: "No differences: %{n} tables match"
-    zh-CN: "没有差异:%{n} 张表结构一致"
-    zh-TW: "沒有差異:%{n} 張表結構一致"
+    en: "No differences: %{n} tables, their views and triggers match"
+    zh-CN: "没有差异:%{n} 张表及视图、触发器结构一致"
+    zh-TW: "沒有差異:%{n} 張表及檢視、觸發器結構一致"
   summary:
     en: "%{added} new · %{changed} changed · %{removed} only in target · %{same} identical"
     zh-CN: "新增 %{added} · 变更 %{changed} · 仅目标库有 %{removed} · 一致 %{same}"
     zh-TW: "新增 %{added} · 變更 %{changed} · 僅目標庫有 %{removed} · 一致 %{same}"
+  kind_view:
+    en: View
+    zh-CN: 视图
+    zh-TW: 檢視
+  kind_trigger:
+    en: Trigger
+    zh-CN: 触发器
+    zh-TW: 觸發器
   status_added:
     en: New
     zh-CN: 新增

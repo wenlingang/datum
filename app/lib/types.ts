@@ -481,6 +481,7 @@ export interface Plan {
 
 /** 表结构对比的一张表。 */
 export interface TableDiff {
+  kind: "table" | "view" | "trigger";
   name: string;
   status: "added" | "removed" | "changed";
   changes: string[];

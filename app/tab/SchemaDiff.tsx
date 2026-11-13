@@ -135,10 +135,18 @@ export function SchemaDiff(props: { connId: string }) {
                       same: r().same,
                     })}
               </Text>
-              <Each of={r().tables} key={(x) => x.name}>
+              <Each of={r().tables} key={(x) => `${x.kind}:${x.name}`}>
                 {(x) => (
-                  <View testID={`sdiff-table:${x().name}`} class="gap-1.5 rounded-(--radius) border border-border bg-panel px-3 py-2.5">
+                  <View
+                    testID={x().kind === "table" ? `sdiff-table:${x().name}` : `sdiff-${x().kind}:${x().name}`}
+                    class="gap-1.5 rounded-(--radius) border border-border bg-panel px-3 py-2.5"
+                  >
                     <View class="flex-row items-center gap-2">
+                      <If when={x().kind !== "table"}>
+                        <Text class={`${FS["2xs"]} rounded-full bg-secondary px-1.5 font-bold text-muted-foreground`}>
+                          {t(`sdiff.kind_${x().kind}`)}
+                        </Text>
+                      </If>
                       <Text class={`${FS.sm} ${MONO} flex-1 font-bold text-foreground line-clamp-1`}>{x().name}</Text>
                       <Text class={`${FS["2xs"]} rounded-full border px-1.5 font-bold ${STATUS_CLASS[x().status]}`}>
                         {t(`sdiff.status_${x().status}`)}

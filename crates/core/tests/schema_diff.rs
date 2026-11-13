@@ -52,22 +52,54 @@ async fn roundtrip(st: &AppState, kind: DbKind, src: &str, dst: &str) {
     // 源库:orders 多一列、一个索引、状态列更长且 NOT NULL;多一张 refunds 表
     exec(st, kind, src, "CREATE TABLE orders (id INT PRIMARY KEY, status VARCHAR(20) NOT NULL DEFAULT 'new', note TEXT)").await;
     exec(st, kind, src, "CREATE INDEX orders_status_idx ON orders (status)").await;
-    exec(st, kind, src, "CREATE TABLE refunds (id INT PRIMARY KEY, order_id INT)").await;
+    exec(st, kind, src, "CREATE TABLE refunds (id INT PRIMARY KEY, order_id INT REFERENCES orders (id) ON DELETE CASCADE)").await;
+    // 两边都有的 items:源库多一个外键;源库多一个视图、目标库多一个视图
+    exec(st, kind, src, "CREATE TABLE items (id INT PRIMARY KEY, order_id INT, FOREIGN KEY (order_id) REFERENCES orders (id))").await;
+    exec(st, kind, src, "CREATE VIEW v_orders AS SELECT id, status FROM orders").await;
     // 目标库:旧结构,多一张 legacy 表、多一列 old_flag
     exec(st, kind, dst, "CREATE TABLE orders (id INT PRIMARY KEY, status VARCHAR(10), old_flag INT)").await;
     exec(st, kind, dst, "CREATE TABLE legacy (id INT PRIMARY KEY)").await;
+    exec(st, kind, dst, "CREATE TABLE items (id INT PRIMARY KEY, order_id INT)").await;
+    exec(st, kind, dst, "CREATE VIEW v_legacy AS SELECT id FROM legacy").await;
+    // 注释(SQLite 没有)
+    match kind {
+        DbKind::Pg => {
+            exec(st, kind, src, "COMMENT ON TABLE orders IS '订单'").await;
+            exec(st, kind, src, "COMMENT ON COLUMN orders.status IS '状态'").await;
+        }
+        DbKind::Mysql => {
+            exec(st, kind, src, "ALTER TABLE orders COMMENT = '订单'").await;
+            exec(st, kind, src, "ALTER TABLE orders MODIFY COLUMN status VARCHAR(20) NOT NULL DEFAULT 'new' COMMENT '状态'").await;
+        }
+        _ => {}
+    }
 
     let r = schema_diff::compare(st, &kind, src, dst).await.unwrap();
-    let names: Vec<(&str, &str)> = r.tables.iter().map(|t| (t.name.as_str(), t.status)).collect();
-    assert!(names.contains(&("refunds", "added")), "{names:?}");
-    assert!(names.contains(&("legacy", "removed")));
-    assert!(names.contains(&("orders", "changed")));
+    let names: Vec<(&str, &str, &str)> = r.tables.iter().map(|t| (t.kind, t.name.as_str(), t.status)).collect();
+    assert!(names.contains(&("table", "refunds", "added")), "{names:?}");
+    assert!(names.contains(&("table", "legacy", "removed")));
+    assert!(names.contains(&("table", "orders", "changed")));
+    assert!(names.contains(&("table", "items", "changed")), "{names:?}");
+    assert!(names.contains(&("view", "v_orders", "added")), "{names:?}");
+    assert!(names.contains(&("view", "v_legacy", "removed")), "{names:?}");
+    assert!(!names.iter().any(|(k, n, _)| *k == "table" && n.starts_with("v_")), "视图不当表比较:{names:?}");
+    if kind != DbKind::Sqlite {
+        let orders = r.tables.iter().find(|t| t.name == "orders").unwrap();
+        assert!(orders.changes.iter().any(|c| c.contains("订单")), "{:?}", orders.changes);
+        assert!(orders.changes.iter().any(|c| c.contains("状态")), "{:?}", orders.changes);
+    }
+    eprintln!("{kind:?} script:\n{}", r.sql);
     apply(st, kind, dst, &r.sql).await;
 
     // 再对比:只剩目标库独有的(删除语句是注释,没执行)
     let again = schema_diff::compare(st, &kind, src, dst).await.unwrap();
     let left: Vec<(&str, &str)> = again.tables.iter().map(|t| (t.name.as_str(), t.status)).collect();
     assert!(left.contains(&("legacy", "removed")));
+    // 视图已建;目标库独有的视图只给了注释掉的 DROP
+    assert!(!left.contains(&("v_orders", "added")), "{left:?}");
+    assert!(left.contains(&("v_legacy", "removed")));
+    // 外键已补上(SQLite 不能给已有的表加外键,仍会列出)
+    assert_eq!(left.contains(&("items", "changed")), kind == DbKind::Sqlite, "{left:?}");
     let orders = again.tables.iter().find(|t| t.name == "orders");
     if let Some(o) = orders {
         // SQLite 改不了列定义;其余只应剩下目标库独有的列
