@@ -79,8 +79,24 @@ impl Prefs {
         rust_i18n::set_locale(&locale);
     }
 
-    /// 应用版本号。
+    /// 应用版本号:取 app/nsh.json 的 "version"(发版版本号的唯一来源,编译时嵌入)。
+    /// 原生 crate 自己的版本号(Cargo.toml)不随发版变,不能用。
     pub fn app_version() -> String {
-        env!("CARGO_PKG_VERSION").to_string()
+        nsh_json_version(include_str!("../../nsh.json")).unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+    }
+}
+
+fn nsh_json_version(text: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    v.get("version")?.as_str().map(str::to_string)
+}
+
+#[cfg(test)]
+mod version_tests {
+    #[test]
+    fn version_comes_from_nsh_json() {
+        let want = super::nsh_json_version(include_str!("../../nsh.json")).unwrap();
+        assert_eq!(super::Prefs::app_version(), want);
+        assert_ne!(want, env!("CARGO_PKG_VERSION"), "nsh.json 才是发版版本号");
     }
 }
