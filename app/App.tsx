@@ -5,6 +5,7 @@ import { mount, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { DialogHost } from "./dialogs";
 import { persistSession, restoreSession } from "./tab/session";
+import { loadConversations, persistConversations } from "./store/ai";
 import { reloadConnections } from "./store/conns";
 import { apply as applyPrefs } from "./store/prefs";
 import { dismissToast, toasts } from "./store/toast";
@@ -18,6 +19,9 @@ reloadConnections();
 // 恢复上次打开的标签与内容,之后有变化就保存
 restoreSession();
 persistSession();
+// AI 对话同样跨重启保留
+loadConversations();
+persistConversations();
 
 const TOAST_ICON = { success: "circle-check", error: "circle-x", info: "info" } as const;
 const TOAST_COLOR = { success: "success", error: "destructive", info: "info" } as const;

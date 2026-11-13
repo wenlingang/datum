@@ -49,6 +49,9 @@ export const store = {
   /** 上次退出时的会话(标签与内容);没有为 null。 */
   loadSession: () => Store.loadSession() as unknown,
   saveSession: (session: unknown) => Store.saveSession(session),
+  /** 保存过的 AI 对话;没有为 null。 */
+  loadAiConversations: () => Store.loadAiConversations() as unknown,
+  saveAiConversations: (data: unknown) => Store.saveAiConversations(data),
 };
 
 export const db = {

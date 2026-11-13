@@ -82,14 +82,42 @@ chat:
     en: Manage Providers & Models…
     zh-CN: 管理服务商与模型…
     zh-TW: 管理服務商與模型…
-  clear:
-    en: Clear
-    zh-CN: 清空
-    zh-TW: 清除
-  clear_tooltip:
-    en: Clear Conversation
-    zh-CN: 清空对话
-    zh-TW: 清除對話
+  new_chat:
+    en: New Chat
+    zh-CN: 新对话
+    zh-TW: 新對話
+  new_chat_tooltip:
+    en: Start a new conversation; this one stays in history
+    zh-CN: 开始新对话,当前对话保留在历史里
+    zh-TW: 開始新對話,目前對話保留在歷史中
+  history:
+    en: History
+    zh-CN: 历史对话
+    zh-TW: 歷史對話
+  history_empty:
+    en: Conversations on this connection appear here
+    zh-CN: 这个连接的对话会出现在这里
+    zh-TW: 這個連線的對話會出現在這裡
+  history_now:
+    en: Just now
+    zh-CN: 刚刚
+    zh-TW: 剛剛
+  history_minutes:
+    en: "%{n} min ago"
+    zh-CN: "%{n} 分钟前"
+    zh-TW: "%{n} 分鐘前"
+  history_hours:
+    en: "%{n} h ago"
+    zh-CN: "%{n} 小时前"
+    zh-TW: "%{n} 小時前"
+  untitled:
+    en: Untitled conversation
+    zh-CN: 未命名对话
+    zh-TW: 未命名對話
+  delete_convo:
+    en: Delete conversation
+    zh-CN: 删除对话
+    zh-TW: 刪除對話
   unavailable:
     en: AI is unavailable
     zh-CN: AI 暂不可用

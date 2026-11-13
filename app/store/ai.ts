@@ -1,11 +1,12 @@
 // AI 助手:配置状态、按连接分的会话、流式回复。对应 GPUI 版 store.rs 的 AiStore。
 //
-// 会话 key 按连接区分(`conn:<id>`),切表、开新查询 tab 都不打断当前对话。
-// 同一时刻只允许一个流(streamingKey),流式写入锁定在发送时的会话上。
+// 会话 key 按连接区分(`conn:<id>`,同一连接的新对话为 `conn:<id>:<时间戳>`),每个连接记住当前对话;
+// 切表、开新查询 tab 都不打断当前对话。同一时刻只允许一个流(streamingKey),流式写入锁定在发送时的会话上。
+// 对话防抖写进配置目录的 ai_conversations.json,启动时读回(见 loadConversations / persistConversations)。
 
-import { batch, signal } from "nsh";
+import { batch, effect, signal } from "nsh";
 import { t } from "nsh/i18n";
-import { ai, errorText } from "../lib/native";
+import { ai, errorText, store } from "../lib/native";
 import type { AgentEvent, AiSettings, AiStatus, ChatEvent, DbKind, ToolDetail } from "../lib/types";
 import { toast } from "./toast";
 
@@ -55,6 +56,10 @@ export interface BoundConn {
 export interface Convo {
   readonly messages: readonly AiMessage[];
   readonly bound: BoundConn | null;
+  /** 标题:第一条用户提问的开头 */
+  readonly title?: string;
+  /** 最近一次有新消息的时刻(毫秒),历史列表按它排序 */
+  readonly updatedAt?: number;
 }
 
 /** 发送给 AI 的历史上限(system 每次重建,不占额度)。 */
@@ -71,6 +76,8 @@ export const aiBackend = {
   agentChat: (kind: DbKind, connId: string, messages: WireMessage[], onEvent: (e: AgentEvent) => void): Promise<void> =>
     ai.agentChat(kind, connId, messages, onEvent),
   stop: () => ai.stopChat(),
+  loadConversations: (): unknown => store.loadAiConversations(),
+  saveConversations: (data: unknown) => store.saveAiConversations(data),
 };
 
 /** 不支持工具调用的模型(本次运行内记住,之后直接走普通对话)。 */
@@ -84,6 +91,8 @@ function modelKey(): string {
 const status = signal<AiStatus | null>(null);
 const settings = signal<AiSettings | null>(null);
 const convos = signal<Record<string, Convo>>({});
+/** 连接 → 当前对话的 key */
+const activeByConn = signal<Record<string, string>>({});
 const streamingKey = signal<string | null>(null);
 const pendingRef = signal<string | null>(null);
 let nextId = 1;
@@ -94,6 +103,14 @@ export const aiStore = {
   ready: () => !!status()?.ready,
   settings: () => settings(),
   convo: (key: string | null | undefined): Convo | undefined => (key ? convos()[key] : undefined),
+  /** 连接当前的对话 key(没有选过时是该连接的默认对话)。 */
+  activeKey: (connId: string): string => activeByConn()[connId] ?? `conn:${connId}`,
+  /** 连接下有内容的对话,最近的在前。 */
+  history: (connId: string): { key: string; title: string; updatedAt: number }[] =>
+    Object.entries(convos())
+      .filter(([k, c]) => convoConn(k) === connId && c.messages.some((m) => !m.hidden))
+      .map(([key, c]) => ({ key, title: c.title ?? "", updatedAt: c.updatedAt ?? 0 }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
   /** 正在流式接收的会话 key。 */
   streamingKey: () => streamingKey(),
   /** 编辑器选中后待发送的引用(发送时拼进消息正文)。 */
@@ -137,8 +154,52 @@ export function setCurrentModel(providerId: string, model: string) {
   }
 }
 
+/** 对话 key 所属的连接 id。 */
+function convoConn(key: string): string {
+  const rest = key.startsWith("conn:") ? key.slice(5) : key;
+  const i = rest.lastIndexOf(":");
+  // 新对话的后缀是时间戳(纯数字);连接 id 本身可能含冒号,只去掉数字后缀
+  return i > 0 && /^\d+$/.test(rest.slice(i + 1)) ? rest.slice(0, i) : rest;
+}
+
+/** 标题取第一条用户提问的开头。 */
+const TITLE_CHARS = 40;
+function titleOf(text: string): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  return one.length > TITLE_CHARS ? `${one.slice(0, TITLE_CHARS)}…` : one;
+}
+
 function updateConvo(key: string, f: (c: Convo) => Convo) {
   convos.update((m) => ({ ...m, [key]: f(m[key] ?? { messages: [], bound: null }) }));
+}
+
+/** 在连接下开一段新对话(当前对话已经是空的就不新开)。返回新对话的 key。 */
+export function newConvo(connId: string): string {
+  const cur = aiStore.activeKey(connId);
+  if (!(convos()[cur]?.messages.length ?? 0)) return cur;
+  const key = `conn:${connId}:${Date.now()}`;
+  activeByConn.update((m) => ({ ...m, [connId]: key }));
+  return key;
+}
+
+/** 切到连接下的某段历史对话。 */
+export function selectConvo(connId: string, key: string) {
+  activeByConn.update((m) => ({ ...m, [connId]: key }));
+}
+
+/** 删除一段对话;删的是当前对话时切到最近的另一段(没有则回到空的新对话)。 */
+export function deleteConvo(connId: string, key: string) {
+  batch(() => {
+    convos.update((m) => {
+      const next = { ...m };
+      delete next[key];
+      return next;
+    });
+    if (aiStore.activeKey(connId) === key) {
+      const rest = aiStore.history(connId);
+      activeByConn.update((m) => ({ ...m, [connId]: rest[0]?.key ?? `conn:${connId}:${Date.now()}` }));
+    }
+  });
 }
 
 export function bindConvo(key: string, bound: BoundConn) {
@@ -158,7 +219,12 @@ export function appendMessage(
   extra?: Partial<Pick<AiMessage, "model" | "startedAt" | "table">>,
 ): number {
   const id = nextId++;
-  updateConvo(key, (c) => ({ ...c, messages: [...c.messages, { id, role, content, hidden, ...extra }] }));
+  updateConvo(key, (c) => ({
+    ...c,
+    messages: [...c.messages, { id, role, content, hidden, ...extra }],
+    title: c.title || (role === "user" && !hidden ? titleOf(content) : c.title),
+    updatedAt: Date.now(),
+  }));
   return id;
 }
 
@@ -192,14 +258,6 @@ export function takeLastUserTurn(key: string): string | null {
   const text = msgs[i].content;
   updateConvo(key, (c) => ({ ...c, messages: c.messages.slice(0, i) }));
   return text;
-}
-
-export function clearConvo(key: string) {
-  convos.update((m) => {
-    const next = { ...m };
-    delete next[key];
-    return next;
-  });
 }
 
 /** 改写一条消息。`parts`:不给则保留原样,null 去掉分段(退回普通回复)。 */
@@ -377,3 +435,78 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
 }
 
 refreshAi();
+
+// ---------------------------------------------------------------- 对话持久化
+
+/** 最多保存多少段对话(最近的优先)、每张查询结果表保留多少行。 */
+const MAX_SAVED_CONVOS = 50;
+const MAX_SAVED_ROWS = 20;
+
+interface SavedConversations {
+  version: 1;
+  convos: Record<string, Convo>;
+  active: Record<string, string>;
+}
+
+/** 写盘前去掉只在运行时有意义的字段,大结果表只留前几行。 */
+function slim(c: Convo): Convo {
+  const trimDetail = <T extends { rows?: unknown[] } | null | undefined>(d: T): T =>
+    d && Array.isArray(d.rows) && d.rows.length > MAX_SAVED_ROWS ? ({ ...d, rows: d.rows.slice(0, MAX_SAVED_ROWS) } as T) : d;
+  return {
+    ...c,
+    messages: c.messages.map((m) => {
+      const { startedAt: _s, ...rest } = m;
+      return {
+        ...rest,
+        table: trimDetail(rest.table),
+        parts: rest.parts?.map((p) => (p.kind === "tool" ? { ...p, detail: trimDetail(p.detail) } : p)),
+      };
+    }),
+  };
+}
+
+/** 启动时读回保存的对话;消息 id 从已有最大值之后接着发,避免与卡片状态的 key 冲突。 */
+export function loadConversations() {
+  let raw: Partial<SavedConversations> | null = null;
+  try {
+    raw = aiBackend.loadConversations() as Partial<SavedConversations> | null;
+  } catch {
+    return;
+  }
+  if (!raw || raw.version !== 1 || typeof raw.convos !== "object" || !raw.convos) return;
+  const loaded = raw.convos as Record<string, Convo>;
+  let max = 0;
+  for (const c of Object.values(loaded)) for (const m of c.messages ?? []) max = Math.max(max, m.id);
+  nextId = Math.max(nextId, max + 1);
+  batch(() => {
+    convos.set(loaded);
+    activeByConn.set(raw?.active ?? {});
+  });
+}
+
+/** 对话有变化就防抖保存(流式回复期间不写,结束后写一次)。 */
+export function persistConversations() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  effect(() => {
+    const all = convos();
+    const active = activeByConn();
+    if (streamingKey() !== null) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      const kept = Object.entries(all)
+        .filter(([, c]) => c.messages.length > 0)
+        .sort(([, a], [, b]) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+        .slice(0, MAX_SAVED_CONVOS);
+      const data: SavedConversations = {
+        version: 1,
+        convos: Object.fromEntries(kept.map(([k, c]) => [k, slim(c)])),
+        active,
+      };
+      try {
+        aiBackend.saveConversations(data);
+      } catch {
+        // 写不了就算了,下次变化再试
+      }
+    }, 1000);
+  });
+}

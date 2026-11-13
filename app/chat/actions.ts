@@ -10,7 +10,9 @@ import {
   appendMessage,
   bindConvo,
   type BoundConn,
-  clearConvo,
+  deleteConvo,
+  newConvo,
+  selectConvo,
   sendMessage,
   setPendingRef,
   takeLastUserTurn,
@@ -39,10 +41,10 @@ export function connLabel(c: Connection): string {
   return `${c.name} / ${db}`;
 }
 
-/** 会话 key:按连接分会话。切表、开新查询 tab 都不打断当前对话。 */
+/** 会话 key:当前连接正在进行的那段对话。切表、开新查询 tab 都不打断它。 */
 export function convoKey(): string | null {
   const c = chatDeps.headConn();
-  return c ? `conn:${c.id}` : null;
+  return c ? aiStore.activeKey(c.id) : null;
 }
 
 /** SQL 的目标连接:会话已绑定的连接,否则当前的关系库连接。 */
@@ -135,13 +137,30 @@ export function regenerate() {
   void prepareAndSend(key, to, text).finally(() => preparing.set(false));
 }
 
-/** 清空当前会话(连同表结构缓存与卡片状态)。 */
-export function clearConversation() {
-  const key = convoKey();
-  if (key) clearConvo(key);
+/** 开一段新对话:当前对话留在历史里;表结构缓存重新按需加载。 */
+export function newConversation() {
+  const c = chatDeps.headConn();
+  if (!c || aiStore.streamingKey() !== null) return;
+  newConvo(c.id);
   details.clear();
+}
+
+/** 切到历史里的某段对话。 */
+export function openConversation(key: string) {
+  const c = chatDeps.headConn();
+  if (!c || aiStore.streamingKey() !== null) return;
+  selectConvo(c.id, key);
+  details.clear();
+}
+
+/** 删除一段对话(连同它的卡片状态)。 */
+export function removeConversation(key: string) {
+  const c = chatDeps.headConn();
+  if (!c || aiStore.streamingKey() === key) return;
+  deleteConvo(c.id, key);
   clearCards();
 }
+
 
 /** 引用编辑器当前选区。 */
 export function quoteSelection() {

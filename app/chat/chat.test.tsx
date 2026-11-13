@@ -34,7 +34,7 @@ test("发送后流式拼接回复,并渲染 SQL 卡片", async () => {
   expect(app.enabled("id:sql-run-2:1")).toBe(true);
   // 绑定连接显示在标题栏,清空按钮出现
   expect(app.shows("text:local / shop")).toBe(true);
-  await app.press("id:ai-clear");
+  await app.press("id:ai-new");
   await app.waitFor("text:Ask about this database");
   app.dispose();
 });
@@ -219,4 +219,33 @@ test("AI 卡片上执行的写操作可撤销,撤销结果告知 AI", async () =
   // 撤销以隐藏消息记进对话
   expect(app.texts().some((x) => x.startsWith("[Undone]"))).toBe(true);
   app.dispose();
+});
+
+test("新对话保留历史:可从历史菜单切回;对话跨重启保留", async () => {
+  const first = await open("./testing/persist.tsx", SIZE);
+  await first.waitFor("text:Ask about this database");
+  await first.type("id:ai-input", "第一段对话的问题");
+  await first.press("id:ai-send");
+  await first.waitFor("text:/然后初始化几条数据/", { timeout: 10_000 });
+  // 新对话:当前对话进历史,面板回到空状态
+  await first.press("id:ai-new");
+  await first.waitFor("text:Ask about this database");
+  await first.type("id:ai-input", "第二段对话的问题");
+  await first.press("id:ai-send");
+  await first.waitFor("text:第二段对话的问题");
+  await first.waitUntil(() => first.texts().filter((s) => /然后初始化几条数据/.test(s)).length > 0, { timeout: 10_000 });
+  // 从历史菜单切回第一段
+  await first.press("label:History");
+  await first.press("label:/^第一段对话的问题/");
+  await first.waitFor("text:第一段对话的问题");
+  expect(first.texts()).not.toContain("第二段对话的问题");
+  // 等防抖写盘后「重启」
+  await first.wait(1600);
+  first.dispose();
+
+  const second = await open("./testing/persist.tsx", SIZE);
+  await second.waitFor("text:第一段对话的问题", { timeout: 10_000 });
+  await second.press("label:History");
+  await second.waitFor("label:/^第二段对话的问题/");
+  second.dispose();
 });

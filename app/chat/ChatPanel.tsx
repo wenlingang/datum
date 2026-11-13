@@ -13,13 +13,25 @@ import { toast } from "../store/toast";
 import { toggleAiFullscreen } from "../store/workspace";
 import { Btn, Hint, Icon, IconButton, tip } from "../ui/kit";
 import { FS } from "../ui/text";
-import { askFix, canSend, clearConversation, convoKey, quoteSelection, regenerate, sendText, target } from "./actions";
+import {
+  askFix,
+  canSend,
+  convoKey,
+  newConversation,
+  openConversation,
+  quoteSelection,
+  regenerate,
+  removeConversation,
+  sendText,
+  target,
+} from "./actions";
 import { cardKey } from "./cards";
 import { chatDeps } from "./deps";
 import { ModelPicker } from "./ModelPicker";
 import { SqlCard, SqlConfirmDialog } from "./SqlCard";
 import { ResultTable, ShownNote, ToolCard } from "./ToolCard";
 import { ErrorText } from "../ui/error";
+import { DropMenu, MItem, MSep } from "../ui/menu";
 
 /** 消息与输入框所在的居中一栏(面板窄时就是全宽)。 */
 const COLUMN = "w-full max-w-[820px] self-center";
@@ -43,6 +55,83 @@ effect(() => {
   }
 });
 
+/** 历史对话的时间:刚刚 / N 分钟前 / N 小时前 / 日期。 */
+function whenText(ms: number): string {
+  if (!ms) return "";
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return t("chat.history_now");
+  if (mins < 60) return t("chat.history_minutes", { n: mins });
+  if (mins < 24 * 60) return t("chat.history_hours", { n: Math.floor(mins / 60) });
+  return new Date(ms).toLocaleDateString();
+}
+
+/** 当前连接的历史对话(有内容的),最近的在前。 */
+function historyList() {
+  const c = chatDeps.headConn();
+  return c ? aiStore.history(c.id) : [];
+}
+
+/** 侧边面板顶栏的「历史」菜单。 */
+function HistoryMenu() {
+  return (
+    <DropMenu
+      testID="ai-history"
+      placement="bottom"
+      align="end"
+      popupClass="max-h-[360px] min-w-64"
+      trigger={<IconButton icon="rotate-ccw-clock" size={14} tooltip={t("chat.history")} class="p-1" />}
+    >
+      <Each of={historyList()} key={(h) => h.key}>
+        {(h) => (
+          <MItem
+            label={`${h().key === convoKey() ? "● " : ""}${h().title || t("chat.untitled")} · ${whenText(h().updatedAt)}`}
+            onSelect={() => openConversation(h().key)}
+          />
+        )}
+      </Each>
+      <MSep />
+      <MItem label={t("chat.new_chat")} onSelect={newConversation} />
+    </DropMenu>
+  );
+}
+
+/** 对话工作台左侧:当前连接的历史对话。 */
+function HistoryRail() {
+  return (
+    <View testID="ai-history-rail" class="w-[240px] shrink-0 border-r border-border">
+      <View class="h-10 shrink-0 flex-row items-center px-3">
+        <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("chat.history")}</Text>
+        <IconButton icon="plus" size={14} tooltip={t("chat.new_chat")} class="p-1" onPress={newConversation} />
+      </View>
+      <If when={historyList().length > 0} else={<Hint class={`${FS.xs} px-3`}>{t("chat.history_empty")}</Hint>}>
+        <List each={historyList()} keyExtractor={(h) => h.key} estimatedItemSize={48} class="flex-1" contentClass="px-1.5 pb-2">
+          {(h) => (
+            <View
+              testID={`ai-history-item:${h().title}`}
+              role="button"
+              accessibilityLabel={h().title || t("chat.untitled")}
+              onPress={() => openConversation(h().key)}
+              class="flex-row items-start gap-1 rounded-(--radius) py-1.5 pl-2.5 pr-1 hover:bg-list-hover"
+              classList={{ "bg-raised": h().key === convoKey() }}
+            >
+              <View class="min-w-0 flex-1 gap-0.5">
+                <Text
+                  class={`${FS.sm} line-clamp-2`}
+                  classList={{ "font-bold text-foreground": h().key === convoKey(), "text-foreground": h().key !== convoKey() }}
+                >
+                  {h().title || t("chat.untitled")}
+                </Text>
+                <Text class={`${FS.xs} text-fg-faint`}>{whenText(h().updatedAt)}</Text>
+              </View>
+              <IconButton icon="x" size={12} tooltip={t("chat.delete_convo")} class="p-1" onPress={() => removeConversation(h().key)} />
+            </View>
+          )}
+        </List>
+      </If>
+    </View>
+  );
+}
+
 function Header(props: { label: string | null; hasMessages: boolean; wide: boolean }) {
   return (
     <View class="h-10 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
@@ -56,12 +145,15 @@ function Header(props: { label: string | null; hasMessages: boolean; wide: boole
         <Btn
           small
           variant="ghost"
-          icon="eraser"
-          label={t("chat.clear")}
-          tooltip={t("chat.clear_tooltip")}
-          testID="ai-clear"
-          onPress={clearConversation}
+          icon="plus"
+          label={t("chat.new_chat")}
+          tooltip={t("chat.new_chat_tooltip")}
+          testID="ai-new"
+          onPress={newConversation}
         />
+      </If>
+      <If when={!props.wide && historyList().length > 0}>
+        <HistoryMenu />
       </If>
       <Btn
         small
@@ -404,7 +496,11 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
   });
 
   return (
-    <View class="flex-1 bg-panel" classList={{ "border-l border-ai/30": !wide() }} testID={wide() ? "ai-panel-wide" : "ai-panel"}>
+    <View class="flex-1 flex-row bg-panel" classList={{ "border-l border-ai/30": !wide() }} testID={wide() ? "ai-panel-wide" : "ai-panel"}>
+      <If when={wide()}>
+        <HistoryRail />
+      </If>
+      <View class="min-w-0 flex-1">
       <Header label={bound()?.label ?? null} hasMessages={messages().length > 0} wide={wide()} />
       <If when={status() !== null && !ready()}>
         <View class="gap-2 border-b border-border px-3 py-2.5">
@@ -489,6 +585,7 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
         streaming={streaming()}
         onSend={send}
       />
+      </View>
       <SqlConfirmDialog />
     </View>
   );
