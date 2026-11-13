@@ -55,13 +55,16 @@ staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
-# GitHub 的 macOS runner 上 hdiutil 偶尔报 "Resource busy":隔几秒重试,失败原因照常输出
-for attempt in 1 2 3 4 5; do
-  if hdiutil create -volname Datum -srcfolder "$staging" -ov -format UDZO "$dmg"; then
+# 映像容量按实际大小显式给出(多留 20% + 20 MB):hdiutil 按 -srcfolder 自动估算时,新版 macOS 上
+# 可能估小,拷贝时报 "No space left on device"。UDZO 是压缩格式,成品不会因此变大。
+size_kb=$(( $(du -sk "$staging" | cut -f1) * 12 / 10 + 20480 ))
+# 偶发的 "Resource busy" 隔几秒重试;失败原因照常输出
+for attempt in 1 2 3; do
+  if hdiutil create -volname Datum -srcfolder "$staging" -size "${size_kb}k" -ov -format UDZO "$dmg"; then
     break
   fi
-  if [[ $attempt == 5 ]]; then
-    echo "❌ hdiutil create 连续 5 次失败" >&2
+  if [[ $attempt == 3 ]]; then
+    echo "❌ hdiutil create 连续 3 次失败" >&2
     exit 1
   fi
   echo "hdiutil create 失败(第 $attempt 次),5 秒后重试" >&2
