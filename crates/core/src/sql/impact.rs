@@ -1,9 +1,15 @@
-//! 写操作的影响范围预估:把单表的 UPDATE / DELETE、TRUNCATE、DROP TABLE 改写成只读的
+//! 写操作的影响范围预估:把 UPDATE / DELETE、TRUNCATE、DROP TABLE 改写成只读的
 //! `SELECT COUNT(*)` 与预览查询(纯函数)。
 //!
-//! 只认能可靠改写的形态,其余(多表 / JOIN、`UPDATE … FROM`、`DELETE … USING`、CTE、
-//! 存储过程等)返回 None,界面显示「无法预估」,不去猜。改写结果由调用方在数据库强制只读的
-//! 会话里执行,即使改写有偏差也写不进数据。
+//! - 单表:`SELECT * FROM 表 WHERE …`
+//! - PG / SQLite 的 `UPDATE … FROM`、PG 的 `DELETE … USING`:`SELECT * FROM 目标表 WHERE EXISTS
+//!   (SELECT 1 FROM 其余表 WHERE 条件)`——目标表的每一行至多算一次,与数据库的实际行为一致
+//! - MySQL 的多表 UPDATE / DELETE(JOIN 或逗号):只改一张表时 `SELECT DISTINCT 目标.* FROM 联表 WHERE …`
+//!   (有主键时精确;没有主键时完全相同的行只算一次)
+//! - `WITH … UPDATE / DELETE`:CTE 原样带到预估查询前面;CTE 里有写操作(PG 的数据修改 CTE)不预估
+//!
+//! 其余(一次改多张表、存储过程等)返回 None,界面显示「无法预估」,不去猜。改写结果由调用方在
+//! 数据库强制只读的会话里执行,即使改写有偏差也写不进数据。
 //!
 //! 统计的是「条件匹配的行数」:MySQL 的 UPDATE 返回的受影响行数只算值真正变了的行,可能更少。
 
@@ -98,7 +104,7 @@ fn table_of(from: &str) -> Option<String> {
 
 /// SET 段 → 赋值的列名;遇到元组赋值等解析不了的写法返回 None。
 fn set_columns(set: &str, commas: &[usize], base: usize) -> Option<Vec<String>> {
-    let mut cuts: Vec<usize> = commas.iter().map(|c| c - base).filter(|&c| c < set.len()).collect();
+    let mut cuts: Vec<usize> = commas.iter().filter(|&&c| c >= base).map(|c| c - base).filter(|&c| c < set.len()).collect();
     cuts.push(set.len());
     let mut out = Vec::new();
     let mut from = 0;
@@ -248,6 +254,94 @@ impl Scan {
 
 const JOINS: &[&str] = &["JOIN", "STRAIGHT_JOIN"];
 
+/// 表引用里紧跟在表名后、不是别名的关键字。
+const NOT_ALIAS: &[&str] = &[
+    "ON", "USING", "JOIN", "STRAIGHT_JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL", "OUTER", "WHERE",
+    "SET", "USE", "FORCE", "IGNORE", "PARTITION",
+];
+
+/// 在 MySQL 的表引用(`a JOIN b ON … , c AS x`)里找别名或表名为 `target` 的表,返回表名原文。
+fn resolve_target(refs: &str, target: &str, d: Dialect) -> Option<String> {
+    let s = scan(refs, d)?;
+    // 表名出现的位置:开头、每个顶层逗号后、每个 JOIN 后
+    let mut starts = vec![0];
+    starts.extend(s.commas.iter().map(|c| c + 1));
+    starts.extend(s.words.iter().filter(|w| JOINS.contains(&w.upper.as_str())).map(|w| w.end));
+    let want = unquote(target);
+    let mut found = None;
+    for at in starts {
+        let rest = &refs[at..];
+        if rest.trim_start().starts_with('(') {
+            continue; // 子查询 / 括号里的连接:不当目标
+        }
+        let Some((name, after)) = read_qualified(rest) else { continue };
+        let name = name.trim();
+        let mut alias = None;
+        let mut tail = after.trim_start();
+        if tail.len() >= 3 && tail[..3].eq_ignore_ascii_case("as ") {
+            tail = &tail[3..];
+        }
+        if let Some((a, _)) = read_qualified(tail) {
+            if !NOT_ALIAS.contains(&a.trim().to_ascii_uppercase().as_str()) && !a.contains('.') {
+                alias = Some(unquote(a));
+            }
+        }
+        let last = unquote(name.rsplit('.').next().unwrap_or(name));
+        let hit = match &alias {
+            Some(a) => a.eq_ignore_ascii_case(&want),
+            None => last.eq_ignore_ascii_case(&want),
+        };
+        if hit {
+            if found.is_some() {
+                return None; // 同名出现两次:说不清是哪张
+            }
+            found = Some(name.to_string());
+        }
+    }
+    found
+}
+
+/// SET 段里赋值的列都带同一个限定名(`a.x = …, a.y = …`)时返回它;否则(不带、混用)为 None。
+fn set_qualifier(set: &str, commas: &[usize], base: usize) -> Option<String> {
+    let mut cuts: Vec<usize> = commas.iter().filter(|&&c| c >= base).map(|c| c - base).filter(|&c| c < set.len()).collect();
+    cuts.push(set.len());
+    let mut from = 0;
+    let mut q: Option<String> = None;
+    for cut in cuts {
+        let (name, _) = read_qualified(&set[from..cut])?;
+        from = cut + 1;
+        let (qual, _) = name.trim().rsplit_once('.')?;
+        let qual = unquote(qual.rsplit('.').next().unwrap_or(qual));
+        match &q {
+            Some(prev) if !prev.eq_ignore_ascii_case(&qual) => return None,
+            _ => q = Some(qual),
+        }
+    }
+    q
+}
+
+/// `SELECT * FROM 目标 WHERE EXISTS (SELECT 1 FROM 其余 WHERE 条件)`:PG / SQLite 的多表写法。
+fn exists_queries(target: &str, others: &str, cond: &str, op: WriteOp) -> Option<ImpactQuery> {
+    let cond = cond.trim();
+    let filter = if cond.is_empty() { String::new() } else { format!("\nWHERE {cond}\n") };
+    let tail = format!("WHERE EXISTS (SELECT 1 FROM {}{filter}\n)", others.trim());
+    queries(target, &tail, op)
+}
+
+/// `SELECT DISTINCT 目标.* FROM 联表 WHERE …`:MySQL 的多表写法。`qual` 是 SET / DELETE 里写的目标(别名或表名)。
+fn distinct_queries(refs: &str, qual: &str, tail: &str, op: WriteOp, d: Dialect) -> Option<ImpactQuery> {
+    let table = resolve_target(refs, qual, d)?;
+    let inner = format!("SELECT DISTINCT {}.* FROM {}\n{}\n", qual.trim(), refs.trim(), tail.trim());
+    Some(ImpactQuery {
+        count_sql: format!("SELECT COUNT(*) FROM ({inner}) AS datum_impact"),
+        rows_sql: format!("SELECT * FROM ({inner}) AS datum_impact LIMIT {PREVIEW_ROWS}"),
+        snapshot_sql: inner,
+        whole_table: false,
+        table,
+        op,
+    })
+}
+
 /// 生成预估查询:`from` 为表(可带别名),`tail` 为 WHERE / ORDER BY / LIMIT 部分。
 /// 各段之间一律换行:原文里的 `-- 注释` 只能注释到行尾,不能把后面拼上的 WHERE 或右括号吞掉。
 fn queries(from: &str, tail: &str, op: WriteOp) -> Option<ImpactQuery> {
@@ -268,21 +362,69 @@ pub fn impact_query(stmt: &str, d: Dialect) -> Option<ImpactQuery> {
     let s = scan(sql, d)?;
     let first = s.words.first()?;
     match first.upper.as_str() {
+        "WITH" => {
+            // CTE:原样带到预估查询前面。CTE 里有写操作(PG 的数据修改 CTE)就不预估
+            let body = s.find(first.end, &["UPDATE", "DELETE", "INSERT", "SELECT", "MERGE", "REPLACE"])?;
+            if !matches!(body.upper.as_str(), "UPDATE" | "DELETE") {
+                return None;
+            }
+            let cte = &sql[..body.start];
+            let upper = cte.to_ascii_uppercase();
+            let writes = upper
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .any(|w| matches!(w, "INSERT" | "UPDATE" | "DELETE" | "MERGE"));
+            if writes {
+                return None;
+            }
+            let q = impact_query(&sql[body.start..], d)?;
+            let pre = |x: &str| format!("{}\n{x}", cte.trim_end());
+            Some(ImpactQuery {
+                count_sql: pre(&q.count_sql),
+                rows_sql: pre(&q.rows_sql),
+                snapshot_sql: pre(&q.snapshot_sql),
+                ..q
+            })
+        }
         "DELETE" => {
             let from_kw = s.words.get(1..)?.iter().find(|w| {
                 !matches!(w.upper.as_str(), "LOW_PRIORITY" | "QUICK" | "IGNORE")
             })?;
             if from_kw.upper != "FROM" {
-                // MySQL 多表 DELETE(`DELETE t1 FROM …`)
-                return None;
+                // MySQL 多表 DELETE:`DELETE t1 FROM 联表 WHERE …`(只删一张表时才预估)
+                if d != Dialect::Mysql {
+                    return None;
+                }
+                let from = s.find(from_kw.start, &["FROM"])?;
+                let targets = &sql[from_kw.start..from.start];
+                if s.has_comma_between(from_kw.start, from.start) {
+                    return None;
+                }
+                let qual = targets.trim().trim_end_matches(".*").trim();
+                let tail = s.find(from.end, &["WHERE"]).map(|w| w.start).unwrap_or(sql.len());
+                return distinct_queries(&sql[from.end..tail], qual, &sql[tail..], WriteOp::Delete, d);
             }
             let table_start = from_kw.end;
             let tail = s.find(table_start, &["WHERE", "ORDER", "LIMIT", "RETURNING", "USING"]);
             let tail_start = tail.map(|w| w.start).unwrap_or(sql.len());
-            if tail.is_some_and(|w| w.upper == "USING")
-                || s.has_comma_between(table_start, tail_start)
-                || s.has_word_between(table_start, tail_start, JOINS)
-            {
+            if let Some(using) = tail.filter(|w| w.upper == "USING") {
+                let target = &sql[table_start..using.start];
+                if s.has_comma_between(table_start, using.start) {
+                    return None;
+                }
+                let where_kw = s.find(using.end, &["WHERE"]);
+                let list_end = where_kw.map(|w| w.start).unwrap_or(sql.len());
+                if d == Dialect::Mysql {
+                    // MySQL:`DELETE FROM t1 USING 联表 WHERE …`
+                    let qual = target.trim().trim_end_matches(".*").trim();
+                    return distinct_queries(&sql[using.end..list_end], qual, &sql[list_end..], WriteOp::Delete, d);
+                }
+                // PG:`DELETE FROM t USING 其余表 WHERE …`
+                let end = s.find(list_end, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
+                let cond = where_kw.map(|w| &sql[w.end..end]).unwrap_or("");
+                let list_end = s.find(using.end, &["WHERE", "RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
+                return exists_queries(target, &sql[using.end..list_end], cond, WriteOp::Delete);
+            }
+            if s.has_comma_between(table_start, tail_start) || s.has_word_between(table_start, tail_start, JOINS) {
                 return None;
             }
             let end = s.find(tail_start, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
@@ -303,18 +445,37 @@ pub fn impact_query(stmt: &str, d: Dialect) -> Option<ImpactQuery> {
                 _ => s.words.get(idx - 1)?.end,
             };
             let set = s.find(table_start, &["SET"])?;
-            if s.has_comma_between(table_start, set.start) || s.has_word_between(table_start, set.start, JOINS) {
-                return None;
-            }
             let tail = s.find(set.end, &["WHERE", "ORDER", "LIMIT", "RETURNING", "FROM"]);
-            if tail.is_some_and(|w| w.upper == "FROM") {
-                // PG / SQLite 的 UPDATE … FROM:多表
-                return None;
-            }
             let tail_start = tail.map(|w| w.start).unwrap_or(sql.len());
-            let end = s.find(tail_start, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
             let set_cols = set_columns(&sql[set.end..tail_start], &s.commas, set.end);
-            queries(&sql[table_start..set.start], &sql[tail_start..end], WriteOp::Update { set_columns: set_cols })
+            let op = WriteOp::Update { set_columns: set_cols };
+            if s.has_comma_between(table_start, set.start) || s.has_word_between(table_start, set.start, JOINS) {
+                // MySQL 多表 UPDATE:SET 里的列都属于同一张表时才预估
+                if d != Dialect::Mysql {
+                    return None;
+                }
+                let qual = set_qualifier(&sql[set.end..tail_start], &s.commas, set.end)?;
+                return distinct_queries(&sql[table_start..set.start], &qual, &sql[tail_start..], op, d);
+            }
+            if let Some(from) = tail.filter(|w| w.upper == "FROM") {
+                // PG / SQLite 的 UPDATE … FROM
+                if d == Dialect::Mysql {
+                    return None;
+                }
+                let where_kw = s.find(from.end, &["WHERE"]);
+                let list_end = s.find(from.end, &["WHERE", "RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
+                let end = s.find(list_end, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
+                let cond = where_kw.map(|w| &sql[w.end..end]).unwrap_or("");
+                let set_cols = set_columns(&sql[set.end..from.start], &s.commas, set.end);
+                return exists_queries(
+                    &sql[table_start..set.start],
+                    &sql[from.end..list_end],
+                    cond,
+                    WriteOp::Update { set_columns: set_cols },
+                );
+            }
+            let end = s.find(tail_start, &["RETURNING"]).map(|w| w.start).unwrap_or(sql.len());
+            queries(&sql[table_start..set.start], &sql[tail_start..end], op)
         }
         "TRUNCATE" | "DROP" => {
             let mut idx = 1;
@@ -419,16 +580,70 @@ mod tests {
     }
 
     #[test]
-    fn multi_table_forms_are_not_guessed() {
-        assert_eq!(q("UPDATE t SET a = s.a FROM s WHERE t.id = s.id", Pg), None);
-        assert_eq!(q("DELETE FROM t USING s WHERE t.id = s.id", Pg), None);
-        assert_eq!(q("DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id", Mysql), None);
-        assert_eq!(q("UPDATE t1 JOIN t2 ON t1.id = t2.id SET t1.a = 1", Mysql), None);
-        assert_eq!(q("UPDATE t1, t2 SET t1.a = t2.a", Mysql), None);
-        assert_eq!(q("WITH x AS (SELECT 1) DELETE FROM t", Pg), None);
+    fn multi_table_forms() {
+        // PG / SQLite:UPDATE … FROM、DELETE … USING 改成 EXISTS,目标表每行至多算一次
+        assert_eq!(
+            count("UPDATE t AS a SET x = s.x FROM s WHERE a.id = s.id RETURNING a.*", Pg),
+            "SELECT COUNT(*) FROM (SELECT * FROM t AS a WHERE EXISTS (SELECT 1 FROM s WHERE a.id = s.id)) AS datum_impact"
+        );
+        assert_eq!(
+            count("UPDATE t SET x = 1 FROM s JOIN u ON u.id = s.uid", Sqlite),
+            "SELECT COUNT(*) FROM (SELECT * FROM t WHERE EXISTS (SELECT 1 FROM s JOIN u ON u.id = s.uid)) AS datum_impact"
+        );
+        let del = impact_query("DELETE FROM ONLY t USING s, u WHERE t.id = s.id AND s.k = u.k", Pg).unwrap();
+        assert_eq!(
+            squash(&del.count_sql),
+            "SELECT COUNT(*) FROM (SELECT * FROM ONLY t WHERE EXISTS (SELECT 1 FROM s, u WHERE t.id = s.id AND s.k = u.k)) AS datum_impact"
+        );
+        assert_eq!(del.table, "t");
+        let up = impact_query("UPDATE t SET a = s.a, b = 2 FROM s WHERE t.id = s.id", Pg).unwrap();
+        assert_eq!(up.op, WriteOp::Update { set_columns: Some(vec!["a".into(), "b".into()]) });
+
+        // MySQL:只改一张表的多表写法 → DISTINCT 目标.*
+        let m = impact_query("UPDATE orders o JOIN users u ON u.id = o.uid SET o.flag = 1 WHERE u.vip = 1", Mysql).unwrap();
+        assert_eq!(
+            squash(&m.count_sql),
+            "SELECT COUNT(*) FROM (SELECT DISTINCT o.* FROM orders o JOIN users u ON u.id = o.uid WHERE u.vip = 1) AS datum_impact"
+        );
+        assert_eq!(m.table, "orders");
+        assert_eq!(m.op, WriteOp::Update { set_columns: Some(vec!["flag".into()]) });
+        assert_eq!(
+            count("UPDATE t1, t2 SET t1.a = t2.a WHERE t1.id = t2.id", Mysql),
+            "SELECT COUNT(*) FROM (SELECT DISTINCT t1.* FROM t1, t2 WHERE t1.id = t2.id) AS datum_impact"
+        );
+        let d1 = impact_query("DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id WHERE t2.gone", Mysql).unwrap();
+        assert_eq!(
+            squash(&d1.count_sql),
+            "SELECT COUNT(*) FROM (SELECT DISTINCT t1.* FROM t1 JOIN t2 ON t1.id = t2.id WHERE t2.gone) AS datum_impact"
+        );
+        assert_eq!(d1.table, "t1");
+        let d2 = impact_query("DELETE FROM a.* USING `shop`.`orders` AS a LEFT JOIN b ON b.id = a.bid WHERE b.id IS NULL", Mysql).unwrap();
+        assert_eq!(d2.table, "`shop`.`orders`");
+
+        // 一次改多张表、说不清改哪张:不预估
+        assert_eq!(q("UPDATE t1 JOIN t2 ON t1.id = t2.id SET t1.a = 1, t2.b = 2", Mysql), None);
+        assert_eq!(q("UPDATE t1 JOIN t2 ON t1.id = t2.id SET a = 1", Mysql), None);
+        assert_eq!(q("DELETE t1, t2 FROM t1 JOIN t2 ON t1.id = t2.id", Mysql), None);
+        assert_eq!(q("DELETE x FROM t1 JOIN t2 ON t1.id = t2.id", Mysql), None, "目标不在联表里");
+        assert_eq!(q("UPDATE t SET a = 1 FROM s", Mysql), None);
         assert_eq!(q("INSERT INTO t VALUES (1)", Pg), None);
         assert_eq!(q("DELETE FROM t WHERE x = 'unterminated", Pg), None);
         assert_eq!(q("DELETE FROM t WHERE x = 1 /*! OR 1=1 */", Mysql), None);
+    }
+
+    #[test]
+    fn cte_prefix() {
+        let c = impact_query("WITH old AS (SELECT id FROM t WHERE ts < now()) DELETE FROM t WHERE id IN (SELECT id FROM old)", Pg).unwrap();
+        assert_eq!(
+            squash(&c.count_sql),
+            "WITH old AS (SELECT id FROM t WHERE ts < now()) SELECT COUNT(*) FROM (SELECT * FROM t WHERE id IN (SELECT id FROM old)) AS datum_impact"
+        );
+        assert!(squash(&c.snapshot_sql).starts_with("WITH old AS"));
+        assert!(impact_query("WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) UPDATE t SET a = 1 WHERE id IN (SELECT n FROM r)", Mysql).is_some());
+        // 数据修改 CTE、主体不是 UPDATE / DELETE:不预估
+        assert_eq!(q("WITH d AS (DELETE FROM t RETURNING id) DELETE FROM u WHERE id IN (SELECT id FROM d)", Pg), None);
+        assert_eq!(q("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", Pg), None);
+        assert_eq!(q("WITH x AS (SELECT 1) SELECT * FROM x", Pg), None);
     }
 
     #[test]

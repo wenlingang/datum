@@ -82,6 +82,39 @@ async fn check_counts_and_leaves_data_alone(st: &AppState, kind: DbKind, id: &st
     assert_eq!(i.count, 30);
     assert!(i.whole_table);
 
+    // 多表:每个 cancelled 订单在 impact_refs 里有两条记录,目标行也只算一次
+    exec(st, kind, id, "DROP TABLE IF EXISTS impact_refs").await;
+    exec(st, kind, id, "CREATE TABLE impact_refs (id INT PRIMARY KEY, item_id INT)").await;
+    let refs: Vec<String> = (1..=30).filter(|i| i % 3 == 0).flat_map(|i| [format!("({i}, {i})"), format!("({}, {i})", i + 100)]).collect();
+    exec(st, kind, id, &format!("INSERT INTO impact_refs VALUES {}", refs.join(", "))).await;
+    let multi: &[&str] = match kind {
+        DbKind::Mysql => &[
+            "UPDATE impact_items i JOIN impact_refs r ON r.item_id = i.id SET i.status = 'x'",
+            "DELETE i FROM impact_items i JOIN impact_refs r ON r.item_id = i.id",
+            "DELETE FROM i USING impact_items AS i, impact_refs r WHERE r.item_id = i.id",
+        ],
+        DbKind::Pg => &[
+            "UPDATE impact_items i SET status = 'x' FROM impact_refs r WHERE r.item_id = i.id",
+            "DELETE FROM impact_items i USING impact_refs r WHERE r.item_id = i.id",
+        ],
+        _ => &["UPDATE impact_items SET status = 'x' FROM impact_refs r WHERE r.item_id = impact_items.id"],
+    };
+    for sql in multi {
+        let i = service::write_impact(st, &kind, id, sql).await.unwrap().unwrap_or_else(|| panic!("{sql}"));
+        assert_eq!(i.count, 10, "{sql}");
+    }
+    let i = service::write_impact(
+        st,
+        &kind,
+        id,
+        "WITH c AS (SELECT id FROM impact_items WHERE status = 'cancelled') DELETE FROM impact_items WHERE id IN (SELECT id FROM c)",
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(i.count, 10);
+    exec(st, kind, id, "DROP TABLE impact_refs").await;
+
     // 改写不了的形态:不猜
     assert!(service::write_impact(st, &kind, id, "INSERT INTO impact_items VALUES (99, 'x')")
         .await

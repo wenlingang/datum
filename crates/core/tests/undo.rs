@@ -72,6 +72,25 @@ async fn check_round_trips(st: &AppState, kind: DbKind, id: &str) {
     service::import_sql(st, &kind, id, prep.statements).await.unwrap();
     assert_eq!(dump(st, kind, id).await, before, "撤销后应回到原样");
 
+    // 多表写法:按目标表的快照撤销
+    exec(st, kind, id, "DROP TABLE IF EXISTS undo_refs").await;
+    exec(st, kind, id, "CREATE TABLE undo_refs (id INT PRIMARY KEY, item_id INT)").await;
+    exec(st, kind, id, "INSERT INTO undo_refs VALUES (1, 3), (2, 3), (3, 4)").await;
+    let multi = match kind {
+        DbKind::Mysql => "UPDATE undo_items i JOIN undo_refs r ON r.item_id = i.id SET i.note = 'joined'; DELETE i FROM undo_items i JOIN undo_refs r ON r.item_id = i.id WHERE r.id = 3",
+        DbKind::Pg => "UPDATE undo_items i SET note = 'joined' FROM undo_refs r WHERE r.item_id = i.id; DELETE FROM undo_items i USING undo_refs r WHERE r.item_id = i.id AND r.id = 3",
+        _ => "UPDATE undo_items SET note = 'joined' FROM undo_refs r WHERE r.item_id = undo_items.id",
+    };
+    let prep = service::undo_prepare(st, &kind, id, multi).await.unwrap();
+    assert!(prep.reason.is_none(), "{:?}", prep.reason);
+    for stmt in datum_core::sql::stmt::statements(multi) {
+        exec(st, kind, id, &stmt).await;
+    }
+    assert_ne!(dump(st, kind, id).await, before);
+    service::import_sql(st, &kind, id, prep.statements).await.unwrap();
+    assert_eq!(dump(st, kind, id).await, before, "多表写法撤销后应回到原样");
+    exec(st, kind, id, "DROP TABLE undo_refs").await;
+
     // 不能撤销的情况给出原因
     exec(st, kind, id, "CREATE TABLE IF NOT EXISTS undo_nopk (a INT, b INT)").await;
     let r = service::undo_prepare(st, &kind, id, "UPDATE undo_nopk SET b = 1").await.unwrap();

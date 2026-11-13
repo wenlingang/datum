@@ -171,7 +171,7 @@ pub async fn query_read_only_timeout(
 }
 
 /// 预估一条写语句的影响范围:改写成只读的 COUNT 与预览查询,在数据库强制只读的会话里执行。
-/// 改写不了的语句(多表、CTE 等)返回 None。
+/// 改写不了的语句(一次改多张表、数据修改 CTE、INSERT 等)返回 None。
 pub async fn write_impact(state: &AppState, kind: &DbKind, id: &str, stmt: &str) -> AppResult<Option<WriteImpact>> {
     let Some(dialect) = Dialect::from_kind(kind) else {
         return Ok(None);
