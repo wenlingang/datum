@@ -54,6 +54,8 @@ export const store = {
   /** 保存过的 AI 对话;没有为 null。 */
   loadAiConversations: () => Store.loadAiConversations() as unknown,
   saveAiConversations: (data: unknown) => Store.saveAiConversations(data),
+  loadSnippets: () => Store.loadSnippets() as unknown,
+  saveSnippets: (data: unknown) => Store.saveSnippets(data),
 };
 
 export const db = {

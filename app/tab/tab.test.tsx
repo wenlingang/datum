@@ -339,3 +339,42 @@ test("查询参数:执行前弹框填值,预览代入结果;同一标签记住�
   await app.press("id:params-cancel");
   await app.waitUntil(() => !app.shows("id:params-dialog"), { timeout: 5000 });
 });
+
+test("SQL 片段:收藏当前语句,在光标处插入,可删除;重启后仍在", async () => {
+  const app = await start();
+  await replaceSql(app, "SELECT name FROM categories ORDER BY id");
+  await app.press("id:snippets");
+  await app.waitFor("text:No snippets yet. Save a statement you use often.", { timeout: 5000 });
+  await app.press("id:snippet-add");
+  await app.waitFor("id:snippet-name");
+  expect(app.value("id:snippet-name")).toBe("SELECT name FROM categories ORDER BY id");
+  await app.clear("id:snippet-name");
+  await app.type("id:snippet-name", "all categories");
+  await app.press("id:snippet-save");
+  await app.waitFor("id:snippet:all categories", { timeout: 5000 });
+  const saved = Store.loadSnippets() as { snippets: { name: string; sql: string; lang: string }[] };
+  expect(saved.snippets.map((s) => [s.name, s.sql, s.lang])).toEqual([
+    ["all categories", "SELECT name FROM categories ORDER BY id", "sql"],
+  ]);
+  // 换一段语句后插入片段:接在后面另起一行,不自动执行
+  await app.keyboard.press("Escape");
+  await app.waitUntil(() => !app.shows("id:snippet-add"), { timeout: 5000 });
+  await app.press("text:SELECT name FROM categories ORDER BY id");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT 1;");
+  await app.press("id:snippets");
+  await app.press("id:snippet:all categories");
+  await app.waitUntil(() => app.texts().includes("SELECT 1;") && app.texts().includes("2"), { timeout: 5000 });
+  expect(app.texts()).toContain("SELECT name FROM categories ORDER BY id");
+  expect(hasText(app, "Ready")).toBe(true);
+  app.dispose();
+
+  // 重启后片段还在;删除后为空
+  const again = await start();
+  await again.press("id:snippets");
+  await again.waitFor("id:snippet:all categories", { timeout: 5000 });
+  await again.press("id:snippet:all categories >> label:Delete Snippet");
+  await again.waitFor("text:No snippets yet. Save a statement you use often.", { timeout: 5000 });
+  expect((Store.loadSnippets() as { snippets: unknown[] }).snippets).toEqual([]);
+  again.dispose();
+});

@@ -3,6 +3,7 @@
 
 import activity from "../assets/icons/activity.svg";
 import arrowUp from "../assets/icons/arrow-up.svg";
+import bookmark from "../assets/icons/bookmark.svg";
 import braces from "../assets/icons/braces.svg";
 import check from "../assets/icons/check.svg";
 import chevronDown from "../assets/icons/chevron-down.svg";
@@ -79,6 +80,7 @@ import zoomOut from "../assets/icons/zoom-out.svg";
 export const ICONS = {
   "activity": activity,
   "arrow-up": arrowUp,
+  "bookmark": bookmark,
   "braces": braces,
   "check": check,
   "chevron-down": chevronDown,

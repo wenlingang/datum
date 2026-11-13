@@ -186,6 +186,71 @@ toolbar:
     en: "View Execution Plan (⌘E)"
     zh-CN: "查看执行计划 (⌘E)"
     zh-TW: "檢視執行計畫 (⌘E)"
+snippets:
+  title:
+    en: Snippets
+    zh-CN: SQL 片段
+    zh-TW: SQL 片段
+  button:
+    en: Snippets
+    zh-CN: 片段
+    zh-TW: 片段
+  tooltip:
+    en: Saved snippets — click one to insert it at the cursor
+    zh-CN: 收藏的常用语句,点一下插入到光标处
+    zh-TW: 收藏的常用語句,點一下插入到游標處
+  save_current:
+    en: Save Current
+    zh-CN: 收藏当前语句
+    zh-TW: 收藏目前語句
+  save_selection:
+    en: Save Selection
+    zh-CN: 收藏选中内容
+    zh-TW: 收藏選取內容
+  name_placeholder:
+    en: Snippet name
+    zh-CN: 片段名称
+    zh-TW: 片段名稱
+  save:
+    en: Save
+    zh-CN: 保存
+    zh-TW: 儲存
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  search:
+    en: Search by name or content
+    zh-CN: 按名称或内容搜索
+    zh-TW: 依名稱或內容搜尋
+  empty:
+    en: No snippets yet. Save a statement you use often.
+    zh-CN: 还没有片段。把常用的语句收藏起来吧。
+    zh-TW: 還沒有片段。把常用的語句收藏起來吧。
+  no_match:
+    en: No matching snippets
+    zh-CN: 没有匹配的片段
+    zh-TW: 沒有符合的片段
+  empty_editor:
+    en: The editor is empty
+    zh-CN: 编辑器是空的
+    zh-TW: 編輯器是空的
+  saved:
+    en: Snippet saved
+    zh-CN: 已收藏
+    zh-TW: 已收藏
+  delete:
+    en: Delete Snippet
+    zh-CN: 删除片段
+    zh-TW: 刪除片段
+  too_many:
+    en: "Too many snippets (max %{max}). Delete some first."
+    zh-CN: "片段太多了(上限 %{max} 个),先删掉一些"
+    zh-TW: "片段太多了(上限 %{max} 個),先刪掉一些"
+  save_failed:
+    en: "Couldn't save snippets: %{error}"
+    zh-CN: "片段保存失败:%{error}"
+    zh-TW: "片段儲存失敗:%{error}"
 history:
   just_now:
     en: "Just now"

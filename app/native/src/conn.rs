@@ -110,12 +110,24 @@ impl Store {
     pub fn save_ai_conversations(data: JsonValue) -> Result<(), String> {
         save_json(AI_CONVOS_FILE, &data)
     }
+
+    /// 收藏的 SQL 片段;没有或读不了为 null。
+    pub fn load_snippets() -> JsonValue {
+        load_json(SNIPPETS_FILE)
+    }
+
+    /// 保存 SQL 片段(原子写)。
+    pub fn save_snippets(data: JsonValue) -> Result<(), String> {
+        save_json(SNIPPETS_FILE, &data)
+    }
 }
 
 /// 会话文件名(在配置目录下)。
 const SESSION_FILE: &str = "session.json";
 /// AI 对话文件名(在配置目录下)。
 const AI_CONVOS_FILE: &str = "ai_conversations.json";
+/// SQL 片段文件名(在配置目录下)。
+const SNIPPETS_FILE: &str = "snippets.json";
 
 fn load_json(name: &str) -> JsonValue {
     std::fs::read(state().config_dir.join(name))

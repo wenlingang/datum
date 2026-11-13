@@ -141,6 +141,8 @@ export interface TabModel {
   // 工具条浮层与弹窗
   readonly limitOpen: Signal<boolean>;
   readonly historyOpen: Signal<boolean>;
+  /** SQL 片段浮层是否打开 */
+  readonly snippetsOpen: Signal<boolean>;
   readonly risk: Signal<RiskGate | null>;
   readonly cell: Signal<CellDialogState | null>;
   /** 编辑器里最近一次执行(运行 / Explain)的 SQL:报错时「让 AI 修复」、Explain 后「让 AI 解读」用 */
@@ -246,6 +248,7 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     nlNote: signal<{ error: boolean; text: string } | null>(null),
     limitOpen: signal(false),
     historyOpen: signal(false),
+    snippetsOpen: signal(false),
     risk: signal<RiskGate | null>(null),
     cell: signal<CellDialogState | null>(null),
     lastRun: signal<{ sql: string; explain: boolean } | null>(null),
@@ -371,6 +374,17 @@ export function selectionText(m: TabModel): string {
 export function setSql(m: TabModel, text: string) {
   m.sql.set(text);
   m.editor?.setValue(text);
+}
+
+/** 在光标处插入文本(有选区则替换选区);插入的片段前后按需补换行,不与已有语句粘在一行。 */
+export function insertAtCursor(m: TabModel, snippet: string) {
+  const text = m.sql();
+  const [a, b] = primaryRange(text, m.selections()) ?? [text.length, text.length];
+  const before = text.slice(0, a);
+  const after = text.slice(b);
+  const lead = before && !before.endsWith("\n") ? "\n" : "";
+  const tail = after && !after.startsWith("\n") ? "\n" : "";
+  setSql(m, before + lead + snippet + tail + after);
 }
 
 /** 运行时取:有选区跑选区,否则跑光标所在的那条语句(Redis 为光标所在行)。 */

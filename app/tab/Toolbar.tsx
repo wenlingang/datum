@@ -9,6 +9,7 @@ import { MAX_ROWS_OPTIONS, maxRows, normalizeMaxRows, updatePrefs } from "../sto
 import { Btn, Icon, TextField, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { HistoryPanel } from "./History";
+import { SnippetPanel } from "./Snippets";
 import { beautify, explain, run, runAll, type TabModel } from "./model";
 
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
@@ -127,6 +128,26 @@ export function Toolbar(props: { m: TabModel }) {
         />
       </If>
       <View class="flex-1" />
+      <Popover
+        open={m.snippetsOpen()}
+        onOpenChange={(e) => m.snippetsOpen.set(e.open)}
+        placement="top"
+        align="end"
+        offset={4}
+        popupClass={POPUP}
+        trigger={
+          <Button
+            testID="snippets"
+            tooltip={tip(t("snippets.tooltip"))}
+            class="h-6 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover active:bg-secondary-active"
+          >
+            <Icon name="bookmark" size={13} />
+            <Text class={`${FS.xs} font-medium text-foreground`}>{t("snippets.button")}</Text>
+          </Button>
+        }
+      >
+        <SnippetPanel m={m} />
+      </Popover>
       <Popover
         open={m.historyOpen()}
         onOpenChange={(e) => m.historyOpen.set(e.open)}
