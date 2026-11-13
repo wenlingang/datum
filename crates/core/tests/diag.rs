@@ -138,7 +138,7 @@ async fn pg_diag() {
     let slow = section(&all, "slow");
     assert_eq!(slow.unavailable.as_ref().unwrap().reason, "pg_stat_statements_missing");
     let o = section(&all, "overview");
-    assert!(o.rows[0][col(o, "version")].as_deref().unwrap().starts_with("16"));
+    assert!(o.rows[0][col(o, "version")].as_deref().is_some_and(|v| v.chars().next().is_some_and(|c| c.is_ascii_digit())));
     let u = section(&all, "unused_indexes");
     assert!(u.rows.iter().any(|r| r[col(u, "index")].as_deref() == Some("diag_items_v")));
     assert!(!u.rows.iter().any(|r| r[col(u, "index")].as_deref() == Some("diag_items_pkey")), "主键不算");
@@ -177,9 +177,13 @@ async fn pg_diag() {
     service::diag_act(&st, &kind, &id, Action::VacuumTable, &["public".into(), "diag_items".into()])
         .await
         .unwrap();
-    let bloat = service::diag_run(&st, &kind, &id, "bloat").await.unwrap();
-    let row = bloat.rows.iter().find(|r| r[col(&bloat, "table")].as_deref() == Some("diag_items")).unwrap();
-    assert!(row[col(&bloat, "last_vacuum")].is_some());
+    // PG 15 之前统计由收集进程异步更新:等它反映出来
+    wait_for(&st, kind, &id, "bloat", |b| {
+        b.rows
+            .iter()
+            .any(|r| r[col(b, "table")].as_deref() == Some("diag_items") && r[col(b, "last_vacuum")].is_some())
+    })
+    .await;
     exec(&st, kind, &id, "DROP TABLE diag_items").await;
 }
 
@@ -199,7 +203,7 @@ async fn mysql_diag() {
 
     let all = run_all(&st, kind, &id).await;
     let o = section(&all, "overview");
-    assert!(o.rows[0][col(o, "version")].as_deref().unwrap().starts_with("8."));
+    assert!(o.rows[0][col(o, "version")].as_deref().is_some_and(|v| v.chars().next().is_some_and(|c| c.is_ascii_digit())));
     assert!(o.rows[0][col(o, "connections")].as_deref().unwrap().contains(" / "));
     let t = section(&all, "tables");
     assert!(t.rows.iter().any(|r| r[col(t, "table")].as_deref() == Some("diag_items")));

@@ -182,10 +182,10 @@ pub async fn run(state: &AppState, kind: &DbKind, id: &str, key: &str) -> AppRes
 const PG_OVERVIEW: &str = "\
 SELECT current_setting('server_version') AS version,
   pg_database_size(current_database()) AS db_size_bytes,
-  concat((SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'), ' / ',
+  concat((SELECT count(*) FROM pg_stat_activity WHERE {CLIENT}), ' / ',
          current_setting('max_connections')) AS connections,
-  (SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend' AND state = 'active') AS active,
-  (SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'
+  (SELECT count(*) FROM pg_stat_activity WHERE {CLIENT} AND state = 'active') AS active,
+  (SELECT count(*) FROM pg_stat_activity WHERE {CLIENT}
      AND state LIKE 'idle in transaction%') AS idle_in_tx,
   (SELECT round(100.0 * blks_hit / NULLIF(blks_hit + blks_read, 0), 2) FROM pg_stat_database
      WHERE datname = current_database()) AS cache_hit_pct,
@@ -203,7 +203,7 @@ SELECT pid, usename AS \"user\", datname AS database, client_addr::text AS clien
   NULLIF(concat_ws(':', wait_event_type, wait_event), '') AS wait,
   query
 FROM pg_stat_activity
-WHERE pid <> pg_backend_pid() AND backend_type = 'client backend'
+WHERE pid <> pg_backend_pid() AND {CLIENT}
 ORDER BY (state = 'active') DESC, (state LIKE 'idle in transaction%') DESC, query_start NULLS LAST";
 
 const PG_LOCKS: &str = "\
@@ -246,11 +246,32 @@ FROM pg_stat_user_tables
 ORDER BY n_dead_tup DESC, pg_total_relation_size(relid) DESC
 LIMIT 100";
 
+/// 「客户端会话」的条件:PG 10 起有 backend_type;9.6 没有,排除后台的 autovacuum 进程。
+fn pg_client_filter(version_num: u32) -> &'static str {
+    if version_num >= 100_000 {
+        "backend_type = 'client backend'"
+    } else {
+        "datid IS NOT NULL AND coalesce(query, '') NOT LIKE 'autovacuum:%'"
+    }
+}
+
+async fn pg_version_num(state: &AppState, id: &str) -> u32 {
+    ro(state, &DbKind::Pg, id, "SELECT current_setting('server_version_num')")
+        .await
+        .ok()
+        .and_then(|r| r.rows.first().and_then(|r| r[0].clone()))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100_000)
+}
+
 async fn pg_run(state: &AppState, id: &str, key: &str) -> AppResult<DiagResult> {
     let kind = DbKind::Pg;
+    if matches!(key, "overview" | "sessions") {
+        let base = if key == "overview" { PG_OVERVIEW } else { PG_SESSIONS };
+        let sql = base.replace("{CLIENT}", pg_client_filter(pg_version_num(state, id).await));
+        return Ok(ro(state, &kind, id, &sql).await?.into());
+    }
     let sql = match key {
-        "overview" => PG_OVERVIEW,
-        "sessions" => PG_SESSIONS,
         "locks" => PG_LOCKS,
         "long_tx" => PG_LONG_TX,
         "unused_indexes" => PG_UNUSED_INDEXES,
@@ -463,7 +484,17 @@ fn my_overview_row(status: &HashMap<String, String>, version: &str, max_conn: &s
 
 async fn my_overview(state: &AppState, id: &str) -> AppResult<DiagResult> {
     let kind = DbKind::Mysql;
-    let status = status_map(&ro(state, &kind, id, "SHOW GLOBAL STATUS").await?);
+    // 只取用到的几项:MariaDB 的状态变量超过 500 个,整张取会被行数上限截掉
+    let status = status_map(
+        &ro(
+            state,
+            &kind,
+            id,
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime', 'Threads_connected', 'Threads_running', \
+             'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads', 'Questions', 'Slow_queries', 'Aborted_connects')",
+        )
+        .await?,
+    );
     let base = ro(
         state,
         &kind,
@@ -611,6 +642,13 @@ mod tests {
         assert_eq!(action_sql(&DbKind::Mysql, Action::OptimizeTable, &a("a`b")).unwrap(), "OPTIMIZE TABLE `a``b`");
         assert!(action_sql(&DbKind::Mysql, Action::OptimizeTable, &a("")).is_err());
         assert!(action_sql(&DbKind::Pg, Action::OptimizeTable, &a("t")).is_err());
+    }
+
+    #[test]
+    fn pg_client_filter_by_version() {
+        assert!(PG_OVERVIEW.contains("{CLIENT}") && PG_SESSIONS.contains("{CLIENT}"));
+        assert!(pg_client_filter(160002).contains("backend_type"));
+        assert!(!pg_client_filter(90624).contains("backend_type"));
     }
 
     #[test]
