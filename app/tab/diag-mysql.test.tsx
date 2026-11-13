@@ -50,7 +50,8 @@ test("未使用的索引生成 DROP INDEX(放进编辑器不执行);OPTIMIZE TAB
   await app.waitUntil(() => app.shows("id:diag-optimize_table"), { timeout: 10000 });
   await app.press("id:diag-optimize_table >> nth=0");
   await app.waitFor("id:diag-confirm", { timeout: 5000 });
-  expect(has(app, "Optimize table big?")).toBe(true);
+  // 表大小在 information_schema 里有缓存,新表的先后不固定:确认框里是其中一张即可
+  expect(app.texts().some((x) => /^Optimize table (big|products)\?$/.test(x))).toBe(true);
   await app.press("id:diag-confirm-ok");
   await app.waitUntil(() => has(app, "Table optimized"), { timeout: 15000 });
   app.dispose();
