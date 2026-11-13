@@ -4,7 +4,10 @@
 import { Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import type { ToolStep } from "../store/ai";
+import type { ExportFormat } from "../lib/native";
 import { Btn, Icon } from "../ui/kit";
+import { DropMenu, MItem } from "../ui/menu";
+import { chatDeps } from "./deps";
 import type { IconName } from "../ui/icons";
 import { FS, MONO } from "../ui/text";
 import { ErrorText } from "../ui/error";
@@ -60,6 +63,34 @@ export function ResultTable(props: { columns: string[]; rows: (string | null)[][
   );
 }
 
+/** 对话里能导出的格式(INSERT 语句需要真实表名,这里不提供)。 */
+const CHAT_EXPORTS: { format: ExportFormat; label: string }[] = [
+  { format: "csv", label: "CSV" },
+  { format: "xlsx", label: "Excel" },
+  { format: "json", label: "JSON" },
+  { format: "markdown", label: "Markdown" },
+];
+
+/** 结果表下方的「复制 CSV」「导出」;导出的是这张卡片里保存的全部行(不止显示的部分)。 */
+export function ResultActions(props: { columns: string[]; rows: (string | null)[][]; testID?: string }) {
+  return (
+    <View class="flex-row items-center gap-1" testID={props.testID}>
+      <Btn
+        small
+        variant="ghost"
+        icon="copy"
+        label={t("chat.copy_csv")}
+        onPress={() => chatDeps.copyCsv(props.columns, props.rows)}
+      />
+      <DropMenu trigger={<Btn small variant="ghost" icon="download" label={t("chat.export_result")} />}>
+        {CHAT_EXPORTS.map((e) => (
+          <MItem label={e.label} onSelect={() => chatDeps.exportRows(e.format, props.columns, props.rows)} />
+        ))}
+      </DropMenu>
+    </View>
+  );
+}
+
 /** 超出显示范围时的说明。 */
 export function ShownNote(props: { columns: number; rows: number; wide?: boolean }) {
   const maxRows = () => (props.wide ? WIDE_ROWS : SHOW_ROWS);
@@ -85,6 +116,7 @@ function Body(props: { step: ToolStep; wide?: boolean; onOpenQuery?: (sql: strin
       <If when={props.step.name === "run_query" && (d()?.rows?.length ?? 0) > 0}>
         <ResultTable columns={columnNames()} rows={d()?.rows ?? []} wide={props.wide} />
         <ShownNote columns={columnNames().length} rows={d()?.rows?.length ?? 0} wide={props.wide} />
+        <ResultActions columns={columnNames()} rows={d()?.rows ?? []} testID="tool-result-actions" />
       </If>
       <If when={props.step.name === "run_query" && props.onOpenQuery && (d()?.sql ?? props.step.args.sql)}>
         <View class="flex-row">

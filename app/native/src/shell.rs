@@ -3,7 +3,7 @@
 
 use crate::runtime::from;
 use datum_core::core::connection::DbKind;
-use datum_core::grid::{Cell, file_timestamp, to_csv, to_markdown};
+use datum_core::grid::{Cell, file_timestamp, to_csv, to_json, to_markdown, to_xlsx};
 use datum_core::sql::Dialect;
 use datum_core::sql::build::build_insert_row;
 use nsh_core::JsonValue;
@@ -30,7 +30,29 @@ impl Shell {
         Ok(Some(path.to_string_lossy().into_owned()))
     }
 
-    /// 把结果行渲染成导出文本。`format`:`"csv"` / `"markdown"` / `"sql"`(每行一条 INSERT,
+    /// 把结果行写成 Excel(.xlsx):弹出保存对话框(同 `save_text`),工作表名取 `table`。
+    /// 返回写入的路径;用户取消时为 null。
+    pub async fn save_xlsx(
+        file_name: String,
+        table: String,
+        columns: Vec<String>,
+        rows: JsonValue,
+    ) -> Result<Option<String>, String> {
+        let rows: Vec<Vec<Cell>> = from(rows, "rows")?;
+        let refs: Vec<&Vec<Cell>> = rows.iter().collect();
+        let bytes = to_xlsx(&table, &columns, &refs)?;
+        let mut dialog = SaveDialog::new().file_name(file_name);
+        if let Some(dir) = dirs::download_dir() {
+            dialog = dialog.directory(dir);
+        }
+        let Some(path) = pick_save_path(dialog).await? else {
+            return Ok(None);
+        };
+        std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    }
+
+    /// 把结果行渲染成导出文本。`format`:`"csv"` / `"json"` / `"markdown"` / `"sql"`(每行一条 INSERT,
     /// 方言随 `kind`,非关系库按 PostgreSQL)。`rows` 为二维数组,NULL 为 null。
     pub fn render_export(
         format: String,
@@ -43,6 +65,7 @@ impl Shell {
         let refs: Vec<&Vec<Cell>> = rows.iter().collect();
         match format.as_str() {
             "csv" => Ok(to_csv(&columns, &refs)),
+            "json" => Ok(to_json(&columns, &refs)),
             "markdown" => Ok(to_markdown(&columns, &refs)),
             "sql" => {
                 let k: Option<DbKind> = from(JsonValue::String(kind), "kind").ok();

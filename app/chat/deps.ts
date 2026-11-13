@@ -3,12 +3,13 @@
 
 import { Clipboard } from "nsh";
 import { openSettings } from "../dialogs/index";
-import { chat as chatNative, db } from "../lib/native";
+import { chat as chatNative, db, type ExportFormat, grid } from "../lib/native";
 import type { ColumnsByTable, Connection, DbKind, QueryResult, TableDetail } from "../lib/types";
 import { activate, conns, loadTables, refreshTables } from "../store/conns";
 import { maxRows } from "../store/prefs";
 import { setAiFullscreen, workspace } from "../store/workspace";
 import { activeSelectionText, insertAndRun, newQueryTab } from "../tab/index";
+import { copyText, saveRows } from "../workspace/ops";
 
 export const chatDeps = {
   /** 当前连接(当前 tab 的连接,否则侧栏聚焦的连接)。 */
@@ -53,5 +54,13 @@ export const chatDeps = {
   openSettings: () => openSettings("ai"),
   copy: (text: string): void => {
     void Clipboard.writeText(text);
+  },
+  /** 结果表复制为 CSV(带提示)。 */
+  copyCsv: (columns: string[], rows: (string | null)[][]): void => {
+    void copyText(grid.toCsv(columns, rows));
+  },
+  /** 结果表导出成文件(弹出保存对话框),文件名以 `result` 开头。 */
+  exportRows: (format: ExportFormat, columns: string[], rows: (string | null)[][]): void => {
+    void saveRows(format, "result", columns, rows, workspace.headConn()?.kind ?? "pg");
   },
 };

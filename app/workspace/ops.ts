@@ -21,10 +21,10 @@ import { closeConnTabs, setDetailOpen, workspace } from "../store/workspace";
 import { openTable } from "../tab";
 
 /** 导出格式,菜单顺序与 GPUI 版一致。 */
-export const EXPORT_FORMATS: ExportFormat[] = ["csv", "sql", "markdown"];
+export const EXPORT_FORMATS: ExportFormat[] = ["csv", "xlsx", "json", "sql", "markdown"];
 
-const SHORT: Record<ExportFormat, string> = { csv: "CSV", sql: "SQL", markdown: "Markdown" };
-const EXT: Record<ExportFormat, string> = { csv: "csv", sql: "sql", markdown: "md" };
+const SHORT: Record<ExportFormat, string> = { csv: "CSV", xlsx: "Excel", json: "JSON", sql: "SQL", markdown: "Markdown" };
+const EXT: Record<ExportFormat, string> = { csv: "csv", xlsx: "xlsx", json: "json", sql: "sql", markdown: "md" };
 
 /** 结果栏「导出」菜单项文案。 */
 export const exportMenuLabel = (f: ExportFormat) => t("ops.export_as", { format: SHORT[f] });
@@ -51,8 +51,26 @@ export async function copyText(text: string) {
   }
 }
 
-function render(format: ExportFormat, table: string, columns: string[], rows: (string | null)[][], kind: DbKind) {
-  return shell.renderExport(format, table, columns, rows, kind);
+/** 按格式渲染并弹出保存对话框;Excel 是二进制,由原生层直接写文件。 */
+export async function saveRows(
+  format: ExportFormat,
+  table: string,
+  columns: string[],
+  rows: (string | null)[][],
+  kind: DbKind,
+) {
+  const name = fileName(table, EXT[format]);
+  const success = t("ops.exported", { format: SHORT[format] });
+  if (format !== "xlsx") {
+    await saveText(name, shell.renderExport(format, table, columns, rows, kind), success);
+    return;
+  }
+  try {
+    const path = await shell.saveXlsx(name, table, columns, rows);
+    if (path) toast.success(success);
+  } catch (e) {
+    toast.error(t("ops.write_failed", { error: errorText(e) }));
+  }
 }
 
 const fileName = (base: string, ext: string) => `${base}_${shell.fileTimestamp()}.${ext}`;
@@ -64,8 +82,7 @@ export async function exportFiltered(format: ExportFormat) {
   const tab = workspace.activeTab();
   const data = workspace.resultTools()?.exportData();
   if (!tab || !data || data.rows.length === 0) return;
-  const text = render(format, data.table, data.columns, data.rows, tab.dbKind);
-  await saveText(fileName(data.table, EXT[format]), text, t("ops.exported", { format: SHORT[format] }));
+  await saveRows(format, data.table, data.columns, data.rows, tab.dbKind);
 }
 
 /** 表右键「导出整表」:查询全部行(不受行数上限)。 */
@@ -78,8 +95,7 @@ export async function exportTable(connId: string, table: string, format: ExportF
       toast.info(t("ops.table_empty"));
       return;
     }
-    const text = render(format, table, result.columns, result.rows, conn.kind);
-    await saveText(fileName(table, EXT[format]), text, t("ops.exported", { format: SHORT[format] }));
+    await saveRows(format, table, result.columns, result.rows, conn.kind);
   } catch (e) {
     toast.error(errorText(e));
   }

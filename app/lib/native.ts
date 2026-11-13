@@ -174,13 +174,18 @@ import type { PromptContext, ProviderPreset, ReplySegment } from "./types";
 
 import { Shell } from "datum/native";
 
-export type ExportFormat = "csv" | "sql" | "markdown";
+/** 文本类导出格式(由 `renderExport` 渲染)。 */
+export type TextExportFormat = "csv" | "json" | "sql" | "markdown";
+export type ExportFormat = TextExportFormat | "xlsx";
 
 export const shell = {
   /** 系统保存对话框(默认下载目录)写入文本;返回写入的路径,取消为 null。 */
   saveText: (fileName: string, text: string) => Shell.saveText(fileName, text),
-  /** 结果行 → 导出文本(CSV / Markdown / 每行一条 INSERT)。 */
-  renderExport: (format: ExportFormat, table: string, columns: string[], rows: (string | null)[][], kind: DbKind) =>
+  /** 结果行写成 Excel 文件并弹出保存对话框;返回路径,取消时为 null。 */
+  saveXlsx: (fileName: string, table: string, columns: string[], rows: (string | null)[][]) =>
+    Shell.saveXlsx(fileName, table, columns, rows),
+  /** 结果行 → 导出文本(CSV / JSON / Markdown / 每行一条 INSERT)。 */
+  renderExport: (format: TextExportFormat, table: string, columns: string[], rows: (string | null)[][], kind: DbKind) =>
     Shell.renderExport(format, table, columns, rows, kind),
   /** 文件名友好的时间戳 `YYYYMMDD_HHmmss`。 */
   fileTimestamp: () => Shell.fileTimestamp(),

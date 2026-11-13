@@ -135,6 +135,12 @@ test("AI 自己查数据:工具步骤按顺序显示,可展开看 SQL 与结果;
   await app.press("id:ai-tool-1 >> label:Query");
   await app.waitFor("text:cancelled");
   expect(app.shows("text:42")).toBe(true);
+  // 结果表可复制为 CSV、导出成文件(导出的是卡片保存的全部行)
+  await app.press("id:tool-result-actions >> role:button[Copy as CSV]");
+  await app.waitFor("text:copyCsv status|n 2");
+  await app.press("id:tool-result-actions >> role:button[Export]");
+  await app.press("label:Excel");
+  await app.waitFor("text:export xlsx 2");
   // 写语句不会被自动执行:以 SQL 卡片出现,等用户点「Run」
   expect(app.texts()).toContain("DELETE FROM orders WHERE status = ");
   expect(app.texts()).toContain("Run");

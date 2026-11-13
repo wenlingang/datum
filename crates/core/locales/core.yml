@@ -1,6 +1,10 @@
 _version: 2
 core:
   err:
+    xlsx_too_many_rows:
+      en: "Too many rows for one Excel sheet (max %{max})"
+      zh-CN: "行数超过 Excel 单个工作表的上限(%{max} 行)"
+      zh-TW: "列數超過 Excel 單一工作表的上限(%{max} 列)"
     connection_not_found:
       en: Connection not found
       zh-CN: 连接不存在

@@ -29,7 +29,7 @@ import { cardKey } from "./cards";
 import { chatDeps } from "./deps";
 import { ModelPicker } from "./ModelPicker";
 import { SqlCard, SqlConfirmDialog } from "./SqlCard";
-import { ResultTable, ShownNote, ToolCard } from "./ToolCard";
+import { ResultActions, ResultTable, ShownNote, ToolCard } from "./ToolCard";
 import { ErrorText } from "../ui/error";
 import { DropMenu, MItem, MSep } from "../ui/menu";
 
@@ -299,6 +299,7 @@ function MessageRow(props: {
               <View testID="ai-result" class="gap-1.5 rounded-(--radius) border border-border bg-background px-3 py-2">
                 <ResultTable columns={(tb().columns ?? []) as string[]} rows={tb().rows ?? []} wide={props.wide} />
                 <ShownNote columns={tb().columns?.length ?? 0} rows={tb().rows?.length ?? 0} wide={props.wide} />
+                <ResultActions columns={(tb().columns ?? []) as string[]} rows={tb().rows ?? []} testID="ai-result-actions" />
               </View>
             )}
           </If>

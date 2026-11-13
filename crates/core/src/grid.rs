@@ -285,6 +285,121 @@ pub fn to_markdown(columns: &[String], rows: &[&Vec<Cell>]) -> String {
     lines.join("\n")
 }
 
+/// 文本是否是「规范写法」的数字:可选负号、无前导零(`0` / `0.5` 除外)、
+/// 不以小数点开头或结尾、无指数,有效数字不超过 15 位(f64 能无损表示)。
+/// 只有这样的值导出时才写成数字,`007`、长卡号、`1e5` 之类保持文本原样。
+fn plain_number(v: &str) -> Option<f64> {
+    let body = v.strip_prefix('-').unwrap_or(v);
+    let (int, frac) = match body.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (body, None),
+    };
+    if int.is_empty() || !int.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if int.len() > 1 && int.starts_with('0') {
+        return None;
+    }
+    if let Some(f) = frac {
+        if f.is_empty() || !f.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+    }
+    let digits = int.trim_start_matches('0').len() + frac.map_or(0, str::len);
+    if digits > 15 {
+        return None;
+    }
+    v.parse().ok()
+}
+
+/// 重名列加 `_2`、`_3` 后缀,保证 JSON 对象的键不互相覆盖。
+fn unique_keys(columns: &[String]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    columns
+        .iter()
+        .map(|c| {
+            let mut key = c.clone();
+            let mut n = 1;
+            while !seen.insert(key.clone()) {
+                n += 1;
+                key = format!("{c}_{n}");
+            }
+            key
+        })
+        .collect()
+}
+
+/// 查询结果 → JSON 对象数组(带缩进)。NULL 为 null;规范写法的数字写成数字,其余为字符串。
+pub fn to_json(columns: &[String], rows: &[&Vec<Cell>]) -> String {
+    use serde_json::{Map, Value};
+    let keys = unique_keys(columns);
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|row| {
+            let mut obj = Map::new();
+            for (key, cell) in keys.iter().zip(row.iter()) {
+                let v = match cell.as_deref() {
+                    None => Value::Null,
+                    Some(s) => plain_number(s)
+                        .and_then(|_| s.parse::<serde_json::Number>().ok())
+                        .map(Value::Number)
+                        .unwrap_or_else(|| Value::String(s.to_string())),
+                };
+                obj.insert(key.clone(), v);
+            }
+            Value::Object(obj)
+        })
+        .collect();
+    serde_json::to_string_pretty(&items).unwrap_or_else(|_| "[]".into())
+}
+
+/// 查询结果 → Excel(.xlsx)文件内容。首行为加粗的列名并冻结;NULL 留空,
+/// 规范写法的数字写成数字,其余为文本;列宽按内容估算(上限 60 个字符)。
+pub fn to_xlsx(sheet: &str, columns: &[String], rows: &[&Vec<Cell>]) -> Result<Vec<u8>, String> {
+    use rust_xlsxwriter::{Format, Workbook};
+    const MAX_ROWS: usize = 1_048_575;
+    if rows.len() > MAX_ROWS {
+        return Err(t!("core.err.xlsx_too_many_rows", max = MAX_ROWS).to_string());
+    }
+    let mut book = Workbook::new();
+    let ws = book.add_worksheet();
+    // 工作表名:最长 31 字符,不能含 []:*?/\
+    let name: String = sheet
+        .chars()
+        .map(|c| if "[]:*?/\\".contains(c) { '_' } else { c })
+        .take(31)
+        .collect();
+    if !name.trim().is_empty() {
+        ws.set_name(name).map_err(|e| e.to_string())?;
+    }
+    let bold = Format::new().set_bold();
+    let mut widths: Vec<usize> = columns.iter().map(|c| c.chars().count()).collect();
+    for (c, col) in columns.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, col, &bold).map_err(|e| e.to_string())?;
+    }
+    for (r, row) in rows.iter().enumerate() {
+        let r = r as u32 + 1;
+        for (c, cell) in row.iter().enumerate() {
+            let Some(v) = cell.as_deref() else { continue };
+            match plain_number(v) {
+                Some(n) => ws.write_number(r, c as u16, n),
+                // 单元格文本上限 32767 字符
+                None => ws.write_string(r, c as u16, v.chars().take(32767).collect::<String>()),
+            }
+            .map_err(|e| e.to_string())?;
+            if let Some(w) = widths.get_mut(c) {
+                *w = (*w).max(v.chars().count());
+            }
+        }
+    }
+    for (c, w) in widths.iter().enumerate() {
+        ws.set_column_width(c as u16, (*w).clamp(4, 60) as f64 + 2.0)
+            .map_err(|e| e.to_string())?;
+    }
+    ws.set_freeze_panes(1, 0).map_err(|e| e.to_string())?;
+    book.save_to_buffer().map_err(|e| e.to_string())
+}
+
 /// 本地时间格式化成文件名友好的 `YYYYMMDD_HHmmss`。
 pub fn file_timestamp() -> String {
     chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
@@ -565,6 +680,35 @@ mod tests {
             to_markdown(&cols, &rows),
             "| a | b |\n| --- | --- |\n| x,y | say \"hi\" |\n|  | a\\|b c |"
         );
+    }
+
+    #[test]
+    fn only_plain_numbers_are_numeric() {
+        for v in ["0", "-3", "42", "3.14", "-0.5", "123456789012345"] {
+            assert!(plain_number(v).is_some(), "{v}");
+        }
+        for v in ["007", "1e5", ".5", "5.", "+1", "1234567890123456", "12a", "", "-", "NaN"] {
+            assert!(plain_number(v).is_none(), "{v}");
+        }
+    }
+
+    #[test]
+    fn json_export_keeps_nulls_and_dedupes_keys() {
+        let cols = vec!["id".to_string(), "name".to_string(), "id".to_string()];
+        let r1 = vec![s("1"), s("007"), None];
+        let rows = vec![&r1];
+        let v: serde_json::Value = serde_json::from_str(&to_json(&cols, &rows)).unwrap();
+        assert_eq!(v, serde_json::json!([{ "id": 1, "name": "007", "id_2": null }]));
+        assert_eq!(to_json(&cols, &[]), "[]");
+    }
+
+    #[test]
+    fn xlsx_export_is_a_zip() {
+        let cols = vec!["a".to_string(), "b".to_string()];
+        let r1 = vec![s("1.5"), s("text")];
+        let r2 = vec![None, s("x")];
+        let bytes = to_xlsx("orders:2024/[x]", &cols, &[&r1, &r2]).unwrap();
+        assert_eq!(&bytes[..2], b"PK");
     }
 
     #[test]

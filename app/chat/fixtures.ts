@@ -149,6 +149,8 @@ export function installFakes(o: FakeOptions = {}) {
   };
   chatDeps.activeSelectionText = () => "SELECT * FROM users";
   chatDeps.openSettings = () => {};
+  chatDeps.copyCsv = (columns, rows) => toast.info(`copyCsv ${columns.join("|")} ${rows.length}`);
+  chatDeps.exportRows = (format, _columns, rows) => toast.info(`export ${format} ${rows.length}`);
   refreshAi();
   return { sent, queries, inserted };
 }
