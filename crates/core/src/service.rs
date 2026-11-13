@@ -508,6 +508,16 @@ pub async fn redis_analysis_cancel(state: &AppState, id: &str) {
     state.redis_pool.cancel_analysis(id).await
 }
 
+/// 查看分析排行榜里的 key(集群模式下 `node` 是它所在的主节点)。
+pub async fn redis_key_on(state: &AppState, id: &str, node: Option<&str>, key: &str) -> AppResult<rds::client::KeyValue> {
+    state.redis_pool.get_value_on(id, node, key).await
+}
+
+/// 删除分析排行榜里的 key(UNLINK,老版本 DEL)。返回删掉的个数(已不存在为 0)。
+pub async fn redis_delete_key(state: &AppState, id: &str, node: Option<&str>, key: &str) -> AppResult<i64> {
+    state.redis_pool.delete_key(id, node, key).await
+}
+
 pub async fn redis_exec(state: &AppState, id: &str, command: &str) -> AppResult<String> {
     rds::commands::redis_exec(state, id.to_string(), command.to_string()).await
 }

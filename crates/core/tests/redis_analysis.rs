@@ -124,3 +124,56 @@ async fn cancel_stops_early() {
     assert!(r.scanned < 20_000, "scanned {}", r.scanned);
     service::redis_exec(&st, &id, "FLUSHDB").await.unwrap();
 }
+
+/// 集群:逐个主节点扫描,排行榜里的 key 带所在节点,查看 / 删除连到那个节点。需要一个三主节点的集群,
+/// 种好 300 个 `user:profile:N` 与一个 20 KB 的 `bigkey`(见 run-tests 说明),默认忽略:
+///   DATUM_REDIS_CLUSTER=其中一个节点的端口
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn cluster_scans_every_master() {
+    let Some(port) = std::env::var("DATUM_REDIS_CLUSTER").ok().and_then(|p| p.parse::<u16>().ok()) else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("datum-rds-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let st = AppState::new(dir);
+    let c = Connection {
+        id: "rds-cluster".into(),
+        name: "rds".into(),
+        kind: DbKind::Redis,
+        env: Env::Local,
+        host: "127.0.0.1".into(),
+        port,
+        user: String::new(),
+        database: "0".into(),
+        plaintext_password: None,
+        file_path: None,
+        ssl_mode: SslMode::Disable,
+        uri: None,
+        auth_source: None,
+        ssh: None,
+    };
+    commands::save_connection(&st, c, Some(String::new())).unwrap();
+    service::connect(&st, &DbKind::Redis, "rds-cluster").await.unwrap();
+    service::redis_analysis_start(&st, "rds-cluster").await.unwrap();
+    let r = wait_done(&st, "rds-cluster").await;
+    assert!(r.cluster);
+    assert_eq!(r.nodes.len(), 3, "{:?}", r.nodes);
+    assert!(r.nodes.iter().all(|n| n.error.is_none() && n.keys > 0), "{:?}", r.nodes);
+    assert_eq!(r.scanned, r.nodes.iter().map(|n| n.keys).sum::<u64>());
+    assert!(r.scanned >= 301);
+    let big = &r.biggest[0];
+    assert_eq!(big.key, "bigkey");
+    let node = big.node.clone().expect("集群模式记下节点");
+    let kids = &r.prefix_children["user"];
+    assert_eq!(kids[0].name, "user:profile");
+    assert_eq!(kids[0].keys, 300);
+
+    // 在所在节点上查看与删除
+    let v = service::redis_key_on(&st, "rds-cluster", Some(&node), "bigkey").await.unwrap();
+    assert_eq!(v.key_type, "string");
+    assert_eq!(v.rows[0][0].len(), 20000);
+    assert_eq!(service::redis_delete_key(&st, "rds-cluster", Some(&node), "bigkey").await.unwrap(), 1);
+    assert!(!service::redis_analysis_report(&st, "rds-cluster").await.unwrap().biggest.iter().any(|k| k.key == "bigkey"));
+    assert_eq!(service::redis_delete_key(&st, "rds-cluster", Some(&node), "bigkey").await.unwrap(), 0);
+}

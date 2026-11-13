@@ -166,6 +166,21 @@ impl Db {
             .map_err(err)
     }
 
+    /// Redis 分析排行榜里的 key:查看值(集群模式下 `node` 是它所在的主节点;集合类最多取 1000 个元素)。
+    pub async fn redis_key_on(id: String, node: Option<String>, key: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_key_on(&state(), &id, node.as_deref(), &key).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis 分析排行榜里的 key:删除(UNLINK,老版本 DEL)。返回删掉的个数。
+    pub async fn redis_delete_key(id: String, node: Option<String>, key: String) -> Result<i64, String> {
+        spawn(async move { service::redis_delete_key(&state(), &id, node.as_deref(), &key).await })
+            .await?
+            .map_err(err)
+    }
+
     /// Redis 分析:概览(INFO 里的内存、命中率、key 数等)。
     pub async fn redis_overview(id: String) -> Result<JsonValue, String> {
         spawn(async move { service::redis_overview(&state(), &id).await })

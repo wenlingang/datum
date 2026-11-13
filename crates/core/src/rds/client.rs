@@ -16,7 +16,15 @@ pub struct KeyValue {
     pub key_type: String, // string/hash/list/set/zset/none
     pub columns: Vec<String>,
     pub rows: Vec<Vec<String>>,
+    /// 元素太多只取了前 [`MAX_ELEMENTS`] 个
+    #[serde(default)]
+    pub truncated: bool,
 }
+
+/// 查看集合类 key 时最多取的元素数:大 key 一次全读会拖住实例,也撑爆界面。
+pub const MAX_ELEMENTS: usize = 1000;
+/// 字符串值最多读取的字节数。
+const MAX_STRING_BYTES: usize = 1 << 20;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +38,8 @@ pub struct KeyDetail {
 #[derive(Default)]
 pub struct RedisPool {
     conns: Mutex<HashMap<String, MultiplexedConnection>>,
+    /// 建连参数(集群分析时照着它连其余节点);经 SSH 隧道的连接没有(隧道只通当前节点)
+    infos: Mutex<HashMap<String, redis::ConnectionInfo>>,
     /// 各连接最近一次的分析(进行中或已结束)
     analyses: Mutex<HashMap<String, std::sync::Arc<super::analysis::Analysis>>>,
 }
@@ -153,10 +163,93 @@ fn format_reply(v: &redis::Value) -> String {
     format!("{:?}", v)
 }
 
+/// 读一个 key 的值,统一成表格。集合类最多取 [`MAX_ELEMENTS`] 个元素(hash / set 用 SCAN 分批取,
+/// 不用 HGETALL / SMEMBERS 一次读完),字符串最多 1 MB;超出时 `truncated`。
+async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<KeyValue> {
+    let t: String = redis::cmd("TYPE").arg(key).query_async(con).await.map_err(qerr)?;
+    let max = MAX_ELEMENTS as i64;
+    let mut truncated = false;
+    // HSCAN / SSCAN 分批取到上限;返回的是扁平列表
+    async fn scan_all(con: &mut MultiplexedConnection, cmd: &str, key: &str, cap: usize) -> AppResult<(Vec<Vec<u8>>, bool)> {
+        let mut out = vec![];
+        let mut cursor: u64 = 0;
+        loop {
+            let (next, batch): (u64, Vec<Vec<u8>>) = redis::cmd(cmd)
+                .arg(key)
+                .arg(cursor)
+                .arg("COUNT")
+                .arg(200)
+                .query_async(con)
+                .await
+                .map_err(qerr)?;
+            out.extend(batch);
+            cursor = next;
+            if out.len() >= cap {
+                let more = cursor != 0 || out.len() > cap;
+                out.truncate(cap);
+                return Ok((out, more));
+            }
+            if cursor == 0 {
+                return Ok((out, false));
+            }
+        }
+    }
+    let (columns, rows): (Vec<String>, Vec<Vec<String>>) = match t.as_str() {
+        "string" => {
+            let len: i64 = redis::cmd("STRLEN").arg(key).query_async(con).await.unwrap_or(0);
+            let v: Option<Vec<u8>> = if len as usize > MAX_STRING_BYTES {
+                truncated = true;
+                redis::cmd("GETRANGE").arg(key).arg(0).arg(MAX_STRING_BYTES as i64 - 1).query_async(con).await.map_err(qerr)?
+            } else {
+                redis::cmd("GET").arg(key).query_async(con).await.map_err(qerr)?
+            };
+            (vec!["value".into()], vec![vec![v.map(lossy).unwrap_or_default()]])
+        }
+        "hash" => {
+            let (flat, more) = scan_all(con, "HSCAN", key, MAX_ELEMENTS * 2).await?;
+            truncated = more;
+            (
+                vec!["field".into(), "value".into()],
+                flat.chunks(2).map(|p| vec![lossy(p[0].clone()), lossy(p.get(1).cloned().unwrap_or_default())]).collect(),
+            )
+        }
+        "list" => {
+            let len: i64 = redis::cmd("LLEN").arg(key).query_async(con).await.unwrap_or(0);
+            truncated = len > max;
+            let l: Vec<Vec<u8>> = redis::cmd("LRANGE").arg(key).arg(0).arg(max - 1).query_async(con).await.map_err(qerr)?;
+            (
+                vec!["index".into(), "value".into()],
+                l.into_iter().enumerate().map(|(i, v)| vec![i.to_string(), lossy(v)]).collect(),
+            )
+        }
+        "set" => {
+            let (members, more) = scan_all(con, "SSCAN", key, MAX_ELEMENTS).await?;
+            truncated = more;
+            (vec!["member".into()], members.into_iter().map(|m| vec![lossy(m)]).collect())
+        }
+        "zset" => {
+            let len: i64 = redis::cmd("ZCARD").arg(key).query_async(con).await.unwrap_or(0);
+            truncated = len > max;
+            let z: Vec<(Vec<u8>, String)> = redis::cmd("ZRANGE")
+                .arg(key)
+                .arg(0)
+                .arg(max - 1)
+                .arg("WITHSCORES")
+                .query_async(con)
+                .await
+                .map_err(qerr)?;
+            (vec!["member".into(), "score".into()], z.into_iter().map(|(m, sc)| vec![lossy(m), sc]).collect())
+        }
+        _ => (vec![], vec![]),
+    };
+    Ok(KeyValue { key: key.into(), key_type: t, columns, rows, truncated })
+}
+
 impl RedisPool {
     pub async fn connect(&self, id: &str, url: &str) -> AppResult<()> {
         let con = open(url).await?;
         self.conns.lock().await.insert(id.to_string(), con);
+        self.remember_info(id, url, false).await;
         Ok(())
     }
 
@@ -164,7 +257,20 @@ impl RedisPool {
     pub async fn connect_target(&self, id: &str, target: &Target, url: &str, ssl: SslMode) -> AppResult<()> {
         let con = open_target(target, url, ssl).await?;
         self.conns.lock().await.insert(id.to_string(), con);
+        self.remember_info(id, url, target.tunneled()).await;
         Ok(())
+    }
+
+    async fn remember_info(&self, id: &str, url: &str, tunneled: bool) {
+        let mut infos = self.infos.lock().await;
+        match redis::Client::open(url) {
+            Ok(c) if !tunneled => {
+                infos.insert(id.to_string(), c.get_connection_info().clone());
+            }
+            _ => {
+                infos.remove(id);
+            }
+        }
     }
 
     /// 概览(INFO);`db` 为当前库号。
@@ -183,7 +289,8 @@ impl RedisPool {
         if let Some(old) = self.analyses.lock().await.remove(id) {
             old.cancel();
         }
-        let a = super::analysis::start(con).await?;
+        let base = self.infos.lock().await.get(id).cloned();
+        let a = super::analysis::start(con, base).await?;
         self.analyses.lock().await.insert(id.to_string(), a);
         Ok(())
     }
@@ -197,6 +304,41 @@ impl RedisPool {
         if let Some(a) = self.analyses.lock().await.get(id) {
             a.cancel();
         }
+    }
+
+    /// 分析排行榜里的 key 所在的连接:集群模式用扫描时连上的那个节点。
+    async fn con_for(&self, id: &str, node: Option<&str>) -> AppResult<MultiplexedConnection> {
+        match node {
+            Some(addr) => self
+                .analyses
+                .lock()
+                .await
+                .get(id)
+                .and_then(|a| a.node_con(addr))
+                .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected"))),
+            None => self.con(id).await,
+        }
+    }
+
+    /// 查看某个节点上的 key(集群分析的排行榜用;`node` 为 None 即当前连接)。
+    pub async fn get_value_on(&self, id: &str, node: Option<&str>, key: &str) -> AppResult<KeyValue> {
+        read_value(&mut self.con_for(id, node).await?, key).await
+    }
+
+    /// 删除一个 key:优先 UNLINK(后台释放内存,大 key 不阻塞实例),老版本退回 DEL。返回删掉的个数。
+    pub async fn delete_key(&self, id: &str, node: Option<&str>, key: &str) -> AppResult<i64> {
+        let mut con = self.con_for(id, node).await?;
+        let n: i64 = match redis::cmd("UNLINK").arg(key).query_async(&mut con).await {
+            Ok(n) => n,
+            Err(e) if e.to_string().to_ascii_lowercase().contains("unknown command") => {
+                redis::cmd("DEL").arg(key).query_async(&mut con).await.map_err(qerr)?
+            }
+            Err(e) => return Err(qerr(e)),
+        };
+        if let Some(a) = self.analyses.lock().await.get(id) {
+            a.forget(key, node);
+        }
+        Ok(n)
     }
 
     /// MultiplexedConnection 可廉价 clone,克隆出来避免在 await 期间持锁。
@@ -235,87 +377,7 @@ impl RedisPool {
     }
 
     pub async fn get_value(&self, id: &str, key: &str) -> AppResult<KeyValue> {
-        let mut con = self.con(id).await?;
-        let t: String = redis::cmd("TYPE")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .map_err(qerr)?;
-        // 按字节读取,再 lossy 转 UTF-8:兼容二进制/非 UTF-8 的值,避免转换报错。
-        let (columns, rows): (Vec<String>, Vec<Vec<String>>) = match t.as_str() {
-            "string" => {
-                let v: Option<Vec<u8>> = redis::cmd("GET")
-                    .arg(key)
-                    .query_async(&mut con)
-                    .await
-                    .map_err(qerr)?;
-                (
-                    vec!["value".into()],
-                    vec![vec![v.map(lossy).unwrap_or_default()]],
-                )
-            }
-            "hash" => {
-                let m: Vec<(Vec<u8>, Vec<u8>)> = redis::cmd("HGETALL")
-                    .arg(key)
-                    .query_async(&mut con)
-                    .await
-                    .map_err(qerr)?;
-                (
-                    vec!["field".into(), "value".into()],
-                    m.into_iter()
-                        .map(|(f, v)| vec![lossy(f), lossy(v)])
-                        .collect(),
-                )
-            }
-            "list" => {
-                let l: Vec<Vec<u8>> = redis::cmd("LRANGE")
-                    .arg(key)
-                    .arg(0)
-                    .arg(-1)
-                    .query_async(&mut con)
-                    .await
-                    .map_err(qerr)?;
-                (
-                    vec!["index".into(), "value".into()],
-                    l.into_iter()
-                        .enumerate()
-                        .map(|(i, v)| vec![i.to_string(), lossy(v)])
-                        .collect(),
-                )
-            }
-            "set" => {
-                let s: Vec<Vec<u8>> = redis::cmd("SMEMBERS")
-                    .arg(key)
-                    .query_async(&mut con)
-                    .await
-                    .map_err(qerr)?;
-                (
-                    vec!["member".into()],
-                    s.into_iter().map(|m| vec![lossy(m)]).collect(),
-                )
-            }
-            "zset" => {
-                let z: Vec<(Vec<u8>, String)> = redis::cmd("ZRANGE")
-                    .arg(key)
-                    .arg(0)
-                    .arg(-1)
-                    .arg("WITHSCORES")
-                    .query_async(&mut con)
-                    .await
-                    .map_err(qerr)?;
-                (
-                    vec!["member".into(), "score".into()],
-                    z.into_iter().map(|(m, sc)| vec![lossy(m), sc]).collect(),
-                )
-            }
-            _ => (vec![], vec![]),
-        };
-        Ok(KeyValue {
-            key: key.into(),
-            key_type: t,
-            columns,
-            rows,
-        })
+        read_value(&mut self.con(id).await?, key).await
     }
 
     pub async fn key_detail(&self, id: &str, key: &str) -> AppResult<KeyDetail> {

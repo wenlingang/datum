@@ -2,11 +2,20 @@
 // 扫描在 core 后台进行,这里轮询进度;离开 tab 不取消(回来接着看),「取消」按钮才中止。
 
 import { cleanup, type JSX, Scroll, signal, Text, View } from "nsh";
+import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import { db, errorText } from "../lib/native";
-import type { RedisGroupStat, RedisKeyStat, RedisOverview, RedisReport, RedisSlowEntry } from "../lib/types";
+import type {
+  RedisGroupStat,
+  RedisKeyStat,
+  RedisKeyValue,
+  RedisOverview,
+  RedisReport,
+  RedisSlowEntry,
+} from "../lib/types";
 import { conns } from "../store/conns";
-import { Btn, Hint, Icon, SectionLabel } from "../ui/kit";
+import { toast } from "../store/toast";
+import { Btn, Hint, Icon, IconButton, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { openTable } from "./index";
 import { ErrorText } from "../ui/error";
@@ -117,30 +126,52 @@ function Overview(props: { o: RedisOverview }) {
   );
 }
 
-function KeyTable(props: { connId: string; keys: RedisKeyStat[]; metric: "bytes" | "freq"; testID: string }) {
+function KeyTable(props: {
+  connId: string;
+  keys: RedisKeyStat[];
+  metric: "bytes" | "freq";
+  testID: string;
+  onView: (k: RedisKeyStat) => void;
+  onDelete: (k: RedisKeyStat) => void;
+}) {
+  const cluster = () => props.keys.some((k) => k.node);
   return (
     <View testID={props.testID} class="rounded-(--radius) border border-border">
       <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
         <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>key</Text>
+        <If when={cluster()}>
+          <Text class={`${FS.xs} w-[130px] font-bold text-muted-foreground`}>node</Text>
+        </If>
         <Text class={`${FS.xs} w-[70px] font-bold text-muted-foreground`}>{t("rinsight.col_type")}</Text>
         <Text class={`${FS.xs} w-[90px] text-right font-bold text-muted-foreground`}>
           {props.metric === "bytes" ? t("rinsight.col_memory") : t("rinsight.col_freq")}
         </Text>
         <Text class={`${FS.xs} w-[90px] text-right font-bold text-muted-foreground`}>TTL</Text>
+        <View class="w-[28px]" />
       </View>
-      <Each of={props.keys}>
+      <Each of={props.keys} key={(k) => `${k.node ?? ""}\u0000${k.key}`}>
         {(k) => (
           <View
-            class="flex-row gap-3 px-3 py-1 hover:bg-list-hover"
-            onPress={() => openTable(props.connId, k().key)}
+            class="flex-row items-center gap-3 px-3 py-0.5 hover:bg-list-hover"
+            onPress={() => props.onView(k())}
             accessibilityLabel={k().key}
           >
             <Text class={`${FS.sm} ${MONO} min-w-0 flex-1 text-foreground line-clamp-1`}>{k().key}</Text>
+            <If when={cluster()}>
+              <Text class={`${FS.xs} ${MONO} w-[130px] text-muted-foreground line-clamp-1`}>{k().node ?? ""}</Text>
+            </If>
             <Text class={`${FS.xs} w-[70px] text-muted-foreground`}>{k().type}</Text>
             <Text class={`${FS.xs} ${MONO} w-[90px] text-right text-foreground`}>
               {props.metric === "bytes" ? formatBytes(k().bytes ?? 0) : String(k().freq ?? 0)}
             </Text>
             <Text class={`${FS.xs} w-[90px] text-right text-muted-foreground`}>{formatTtl(k().ttlMs)}</Text>
+            <IconButton
+              icon="trash"
+              size={13}
+              label={`${t("rinsight.delete_key")} ${k().key}`}
+              tooltip={t("rinsight.delete_key")}
+              onPress={() => props.onDelete(k())}
+            />
           </View>
         )}
       </Each>
@@ -148,26 +179,179 @@ function KeyTable(props: { connId: string; keys: RedisKeyStat[]; metric: "bytes"
   );
 }
 
-function Groups(props: { groups: RedisGroupStat[]; r: RedisReport; prefix?: boolean; testID: string }) {
-  const byBytes = () => props.r.memorySupported && props.r.totalBytes > 0;
+function groupDetail(g: RedisGroupStat, r: RedisReport): { detail: string; share: number } {
+  const byBytes = r.memorySupported && r.totalBytes > 0;
+  return byBytes
+    ? {
+        detail: t("rinsight.group_detail", { keys: g.keys.toLocaleString(), bytes: formatBytes(g.bytes), pct: pct(g.bytes, r.totalBytes) }),
+        share: pct(g.bytes, r.totalBytes),
+      }
+    : {
+        detail: t("rinsight.group_detail_keys", { keys: g.keys.toLocaleString(), pct: pct(g.keys, r.scanned) }),
+        share: pct(g.keys, r.scanned),
+      };
+}
+
+function Groups(props: { groups: RedisGroupStat[]; r: RedisReport; testID: string }) {
   return (
     <View testID={props.testID} class="gap-2">
       <Each of={props.groups}>
-        {(g) => (
-          <BarRow
-            mono={props.prefix}
-            name={props.prefix && g().name === "" ? t("rinsight.no_prefix") : props.prefix ? `${g().name}:*` : g().name}
-            detail={
-              byBytes()
-                ? t("rinsight.group_detail", {
-                    keys: g().keys.toLocaleString(),
-                    bytes: formatBytes(g().bytes),
-                    pct: pct(g().bytes, props.r.totalBytes),
-                  })
-                : t("rinsight.group_detail_keys", { keys: g().keys.toLocaleString(), pct: pct(g().keys, props.r.scanned) })
-            }
-            share={byBytes() ? pct(g().bytes, props.r.totalBytes) : pct(g().keys, props.r.scanned)}
-          />
+        {(g) => <BarRow name={g().name} {...groupDetail(g(), props.r)} />}
+      </Each>
+    </View>
+  );
+}
+
+/** 前缀占用:按 `:` 分级,有子前缀的可以展开(`user:*` → `user:profile:*` → …)。 */
+function PrefixTree(props: { r: RedisReport }) {
+  const open = signal<Set<string>>(new Set());
+  const toggle = (name: string) => {
+    const next = new Set(open());
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    open.set(next);
+  };
+  const label = (g: RedisGroupStat) => {
+    if (g.name === "") return t("rinsight.no_prefix");
+    if (g.name.endsWith(":…")) return `${g.name.slice(0, -2)}:… · ${t("rinsight.other_children")}`;
+    return `${g.name}:*`;
+  };
+  function Level(lp: { groups: RedisGroupStat[]; depth: number }): JSX.Element {
+    return (
+      <Each of={lp.groups} key={(g) => g.name}>
+        {(g) => {
+          const kids = () => (g().name ? props.r.prefixChildren[g().name] : undefined);
+          return (
+            <View class="gap-2">
+              <View class="flex-row items-start gap-1" style={{ paddingLeft: lp.depth * 16 }}>
+                <View class="w-[16px] pt-0.5">
+                  <If when={kids()}>
+                    <View testID={`ri-prefix-toggle:${g().name}`} onPress={() => toggle(g().name)}>
+                      <Icon name={open().has(g().name) ? "chevron-down" : "chevron-right"} size={13} />
+                    </View>
+                  </If>
+                </View>
+                <View class="min-w-0 flex-1">
+                  <BarRow mono name={label(g())} {...groupDetail(g(), props.r)} />
+                </View>
+              </View>
+              <If when={kids() && open().has(g().name)}>
+                <Level groups={kids() ?? []} depth={lp.depth + 1} />
+              </If>
+            </View>
+          );
+        }}
+      </Each>
+    );
+  }
+  return (
+    <View testID="ri-prefixes" class="gap-2">
+      <Level groups={props.r.prefixes} depth={0} />
+    </View>
+  );
+}
+
+/** 查看排行榜里某个 key 的值(集群模式下在它所在的节点上读;集合类最多 1000 个元素)。 */
+function KeyValueDialog(props: { value: RedisKeyValue | null; onClose: () => void }) {
+  const v = () => props.value;
+  return (
+    <Dialog
+      testID="ri-value"
+      open={v() !== null}
+      onOpenChange={(e) => !e.open && props.onClose()}
+      closeOnEscape
+      animation="fade"
+      backdropClass="bg-overlay"
+      class="m-auto max-h-[80%] w-[720px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+    >
+      <View class="flex-row items-center gap-2">
+        <Text class={`${FS.base} ${MONO} min-w-0 flex-1 font-bold text-popover-foreground line-clamp-1`}>{v()?.key ?? ""}</Text>
+        <Text class={`${FS.xs} text-muted-foreground`}>{v()?.keyType ?? ""}</Text>
+      </View>
+      <If when={v()?.truncated}>
+        <Text class={`${FS.xs} text-warning`}>{t("rinsight.value_truncated")}</Text>
+      </If>
+      <Scroll class="max-h-[420px] rounded-(--radius) border border-border">
+        <View class="gap-0.5 px-3 py-2">
+          <Each of={v()?.rows ?? []}>
+            {(row) => (
+              <View class="flex-row gap-3">
+                <Each of={row()}>
+                  {(cell, i) => (
+                    <Text
+                      class={`${FS.xs} ${MONO} select-text text-foreground`}
+                      classList={{ "w-[200px] text-muted-foreground line-clamp-1": (v()?.columns.length ?? 0) > 1 && i() === 0, "min-w-0 flex-1 line-clamp-4": !((v()?.columns.length ?? 0) > 1 && i() === 0) }}
+                    >
+                      {cell()}
+                    </Text>
+                  )}
+                </Each>
+              </View>
+            )}
+          </Each>
+        </View>
+      </Scroll>
+      <View class="flex-row justify-end">
+        <Btn testID="ri-value-close" variant="outline" label={t("rinsight.close")} onPress={props.onClose} />
+      </View>
+    </Dialog>
+  );
+}
+
+function DeleteDialog(props: {
+  target: RedisKeyStat | null;
+  prod: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const k = () => props.target;
+  return (
+    <Dialog
+      testID="ri-delete"
+      open={k() !== null}
+      onOpenChange={(e) => !e.open && props.onClose()}
+      closeOnEscape
+      animation="fade"
+      backdropClass="bg-overlay"
+      class="m-auto w-[520px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+    >
+      <View class="flex-row items-center gap-2">
+        <Icon name="triangle-alert" size={16} color="warning" />
+        <Text class={`${FS.base} min-w-0 flex-1 font-bold text-popover-foreground line-clamp-2`}>
+          {t("rinsight.delete_title", { key: k()?.key ?? "" })}
+        </Text>
+      </View>
+      <Text class={`${FS.sm} text-popover-foreground`}>{t("rinsight.delete_body")}</Text>
+      <Text class={`${FS.xs} ${MONO} text-muted-foreground`}>
+        {k() ? `${k()!.type} · ${formatBytes(k()!.bytes ?? 0)} · TTL ${formatTtl(k()!.ttlMs)}${k()!.node ? ` · ${k()!.node}` : ""}` : ""}
+      </Text>
+      <If when={props.prod}>
+        <Text class={`${FS.xs} text-negative`}>{t("rinsight.delete_prod")}</Text>
+      </If>
+      <View class="flex-row justify-end gap-2 pt-1">
+        <Btn variant="outline" label={t("rinsight.cancel")} onPress={props.onClose} testID="ri-delete-cancel" />
+        <Btn variant="danger" disabled={props.busy} label={t("rinsight.delete_key")} onPress={props.onConfirm} testID="ri-delete-ok" />
+      </View>
+    </Dialog>
+  );
+}
+
+function Nodes(props: { r: RedisReport }) {
+  return (
+    <View testID="ri-nodes" class="gap-1.5">
+      <Hint class={FS.xs}>{t("rinsight.cluster_hint")}</Hint>
+      <Each of={props.r.nodes}>
+        {(n) => (
+          <View class="flex-row items-start gap-3">
+            <Text class={`${FS.sm} ${MONO} w-[180px] text-foreground`}>{n().addr}</Text>
+            <If
+              when={n().error}
+              else={<Text class={`${FS.xs} text-muted-foreground`}>{t("rinsight.node_keys", { keys: n().keys.toLocaleString() })}</Text>}
+            >
+              {(e) => <Text class={`${FS.xs} min-w-0 flex-1 text-negative`}>{e()}</Text>}
+            </If>
+          </View>
         )}
       </Each>
     </View>
@@ -235,6 +419,9 @@ export function RedisInsight(props: { connId: string }) {
   const slowlog = signal<Load<RedisSlowEntry[]>>({ state: "loading" });
   const report = signal<RedisReport | null>(null);
   const startError = signal<string | null>(null);
+  const viewing = signal<RedisKeyValue | null>(null);
+  const deleting = signal<RedisKeyStat | null>(null);
+  const busy = signal(false);
   let timer: ReturnType<typeof setInterval> | undefined;
   let alive = true;
   cleanup(() => {
@@ -304,6 +491,40 @@ export function RedisInsight(props: { connId: string }) {
   };
   const conn = () => conns.get(id);
 
+  /** 查看:单机直接打开 key 的标签;集群里的 key 在所在节点上读,弹框显示。 */
+  async function view(k: RedisKeyStat) {
+    if (!k.node) {
+      openTable(id, k.key);
+      return;
+    }
+    try {
+      viewing.set(await db.redisKeyOn(id, k.node, k.key));
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  }
+
+  async function confirmDelete() {
+    const k = deleting();
+    if (!k) return;
+    busy.set(true);
+    try {
+      const n = await db.redisDeleteKey(id, k.node ?? null, k.key);
+      toast.success(n > 0 ? t("rinsight.deleted") : t("rinsight.already_gone"));
+      deleting.set(null);
+      // 排行榜里拿掉它(core 那边也已移除)
+      const r = report();
+      if (r) {
+        const keep = (x: RedisKeyStat) => !(x.key === k.key && (x.node ?? null) === (k.node ?? null));
+        report.set({ ...r, biggest: r.biggest.filter(keep), hottest: r.hottest.filter(keep) });
+      }
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      busy.set(false);
+    }
+  }
+
   return (
     <Scroll testID="redis-insight" class="min-h-0 flex-1 bg-background" contentClass="gap-6 px-5 py-4">
       <View class="flex-row items-center gap-3">
@@ -367,11 +588,23 @@ export function RedisInsight(props: { connId: string }) {
                 <View class="gap-5">
                   <If when={r().memorySupported}>
                     <Section title={t("rinsight.biggest")}>
-                      <KeyTable testID="ri-biggest" connId={id} keys={r().biggest} metric="bytes" />
+                      <KeyTable
+                        testID="ri-biggest"
+                        connId={id}
+                        keys={r().biggest}
+                        metric="bytes"
+                        onView={(k) => void view(k)}
+                        onDelete={(k) => deleting.set(k)}
+                      />
+                    </Section>
+                  </If>
+                  <If when={r().cluster}>
+                    <Section title={t("rinsight.cluster_nodes")}>
+                      <Nodes r={r()} />
                     </Section>
                   </If>
                   <Section title={t("rinsight.prefixes")}>
-                    <Groups testID="ri-prefixes" groups={r().prefixes} r={r()} prefix />
+                    <PrefixTree r={r()} />
                   </Section>
                   <View class="flex-row gap-6">
                     <View class="min-w-0 flex-1">
@@ -387,7 +620,14 @@ export function RedisInsight(props: { connId: string }) {
                   </View>
                   <Section title={t("rinsight.hottest")}>
                     <If when={r().lfu} else={<Hint class={FS.xs}>{t("rinsight.hot_needs_lfu")}</Hint>}>
-                      <KeyTable testID="ri-hottest" connId={id} keys={r().hottest} metric="freq" />
+                      <KeyTable
+                        testID="ri-hottest"
+                        connId={id}
+                        keys={r().hottest}
+                        metric="freq"
+                        onView={(k) => void view(k)}
+                        onDelete={(k) => deleting.set(k)}
+                      />
                     </If>
                   </Section>
                 </View>
@@ -402,6 +642,15 @@ export function RedisInsight(props: { connId: string }) {
           {(entries) => <SlowLog entries={entries} />}
         </Loaded>
       </Section>
+
+      <KeyValueDialog value={viewing()} onClose={() => viewing.set(null)} />
+      <DeleteDialog
+        target={deleting()}
+        prod={conn()?.env === "prod"}
+        busy={busy()}
+        onClose={() => deleting.set(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </Scroll>
   );
 }

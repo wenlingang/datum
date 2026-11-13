@@ -118,6 +118,21 @@ SQL
   $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 
+# Redis 分析(多级前缀、删除大 key、集群逐节点扫描):DATUM_TEST_REDIS=单机端口(会清空库 0,只用测试实例);
+# DATUM_TEST_REDIS_CLUSTER=三主节点集群的首个端口(各节点端口依次 +1,宣告地址 127.0.0.1)
+if { [ -n "${DATUM_TEST_REDIS:-}" ] || [ -n "${DATUM_TEST_REDIS_CLUSTER:-}" ]; } && want redis; then
+  D="$ROOT/redis"; mkdir -p "$D"
+  rconn() { printf '{"id":"%s","name":"%s","kind":"redis","env":"local","host":"127.0.0.1","port":%s,"user":"","database":"0","plaintextPassword":"","sslMode":"disable"}' "$1" "$2" "$3"; }
+  LIST=""
+  [ -n "${DATUM_TEST_REDIS:-}" ] && LIST="$(rconn rs redis-single "$DATUM_TEST_REDIS")"
+  if [ -n "${DATUM_TEST_REDIS_CLUSTER:-}" ]; then
+    C=$DATUM_TEST_REDIS_CLUSTER
+    for i in 0 1 2; do LIST="${LIST:+$LIST,}$(rconn "rc$i" "cluster-$i" $((C + i)))"; done
+  fi
+  printf '[%s]\n' "$LIST" > "$D/connections.json"
+  run redis "$D" tab/redis-insight.test.tsx
+fi
+
 if want chat; then
   D="$ROOT/chat"; mkdir -p "$D"
   run chat "$D" chat/chat.test.tsx

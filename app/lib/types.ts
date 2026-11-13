@@ -260,6 +260,8 @@ export interface RedisKeyValue {
   keyType: string;
   columns: string[];
   rows: string[][];
+  /** 元素太多只取了前 1000 个(字符串前 1 MB) */
+  truncated?: boolean;
 }
 
 /** Redis key 详情。`ttl`:-1 永不过期,-2 不存在。 */
@@ -369,6 +371,14 @@ export interface RedisKeyStat {
   /** 剩余毫秒;-1 永不过期 */
   ttlMs: number;
   freq: number | null;
+  /** 集群模式:所在主节点 host:port */
+  node?: string;
+}
+
+export interface RedisNodeStat {
+  addr: string;
+  keys: number;
+  error: string | null;
 }
 
 export interface RedisGroupStat {
@@ -390,7 +400,12 @@ export interface RedisReport {
   totalBytes: number;
   biggest: RedisKeyStat[];
   hottest: RedisKeyStat[];
+  /** 第一级前缀(name 不含 `:*`) */
   prefixes: RedisGroupStat[];
+  /** 前缀 → 下一级子前缀(name 为完整前缀);最后一段是 `…` 的是放不下的「其余」 */
+  prefixChildren: Record<string, RedisGroupStat[]>;
+  cluster: boolean;
+  nodes: RedisNodeStat[];
   types: RedisGroupStat[];
   ttl: { persistent: number; withinHour: number; withinDay: number; withinWeek: number; longer: number };
 }

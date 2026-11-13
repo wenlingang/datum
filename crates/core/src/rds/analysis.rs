@@ -3,6 +3,9 @@
 //!
 //! 扫描在后台任务里渐进进行,界面轮询进度,可随时取消;每批之间稍作停顿,减轻对线上实例的压力。
 //! 超过 [`MAX_KEYS`] 就停,报告标为抽样。汇总([`Aggregator`])是纯逻辑,单独测试。
+//!
+//! 前缀按 `:` 分级统计到第 [`PREFIX_DEPTH`] 级;集群模式(cluster_enabled)下逐个主节点扫描,
+//! 每个 key 记下所在节点,查看 / 删除时连到那个节点。
 
 use crate::error::{AppError, AppResult, ErrorKind};
 use redis::aio::MultiplexedConnection;
@@ -24,6 +27,14 @@ const PAUSE: Duration = Duration::from_millis(5);
 const TOP: usize = 20;
 /// 前缀榜的条数。
 const TOP_PREFIXES: usize = 30;
+/// 前缀统计的层数(`a:*` → `a:b:*` → `a:b:c:*`)。
+pub const PREFIX_DEPTH: usize = 3;
+/// 每个前缀下最多跟踪多少个不同的子前缀;再多的并进「其余」(`…`),内存与 key 的花样无关地有界。
+const CHILD_CAP: usize = 500;
+/// 报告里每个前缀展开后列出的子前缀数。
+const TOP_CHILDREN: usize = 15;
+/// 子前缀放不下时并入的名字(最后一段)。
+pub const OTHER_SEGMENT: &str = "…";
 
 fn qerr(e: redis::RedisError) -> AppError {
     AppError::new(ErrorKind::Query, t!("core.err.redis_command_failed")).with_detail(e.to_string())
@@ -179,6 +190,20 @@ pub struct KeyStat {
     pub ttl_ms: i64,
     /// OBJECT FREQ(LFU 访问频度);非 LFU 策略为 None
     pub freq: Option<u64>,
+    /// 集群模式:key 所在的主节点(host:port);单机为 None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node: Option<String>,
+}
+
+/// 集群里一个主节点的扫描情况。
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeStat {
+    pub addr: String,
+    /// 扫描开始时的 DBSIZE
+    pub keys: u64,
+    /// 连不上 / 扫描出错的原因
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -219,7 +244,13 @@ pub struct Report {
     pub total_bytes: u64,
     pub biggest: Vec<KeyStat>,
     pub hottest: Vec<KeyStat>,
+    /// 第一级前缀(`name` 是前缀本身,不含 `:*`)
     pub prefixes: Vec<GroupStat>,
+    /// 前缀 → 下一级子前缀(`name` 是完整前缀,如 `user:profile`);只列报告里出现的前缀
+    pub prefix_children: std::collections::BTreeMap<String, Vec<GroupStat>>,
+    /// 集群模式:逐个主节点扫描
+    pub cluster: bool,
+    pub nodes: Vec<NodeStat>,
     pub types: Vec<GroupStat>,
     pub ttl: TtlBuckets,
 }
@@ -229,11 +260,20 @@ pub fn prefix_of(key: &str) -> &str {
     key.split_once(':').map(|(p, _)| p).unwrap_or("")
 }
 
+/// key 的各级前缀(不含 key 本身的最后一段):`a:b:c:d` → `a`、`a:b`、`a:b:c`(最多 [`PREFIX_DEPTH`] 级)。
+pub fn prefix_path(key: &str) -> Vec<&str> {
+    key.match_indices(':').take(PREFIX_DEPTH).map(|(i, _)| &key[..i]).collect()
+}
+
 /// 渐进汇总扫描结果。排行榜只留前 N(插入时维护),内存与 key 数无关地有界。
 #[derive(Debug, Default)]
 pub struct Aggregator {
     report: Report,
     prefixes: HashMap<String, GroupStat>,
+    /// 第二级起的子前缀(完整前缀 → 统计)
+    sub: HashMap<String, GroupStat>,
+    /// 前缀 → 已跟踪的不同子前缀个数
+    child_count: HashMap<String, usize>,
     types: HashMap<String, GroupStat>,
 }
 
@@ -263,6 +303,32 @@ impl Aggregator {
         let p = self.prefixes.entry(prefix_of(&s.key).to_string()).or_default();
         p.keys += 1;
         p.bytes += bytes;
+        // 第二级起:子前缀太多时并入父前缀下的「其余」
+        let path = prefix_path(&s.key);
+        let mut parent: Option<String> = path.first().map(|p| p.to_string());
+        for full in path.iter().skip(1) {
+            let Some(par) = parent.clone() else { break };
+            let name = if self.sub.contains_key(*full) {
+                full.to_string()
+            } else {
+                let n = self.child_count.entry(par.clone()).or_default();
+                if *n < CHILD_CAP {
+                    *n += 1;
+                    full.to_string()
+                } else {
+                    // 「其余」只计数,不再往下分
+                    let other = format!("{par}:{OTHER_SEGMENT}");
+                    let g = self.sub.entry(other).or_default();
+                    g.keys += 1;
+                    g.bytes += bytes;
+                    break;
+                }
+            };
+            let g = self.sub.entry(name.clone()).or_default();
+            g.keys += 1;
+            g.bytes += bytes;
+            parent = Some(name);
+        }
         let t = self.types.entry(s.kind.clone()).or_default();
         t.keys += 1;
         t.bytes += bytes;
@@ -293,10 +359,47 @@ impl Aggregator {
             v.truncate(n);
             v
         };
+        let prefixes = sort(&self.prefixes, TOP_PREFIXES);
+        // 子前缀:从报告里的第一级前缀往下展开,每级取前 TOP_CHILDREN 个
+        let mut children: HashMap<&str, Vec<(&String, &GroupStat)>> = HashMap::new();
+        for (name, g) in &self.sub {
+            if let Some((par, _)) = name.rsplit_once(':') {
+                children.entry(par).or_default().push((name, g));
+            }
+        }
+        let mut prefix_children = std::collections::BTreeMap::new();
+        let mut queue: Vec<String> = prefixes.iter().map(|g| g.name.clone()).filter(|n| !n.is_empty()).collect();
+        while let Some(par) = queue.pop() {
+            let Some(list) = children.get(par.as_str()) else { continue };
+            let mut v: Vec<GroupStat> = list.iter().map(|(n, g)| GroupStat { name: (*n).clone(), ..(*g).clone() }).collect();
+            v.sort_by(|a, b| b.bytes.cmp(&a.bytes).then(b.keys.cmp(&a.keys)).then(a.name.cmp(&b.name)));
+            v.truncate(TOP_CHILDREN);
+            queue.extend(v.iter().map(|g| g.name.clone()).filter(|n| !n.ends_with(OTHER_SEGMENT)));
+            prefix_children.insert(par, v);
+        }
         Report {
-            prefixes: sort(&self.prefixes, TOP_PREFIXES),
+            prefixes,
+            prefix_children,
             types: sort(&self.types, usize::MAX),
             ..self.report.clone()
+        }
+    }
+
+    /// 删掉的 key 从排行榜里拿掉(统计不回退:删除前它确实占着这些内存)。
+    pub fn forget(&mut self, key: &str, node: Option<&str>) {
+        let keep = |k: &KeyStat| !(k.key == key && k.node.as_deref() == node);
+        self.report.biggest.retain(keep);
+        self.report.hottest.retain(keep);
+    }
+
+    fn set_nodes(&mut self, nodes: Vec<NodeStat>) {
+        self.report.cluster = true;
+        self.report.nodes = nodes;
+    }
+
+    fn node_error(&mut self, addr: &str, error: String) {
+        if let Some(n) = self.report.nodes.iter_mut().find(|n| n.addr == addr) {
+            n.error = Some(error);
         }
     }
 
@@ -315,6 +418,8 @@ impl Aggregator {
 pub struct Analysis {
     agg: Mutex<Aggregator>,
     cancel: AtomicBool,
+    /// 集群模式:各主节点的连接(查看 / 删除排行榜里的 key 时用)
+    nodes: Mutex<HashMap<String, MultiplexedConnection>>,
 }
 
 impl Analysis {
@@ -324,6 +429,58 @@ impl Analysis {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
     }
+    /// 集群节点的连接(MultiplexedConnection 可廉价 clone)。
+    pub fn node_con(&self, addr: &str) -> Option<MultiplexedConnection> {
+        self.nodes.lock().unwrap().get(addr).cloned()
+    }
+    pub fn forget(&self, key: &str, node: Option<&str>) {
+        self.agg.lock().unwrap().forget(key, node);
+    }
+}
+
+/// `CLUSTER NODES` 里在线的主节点:(host, port, 是否就是当前连着的节点)。
+/// 行格式:`id ip:port@cport[,hostname] flags master_id ping pong epoch link_state slot…`;
+/// ip 为空(节点还不知道自己的地址)时用 `fallback_host`。
+pub fn parse_cluster_masters(text: &str, fallback_host: &str) -> Vec<(String, u16, bool)> {
+    text.lines()
+        .filter_map(|line| {
+            let f: Vec<&str> = line.split_whitespace().collect();
+            let (addr, flags, link) = (f.get(1)?, f.get(2)?, f.get(7)?);
+            let flags: Vec<&str> = flags.split(',').collect();
+            if !flags.contains(&"master") || flags.iter().any(|x| x.starts_with("fail") || *x == "noaddr" || *x == "handshake") {
+                return None;
+            }
+            if *link != "connected" {
+                return None;
+            }
+            let hostport = addr.split(['@', ',']).next()?;
+            let (host, port) = hostport.rsplit_once(':')?;
+            let port: u16 = port.parse().ok()?;
+            let host = if host.is_empty() { fallback_host } else { host };
+            Some((host.to_string(), port, flags.contains(&"myself")))
+        })
+        .collect()
+}
+
+/// 用同样的认证 / 加密设置连到集群里的另一个节点。
+async fn open_node(base: &redis::ConnectionInfo, host: &str, port: u16) -> Result<MultiplexedConnection, String> {
+    let mut info = base.clone();
+    info.redis.db = 0;
+    info.addr = match &info.addr {
+        redis::ConnectionAddr::TcpTls { insecure, tls_params, .. } => redis::ConnectionAddr::TcpTls {
+            host: host.to_string(),
+            port,
+            insecure: *insecure,
+            tls_params: tls_params.clone(),
+        },
+        _ => redis::ConnectionAddr::Tcp(host.to_string(), port),
+    };
+    let client = redis::Client::open(info).map_err(|e| e.to_string())?;
+    match tokio::time::timeout(Duration::from_secs(10), client.get_multiplexed_async_connection()).await {
+        Ok(Ok(c)) => Ok(c),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(_) => Err(t!("core.err.connect_timeout").to_string()),
+    }
 }
 
 fn is_unknown_command(e: &redis::RedisError) -> bool {
@@ -331,9 +488,9 @@ fn is_unknown_command(e: &redis::RedisError) -> bool {
     s.contains("unknown command") || s.contains("unknown subcommand") || s.contains("noperm") || s.contains("disabled")
 }
 
-/// 开始扫描:先探测实例能力(DBSIZE、MEMORY USAGE、淘汰策略),再在后台逐批扫描。
-pub async fn start(mut con: MultiplexedConnection) -> AppResult<Arc<Analysis>> {
-    let total: u64 = redis::cmd("DBSIZE").query_async(&mut con).await.map_err(qerr)?;
+/// 开始扫描:先探测实例能力(DBSIZE、MEMORY USAGE、淘汰策略、是否集群),再在后台逐批扫描。
+/// `base`:建这条连接用的参数(集群模式下照着它连其余主节点);经 SSH 隧道时为 None,只扫当前节点。
+pub async fn start(mut con: MultiplexedConnection, base: Option<redis::ConnectionInfo>) -> AppResult<Arc<Analysis>> {
     let info: String = redis::cmd("INFO").arg("memory").query_async(&mut con).await.map_err(qerr)?;
     let lfu = parse_info(&info, 0).max_memory_policy.is_some_and(|p| p.contains("lfu"));
     // MEMORY USAGE 不存在的 key 返回 nil;命令被禁用 / 不认识则报错
@@ -347,17 +504,78 @@ pub async fn start(mut con: MultiplexedConnection) -> AppResult<Arc<Analysis>> {
         Err(e) if is_unknown_command(&e) => false,
         Err(e) => return Err(qerr(e)),
     };
+    let cluster_info: String = redis::cmd("INFO").arg("cluster").query_async(&mut con).await.unwrap_or_default();
+    let cluster = cluster_info.lines().any(|l| l.trim() == "cluster_enabled:1");
+
+    // 要扫描的节点:(地址, 连接);集群时连不上的节点记下原因
+    let mut targets: Vec<(Option<String>, MultiplexedConnection)> = vec![];
+    let mut node_stats: Vec<NodeStat> = vec![];
+    if cluster {
+        let text: String = redis::cmd("CLUSTER").arg("NODES").query_async(&mut con).await.map_err(qerr)?;
+        let fallback = match base.as_ref().map(|b| &b.addr) {
+            Some(redis::ConnectionAddr::Tcp(h, _)) | Some(redis::ConnectionAddr::TcpTls { host: h, .. }) => h.clone(),
+            _ => "127.0.0.1".into(),
+        };
+        for (host, port, is_me) in parse_cluster_masters(&text, &fallback) {
+            let addr = format!("{host}:{port}");
+            let opened = if is_me {
+                Ok(con.clone())
+            } else {
+                match &base {
+                    Some(b) => open_node(b, &host, port).await,
+                    None => Err(t!("core.err.redis_cluster_tunnel").to_string()),
+                }
+            };
+            match opened {
+                Ok(mut c) => {
+                    let keys: u64 = redis::cmd("DBSIZE").query_async(&mut c).await.unwrap_or(0);
+                    node_stats.push(NodeStat { addr: addr.clone(), keys, error: None });
+                    targets.push((Some(addr), c));
+                }
+                Err(e) => node_stats.push(NodeStat { addr, keys: 0, error: Some(e) }),
+            }
+        }
+        if targets.is_empty() {
+            targets.push((None, con.clone()));
+        }
+    } else {
+        targets.push((None, con.clone()));
+    }
+    let total: u64 = if cluster {
+        node_stats.iter().map(|n| n.keys).sum()
+    } else {
+        redis::cmd("DBSIZE").query_async(&mut con).await.map_err(qerr)?
+    };
+
+    let mut agg = Aggregator::new(total, memory_supported, lfu);
+    if cluster {
+        agg.set_nodes(node_stats);
+    }
     let analysis = Arc::new(Analysis {
-        agg: Mutex::new(Aggregator::new(total, memory_supported, lfu)),
+        agg: Mutex::new(agg),
         cancel: AtomicBool::new(false),
+        nodes: Mutex::new(targets.iter().filter_map(|(a, c)| Some((a.clone()?, c.clone()))).collect()),
     });
     let a = analysis.clone();
     tokio::spawn(async move {
-        let (cancelled, truncated, error) = match scan_all(&mut con, &a, memory_supported, lfu).await {
-            Ok((cancelled, truncated)) => (cancelled, truncated, None),
-            Err(e) => (false, false, Some(e.display())),
-        };
-        a.agg.lock().unwrap().finish(cancelled, truncated, error);
+        let mut outcome = (false, false, None);
+        let mut seen = 0u64;
+        for (node, mut c) in targets {
+            match scan_all(&mut c, &a, memory_supported, lfu, node.as_deref(), &mut seen).await {
+                Ok((false, false)) => {}
+                Ok((cancelled, truncated)) => {
+                    outcome = (cancelled, truncated, None);
+                    break;
+                }
+                // 集群里一个节点出错:记在节点上,接着扫别的节点
+                Err(e) if node.is_some() => a.agg.lock().unwrap().node_error(node.as_deref().unwrap_or(""), e.display()),
+                Err(e) => {
+                    outcome = (false, false, Some(e.display()));
+                    break;
+                }
+            }
+        }
+        a.agg.lock().unwrap().finish(outcome.0, outcome.1, outcome.2);
     });
     Ok(analysis)
 }
@@ -368,9 +586,10 @@ async fn scan_all(
     a: &Analysis,
     memory: bool,
     lfu: bool,
+    node: Option<&str>,
+    seen: &mut u64,
 ) -> AppResult<(bool, bool)> {
     let mut cursor: u64 = 0;
-    let mut seen: u64 = 0;
     loop {
         if a.cancel.load(Ordering::Relaxed) {
             return Ok((true, false));
@@ -415,15 +634,16 @@ async fn scan_all(
                     bytes,
                     ttl_ms: int_of(Some(&v[1])),
                     freq,
+                    node: node.map(str::to_string),
                 });
             }
-            seen += keys.len() as u64;
+            *seen += keys.len() as u64;
         }
         cursor = next;
         if cursor == 0 {
             return Ok((false, false));
         }
-        if seen >= MAX_KEYS {
+        if *seen >= MAX_KEYS {
             return Ok((false, true));
         }
         tokio::time::sleep(PAUSE).await;
@@ -435,7 +655,7 @@ mod tests {
     use super::*;
 
     fn stat(key: &str, kind: &str, bytes: u64, ttl_ms: i64, freq: Option<u64>) -> KeyStat {
-        KeyStat { key: key.into(), kind: kind.into(), bytes: Some(bytes), ttl_ms, freq }
+        KeyStat { key: key.into(), kind: kind.into(), bytes: Some(bytes), ttl_ms, freq, node: None }
     }
 
     #[test]
@@ -511,6 +731,69 @@ mod tests {
         assert_eq!(r.biggest[0].bytes, Some(99));
         assert_eq!(r.biggest[TOP - 1].bytes, Some(80));
         assert!(r.hottest.is_empty(), "非 LFU 不统计热 key");
+    }
+
+    #[test]
+    fn multi_level_prefixes() {
+        let mut a = Aggregator::new(10, true, false);
+        a.add(&stat("user:profile:1", "hash", 100, -1, None));
+        a.add(&stat("user:profile:2", "hash", 100, -1, None));
+        a.add(&stat("user:session:9", "string", 10, -1, None));
+        a.add(&stat("user:42", "string", 1, -1, None));
+        a.add(&stat("user:profile:avatar:7", "string", 500, -1, None));
+        let r = a.report();
+        let names = |p: &str| r.prefix_children.get(p).map(|v| v.iter().map(|g| (g.name.as_str(), g.keys)).collect::<Vec<_>>());
+        // user 下:profile(3 个 key)与 session;user:42 是 key 本身,不算子前缀
+        assert_eq!(names("user"), Some(vec![("user:profile", 3), ("user:session", 1)]));
+        assert_eq!(names("user:profile"), Some(vec![("user:profile:avatar", 1)]));
+        assert_eq!(prefix_path("a:b:c:d:e"), vec!["a", "a:b", "a:b:c"]);
+        assert!(prefix_path("plain").is_empty());
+    }
+
+    #[test]
+    fn child_prefixes_are_capped() {
+        let mut a = Aggregator::new(0, true, false);
+        for i in 0..(CHILD_CAP + 50) {
+            a.add(&stat(&format!("sess:{i}:x"), "string", 1, -1, None));
+        }
+        let r = a.report();
+        let kids = &r.prefix_children["sess"];
+        assert_eq!(kids.len(), TOP_CHILDREN);
+        // 放不下的 50 个并进「其余」;它是最大的一组,排第一
+        assert_eq!(kids[0].name, format!("sess:{OTHER_SEGMENT}"));
+        assert_eq!(kids[0].keys, 50);
+    }
+
+    #[test]
+    fn forget_removes_from_rankings() {
+        let mut a = Aggregator::new(2, true, true);
+        let mut k = stat("big", "list", 1000, -1, Some(5));
+        k.node = Some("10.0.0.1:7000".into());
+        a.add(&k);
+        a.add(&stat("big", "list", 900, -1, Some(4)));
+        a.forget("big", Some("10.0.0.1:7000"));
+        let r = a.report();
+        assert_eq!(r.biggest.len(), 1, "只删那个节点上的");
+        assert_eq!(r.biggest[0].node, None);
+    }
+
+    #[test]
+    fn cluster_nodes_masters() {
+        let text = "\
+07c3 127.0.0.1:7000@17000 myself,master - 0 0 1 connected 0-5460
+67ed 127.0.0.1:7001@17001,host-b master - 0 1426238317239 2 connected 5461-10922
+292f :7002@17002 master - 0 1426238316232 3 connected 10923-16383
+e7d1 127.0.0.1:7003@17003 slave 07c3 0 1426238318243 1 connected
+aa11 127.0.0.1:7004@17004 master,fail - 0 0 4 disconnected
+";
+        assert_eq!(
+            parse_cluster_masters(text, "redis.local"),
+            vec![
+                ("127.0.0.1".to_string(), 7000, true),
+                ("127.0.0.1".to_string(), 7001, false),
+                ("redis.local".to_string(), 7002, false),
+            ]
+        );
     }
 
     #[test]

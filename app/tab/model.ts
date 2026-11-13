@@ -812,6 +812,8 @@ async function refreshRedisKey(m: TabModel, key: string) {
       m.resultIsQuery.set(true);
       setResult(m, { columns: kv.columns, rows: kv.rows, affected: null });
     });
+    // 大 key 只读了前 1000 个元素(字符串前 1 MB),一次全读会拖住实例
+    if (kv.truncated) toast.info(t("rinsight.value_truncated"));
   } catch (e) {
     if (token !== m.token) return;
     batch(() => {

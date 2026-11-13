@@ -87,6 +87,11 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  /** 分析排行榜里的 key 的值(集群模式传所在节点) */
+  redisKeyOn: async (id: string, node: string | null, key: string) =>
+    (await Db.redisKeyOn(id, node, key)) as TabTypes.RedisKeyValue,
+  /** 删除分析排行榜里的 key;返回删掉的个数 */
+  redisDeleteKey: (id: string, node: string | null, key: string) => Db.redisDeleteKey(id, node, key) as Promise<number>,
   /** 表结构对比:脚本让目标库与源库一致(删除类语句已注释)。 */
   schemaDiff: async (kind: DbKind, sourceId: string, targetId: string) =>
     (await Db.schemaDiff(kind, sourceId, targetId)) as DiffReport,

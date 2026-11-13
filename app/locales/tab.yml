@@ -735,6 +735,58 @@ mongo:
     zh-CN: 文档已删除
     zh-TW: 文件已刪除
 rinsight:
+  other_children:
+    en: "Others (too many distinct sub-prefixes)"
+    zh-CN: "其余(子前缀太多,未细分)"
+    zh-TW: "其餘(子前綴太多,未細分)"
+  cluster_nodes:
+    en: "Cluster nodes"
+    zh-CN: "集群节点"
+    zh-TW: "叢集節點"
+  cluster_hint:
+    en: "Cluster mode: each master is scanned in turn; keys show the node they live on"
+    zh-CN: "集群模式:逐个主节点扫描,key 旁标出所在节点"
+    zh-TW: "叢集模式:逐個主節點掃描,key 旁標出所在節點"
+  node_keys:
+    en: "%{keys} keys"
+    zh-CN: "%{keys} 个 key"
+    zh-TW: "%{keys} 個 key"
+  view_key:
+    en: "View"
+    zh-CN: "查看"
+    zh-TW: "檢視"
+  delete_key:
+    en: "Delete"
+    zh-CN: "删除"
+    zh-TW: "刪除"
+  delete_title:
+    en: "Delete key %{key}?"
+    zh-CN: "删除 key %{key}?"
+    zh-TW: "刪除 key %{key}?"
+  delete_body:
+    en: "Runs UNLINK (DEL on old versions): the key is removed at once and memory is freed in the background. This cannot be undone."
+    zh-CN: "执行 UNLINK(老版本用 DEL):key 立即消失,内存在后台释放。无法撤销。"
+    zh-TW: "執行 UNLINK(舊版本用 DEL):key 立即消失,記憶體在背景釋放。無法復原。"
+  delete_prod:
+    en: "This is a PROD connection."
+    zh-CN: "这是生产环境连接。"
+    zh-TW: "這是正式環境連線。"
+  deleted:
+    en: "Key deleted"
+    zh-CN: "已删除"
+    zh-TW: "已刪除"
+  already_gone:
+    en: "The key no longer exists"
+    zh-CN: "key 已经不存在了"
+    zh-TW: "key 已經不存在了"
+  value_truncated:
+    en: "Showing the first 1,000 elements (first 1 MB of a string)"
+    zh-CN: "只显示前 1000 个元素(字符串前 1 MB)"
+    zh-TW: "只顯示前 1000 個元素(字串前 1 MB)"
+  close:
+    en: "Close"
+    zh-CN: "关闭"
+    zh-TW: "關閉"
   title:
     en: "Redis Analysis"
     zh-CN: "Redis 分析"

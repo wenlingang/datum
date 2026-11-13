@@ -1,6 +1,10 @@
 _version: 2
 core:
   err:
+    redis_cluster_tunnel:
+      en: "Connected through an SSH tunnel, which only reaches the current node"
+      zh-CN: "经 SSH 隧道连接,隧道只通当前节点"
+      zh-TW: "經 SSH 通道連線,通道只通到目前節點"
     xlsx_too_many_rows:
       en: "Too many rows for one Excel sheet (max %{max})"
       zh-CN: "行数超过 Excel 单个工作表的上限(%{max} 行)"
