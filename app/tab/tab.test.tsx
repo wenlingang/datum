@@ -209,7 +209,7 @@ test("prod 连接:带 WHERE 的写语句也先确认并预估影响范围", asyn
     // 改写不了的写法:标明无法预估,不猜
     await app.press(`text:${sql}`);
     await app.keyboard.press("mod+a");
-    await app.type("id:sql-editor", "WITH x AS (SELECT 1) UPDATE products SET price_cents = price_cents WHERE id IN (SELECT 1 FROM x)");
+    await app.type("id:sql-editor", "WITH x AS (SELECT 1) INSERT INTO products (category_id, name) SELECT 1, 'z' FROM x");
     await app.press("id:run");
     await app.waitFor("text:Review Destructive Statements");
     await app.waitFor("text:/^Can't estimate the affected rows/", { timeout: 15000 });
@@ -377,4 +377,44 @@ test("SQL 片段:收藏当前语句,在光标处插入,可删除;重启后仍在
   await again.waitFor("text:No snippets yet. Save a statement you use often.", { timeout: 5000 });
   expect((Store.loadSnippets() as { snippets: unknown[] }).snippets).toEqual([]);
   again.dispose();
+});
+
+test("多条写语句一起执行也能撤销;过后还能从历史里撤销", async () => {
+  const app = await start();
+  // 两条写语句一起执行:合成一份倒序的撤销
+  await replaceSql(app, "UPDATE products SET origin = 'Multi' WHERE id BETWEEN 20 AND 21; DELETE FROM products WHERE id = 22");
+  await app.keyboard.press("mod+shift+enter");
+  await app.waitFor("text:Can be undone: restores the 3 rows as they were before", { timeout: 15000 });
+  await app.press("id:undo");
+  await app.waitFor("id:undo-dialog");
+  await app.press("id:undo-confirm");
+  await app.waitFor("text:Undone: 3 rows restored", { timeout: 15000 });
+  let current = "UPDATE products SET origin = 'Multi' WHERE id BETWEEN 20 AND 21; DELETE FROM products WHERE id = 22";
+  const check = async (sql: string, want: string) => {
+    await app.press(`text:${current}`);
+    current = sql;
+    await app.keyboard.press("mod+a");
+    await app.type("id:sql-editor", sql);
+    await app.press("id:run");
+    await app.waitUntil(() => app.texts().includes(want), { timeout: 15000 });
+  };
+  await check("SELECT COUNT(*) || ' left' AS n FROM products WHERE id BETWEEN 20 AND 22 AND COALESCE(origin, '') <> 'Multi'", "3 left");
+
+  // 单条写语句执行后又跑了别的:从历史里还能撤销这一条
+  await check("UPDATE products SET origin = 'Later' WHERE id = 30", "✓ Executed successfully · 1 rows affected");
+  await check("SELECT 'other' AS x", "other");
+  await app.press("id:history");
+  await app.waitUntil(() => app.texts().some((x) => x.startsWith("Undo (1 rows)")), { timeout: 5000 });
+  // 整体撤销过的那两条不再提供撤销,只剩这一条
+  expect(app.texts().filter((x) => x.startsWith("Undo (")).length).toBe(1);
+  await app.press("text:Undo (1 rows)");
+  await app.waitFor("id:undo-dialog", { timeout: 5000 });
+  await app.press("id:undo-confirm");
+  await app.waitFor("text:Undone: 1 rows restored", { timeout: 15000 });
+  await check("SELECT COUNT(*) || ' later' AS n FROM products WHERE origin = 'Later'", "0 later");
+  // 撤销过的不能再撤销
+  await app.press("id:history");
+  await app.waitUntil(() => app.texts().some((x) => x.includes("UPDATE products SET origin = 'Later'")), { timeout: 5000 });
+  expect(app.texts().some((x) => x.startsWith("Undo ("))).toBe(false);
+  app.dispose();
 });

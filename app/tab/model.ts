@@ -29,7 +29,7 @@ import {
   supportsSql,
 } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
-import { recordHistory } from "../store/history";
+import { forgetUndo, recordHistory } from "../store/history";
 import { maxRows } from "../store/prefs";
 import { toast } from "../store/toast";
 import { setDetailOpen, type WorkTab } from "../store/workspace";
@@ -415,18 +415,33 @@ function connName(m: TabModel) {
   return conns.get(m.connId)?.name ?? "";
 }
 
-/** 执行成功才记历史(失败 / EXPLAIN / 翻页都不记)。 */
-function record(m: TabModel, sql: string, elapsed: number, rowCount: number | null, affected: number | null) {
-  recordHistory({
-    sql,
-    connId: m.connId,
-    kind: m.dbKind,
-    connName: connName(m),
-    executedAt: Date.now(),
-    elapsedMs: elapsed,
-    rowCount,
-    affected,
-  });
+/** 执行成功才记历史(失败 / EXPLAIN / 翻页都不记)。写语句带上撤销,过后可从历史里撤销。 */
+function record(
+  m: TabModel,
+  sql: string,
+  elapsed: number,
+  rowCount: number | null,
+  affected: number | null,
+  undo: UndoPrep | null = null,
+) {
+  recordHistory(
+    {
+      sql,
+      connId: m.connId,
+      kind: m.dbKind,
+      connName: connName(m),
+      executedAt: Date.now(),
+      elapsedMs: elapsed,
+      rowCount,
+      affected,
+    },
+    undo,
+  );
+}
+
+/** 写语句执行前的撤销准备;出错时以原因的形式返回(不阻止执行)。 */
+function prepareUndo(m: TabModel, sql: string): Promise<UndoPrep> {
+  return db.undoPrepare(m.dbKind, m.connId, sql).catch((e): UndoPrep => ({ statements: [], rows: 0, reason: errorText(e) }));
 }
 
 /** 执行一条 SQL;成功走 `onOk`,失败把错误挂到结果区。 */
@@ -533,16 +548,13 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
       m.undo.set(undo);
       // 非查询语句可能改变表结构:刷新表列表
       if (!query && conns.tables(m.connId)) void refreshTables(m.connId);
-      if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null));
+      if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null), undo);
     });
   // 写语句:先抓会被改动的原始行,生成撤销用的反向语句,再执行
   if (supportsSql(m.dbKind) && !sqlText.isReadOnly(sql)) {
     const token = m.token;
     m.running.set(true);
-    void db
-      .undoPrepare(m.dbKind, m.connId, sql)
-      .catch((e): UndoPrep => ({ statements: [], rows: 0, reason: errorText(e) }))
-      .then((undo) => {
+    void prepareUndo(m, sql).then((undo) => {
         // 等待期间又执行了别的(或标签页被重用):放弃这次
         if (m.token !== token) return;
         void go(undo);
@@ -558,7 +570,9 @@ export function runAll(m: TabModel) {
   run(m, m.sql());
 }
 
-/** 逐条执行多条语句:遇到错误即停,后面的标为未执行。撤销只支持单条写语句,这里不准备。 */
+/** 逐条执行多条语句:遇到错误即停,后面的标为未执行。
+ *  每条写语句执行前各自抓快照(前面的语句可能已经改了数据);执行过的写语句都能撤销时,
+ *  合成一份倒序的整体撤销;任一条不能撤销就整体不提供(给出那条的原因)。 */
 async function runMany(m: TabModel, statements: string[], skipHistory: boolean) {
   const token = ++m.token;
   const readOnly = m.readOnlyNext;
@@ -572,12 +586,15 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   const out: StmtResult[] = [];
   let failed = false;
   let wrote = false;
+  const undos: UndoPrep[] = [];
   for (const sql of statements) {
     const isQuery = sqlText.isQuery(sql);
     if (failed) {
       out.push({ sql, result: null, error: null, elapsedMs: null, isQuery, skipped: true });
       continue;
     }
+    const undo = !readOnly && !sqlText.isReadOnly(sql) ? await prepareUndo(m, sql) : null;
+    if (token !== m.token) return;
     const started = Date.now();
     try {
       const r = readOnly
@@ -587,7 +604,8 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
       const elapsed = Date.now() - started;
       out.push({ sql, result: r, error: null, elapsedMs: elapsed, isQuery, skipped: false });
       if (!isQuery) wrote = true;
-      if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null));
+      if (undo) undos.push(undo);
+      if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null), undo);
     } catch (e) {
       if (token !== m.token) return;
       out.push({ sql, result: null, error: errorText(e), elapsedMs: null, isQuery, skipped: false });
@@ -599,10 +617,28 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   const errorAt = out.findIndex((x) => x.error !== null);
   batch(() => {
     m.running.set(false);
+    m.undo.set(combineUndo(undos));
     m.multi.set(out);
     selectResult(m, errorAt >= 0 ? errorAt : out.length - 1);
   });
   if (wrote && conns.tables(m.connId)) void refreshTables(m.connId);
+}
+
+/** 多条写语句的撤销合成一份:后执行的先撤销;任一条不能撤销就整体不提供。没改到行的语句不参与。 */
+function combineUndo(list: UndoPrep[]): UndoPrep | null {
+  const blocked = list.find((u) => u.statements.length === 0 && u.reason);
+  if (blocked) return { statements: [], rows: 0, reason: blocked.reason };
+  const usable = list.filter((u) => u.statements.length > 0);
+  if (usable.length === 0) return null;
+  return {
+    statements: usable
+      .slice()
+      .reverse()
+      .flatMap((u) => u.statements),
+    rows: usable.reduce((n, u) => n + u.rows, 0),
+    reason: null,
+    parts: usable,
+  };
 }
 
 /** 切换多语句结果里的第 i 条:结果区、状态行、筛选与排序都跟着换。 */
@@ -631,6 +667,7 @@ export async function undoLast(m: TabModel) {
   if (!undo || undo.statements.length === 0) return;
   try {
     await db.importSql(m.dbKind, m.connId, undo.statements);
+    forgetUndo(undo);
     batch(() => {
       m.undo.set(null);
       m.undoOpen.set(false);

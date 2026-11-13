@@ -6,7 +6,7 @@ import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { HistoryEntry } from "../lib/types";
 import { conns } from "../store/conns";
-import { clearHistory, history } from "../store/history";
+import { clearHistory, history, historyUndo } from "../store/history";
 import { toast } from "../store/toast";
 import { Btn, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
@@ -90,9 +90,26 @@ export function HistoryPanel(props: { m: TabModel }) {
               class="border-b border-border px-3 py-2 hover:bg-list-hover"
             >
               <Text class={`${FS.xs} font-mono text-foreground line-clamp-1`}>{compress(e().sql)}</Text>
-              <View class="mt-0.5 flex-row gap-1">
+              <View class="mt-0.5 flex-row items-center gap-1">
                 <Text class={`${FS.xs} text-muted-foreground`}>{e().connName}</Text>
-                <Text class={`${FS.xs} text-fg-faint`}>{meta(e())}</Text>
+                <Text class={`${FS.xs} min-w-0 flex-1 text-fg-faint line-clamp-1`}>{meta(e())}</Text>
+                {/* 这次写操作还能撤销(本次运行期间):打开撤销确认框 */}
+                <If when={historyUndo(e().id)}>
+                  {(u) => (
+                    <Btn
+                      small
+                      variant="ghost"
+                      icon="undo-2"
+                      testID={`hist-undo:${e().id}`}
+                      label={t("history.undo", { rows: u().rows })}
+                      onPress={() => {
+                        m.historyOpen.set(false);
+                        m.undo.set(u());
+                        m.undoOpen.set(true);
+                      }}
+                    />
+                  )}
+                </If>
               </View>
               <If when={expanded() === e().id}>
                 <View class="mt-1.5 h-[140px] overflow-hidden rounded-(--radius) border border-border">

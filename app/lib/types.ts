@@ -415,6 +415,8 @@ export interface UndoPrep {
   statements: string[];
   rows: number;
   reason: string | null;
+  /** 前端合成的整体撤销:由哪几条语句各自的撤销组成(撤销整体后,它们在历史里也不能再撤销) */
+  parts?: UndoPrep[];
 }
 
 // ---------------------------------------------------------------- 关系库诊断

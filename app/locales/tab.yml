@@ -252,6 +252,10 @@ snippets:
     zh-CN: "片段保存失败:%{error}"
     zh-TW: "片段儲存失敗:%{error}"
 history:
+  undo:
+    en: "Undo (%{rows} rows)"
+    zh-CN: "撤销(%{rows} 行)"
+    zh-TW: "復原(%{rows} 列)"
   just_now:
     en: "Just now"
     zh-CN: "刚刚"
