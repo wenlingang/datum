@@ -9,8 +9,13 @@ import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
 import { CellDialog } from "./CellDialog";
 import { FilterBar } from "./FilterBar";
-import { conns } from "../store/conns";
-import { modelOf, refresh, type TabModel } from "./model";
+import { conns, refreshTables } from "../store/conns";
+import { closeTab } from "../store/workspace";
+import { ErrorText } from "../ui/error";
+import { Hint } from "../ui/kit";
+import { openTable } from "./index";
+import { modelOf, refresh, refreshRedisKey, type TabModel } from "./model";
+import { RedisKeyEditor } from "./RedisKeyEditor";
 import { Results, StatusLine } from "./Results";
 import { Diagnostics } from "./Diagnostics";
 import { SchemaDiff } from "./SchemaDiff";
@@ -50,7 +55,35 @@ function QueryBody(props: { m: TabModel }) {
   );
 }
 
-function ModelView(props: { m: TabModel }) {
+/** Redis key 标签页:按类型的编辑器(值与详情仍由模型读取,详情栏照旧显示)。 */
+function RedisKeyBody(props: { m: TabModel; tabId: string }) {
+  const m = props.m;
+  const key = m.table ?? "";
+  return (
+    <View class="min-h-0 flex-1 px-4 py-3">
+      <If when={m.err() !== null && m.redisValue() === null}>
+        <ErrorText testID="query-error" mono tone="text-destructive" text={m.err() ?? ""} />
+      </If>
+      <If when={m.redisValue() !== null} else={<If when={m.err() === null}><Hint>{t("tab.running")}</Hint></If>}>
+        <RedisKeyEditor
+          connId={m.connId}
+          node={null}
+          value={m.redisValue()}
+          detail={m.redisDetail()}
+          reload={() => refreshRedisKey(m, key)}
+          onRenamed={(next) => {
+            // 新名字开一个标签页,关掉旧名字的;侧栏的 key 列表重读
+            closeTab(props.tabId);
+            openTable(m.connId, next);
+            void refreshTables(m.connId);
+          }}
+        />
+      </If>
+    </View>
+  );
+}
+
+function ModelView(props: { m: TabModel; tabId: string }) {
   const m = props.m;
   // 恢复会话的表浏览 tab:显示出来且连接就绪后才去查数据
   effect(() => {
@@ -60,11 +93,15 @@ function ModelView(props: { m: TabModel }) {
   });
   return (
     <View testID="work-tab" class="flex-1 bg-background">
-      <If when={m.filterOpen() && m.result() !== null}>
+      {/* Redis key 标签页的编辑器自带筛选,不显示网格的筛选条 */}
+      <If when={m.filterOpen() && m.result() !== null && !(m.dbKind === "redis" && m.kind === "table")}>
         <FilterBar m={m} />
       </If>
       <View class="min-h-0 flex-1">
-        <If when={m.kind === "query"} else={<Results m={m} />}>
+        <If
+          when={m.kind === "query"}
+          else={m.dbKind === "redis" ? <RedisKeyBody m={m} tabId={props.tabId} /> : <Results m={m} />}
+        >
           <QueryBody m={m} />
         </If>
       </View>
@@ -83,5 +120,5 @@ export function TabBody(props: { tab: WorkTab }) {
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
   if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;
   if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_unsupported")} />;
-  return <ModelView m={m} />;
+  return <ModelView m={m} tabId={props.tab.id} />;
 }

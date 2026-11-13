@@ -21,6 +21,7 @@ import {
   type FilterRow,
   type KeyDetail,
   type Plan,
+  type RedisKeyValue,
   type QueryResult,
   type RiskFinding,
   type RowDelete,
@@ -140,6 +141,8 @@ export interface TabModel {
   readonly result: Signal<QueryResult | null>;
   readonly detail: Signal<TableDetail | null>;
   readonly redisDetail: Signal<KeyDetail | null>;
+  /** Redis key 标签页:读到的值(按类型的编辑器用;集合类最多 1000 个元素) */
+  readonly redisValue: Signal<RedisKeyValue | null>;
   readonly page: Signal<number>;
   /** 非空表示处于分页浏览(仅关系库表 tab) */
   readonly browseTable: Signal<string | null>;
@@ -258,6 +261,7 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     result: signal<QueryResult | null>(null),
     detail: signal<TableDetail | null>(null),
     redisDetail: signal<KeyDetail | null>(null),
+    redisValue: signal<RedisKeyValue | null>(null),
     page: signal(0),
     browseTable: signal<string | null>(kind === "table" && supportsSql(dbKind) ? table : null),
     dirty: signal<Record<string, CellEdit>>({}),
@@ -904,7 +908,8 @@ export function refresh(m: TabModel) {
   void refreshTable(m, table);
 }
 
-async function refreshRedisKey(m: TabModel, key: string) {
+/** 重读 Redis key 标签页的值与详情(编辑器写完后调用)。 */
+export async function refreshRedisKey(m: TabModel, key: string) {
   const token = ++m.token;
   m.running.set(true);
   try {
@@ -914,11 +919,10 @@ async function refreshRedisKey(m: TabModel, key: string) {
       m.running.set(false);
       m.err.set(null);
       m.redisDetail.set(detail);
+      m.redisValue.set(kv);
       m.resultIsQuery.set(true);
       setResult(m, { columns: kv.columns, rows: kv.rows, affected: null });
     });
-    // 大 key 只读了前 1000 个元素(字符串前 1 MB),一次全读会拖住实例
-    if (kv.truncated) toast.info(t("rinsight.value_truncated"));
   } catch (e) {
     if (token !== m.token) return;
     batch(() => {

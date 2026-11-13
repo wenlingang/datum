@@ -640,6 +640,53 @@ pub async fn redis_delete_key(state: &AppState, id: &str, node: Option<&str>, ke
     state.redis_pool.delete_key(id, node, key).await
 }
 
+/// key 详情(TTL、大小);集群模式下在 `node` 上读。
+pub async fn redis_key_detail_on(state: &AppState, id: &str, node: Option<&str>, key: &str) -> AppResult<rds::client::KeyDetail> {
+    state.redis_pool.key_detail_on(id, node, key).await
+}
+
+/// 元素级编辑(增删改字段 / 成员 / 下标,Stream 追加条目)。
+pub async fn redis_edit(
+    state: &AppState,
+    id: &str,
+    node: Option<&str>,
+    key: &str,
+    edit: &rds::edit::KeyEdit,
+) -> AppResult<rds::edit::EditResult> {
+    state.redis_pool.edit_key(id, node, key, edit).await
+}
+
+/// 设置(`Some(秒)`)/ 移除(`None`)TTL。
+pub async fn redis_set_ttl(state: &AppState, id: &str, node: Option<&str>, key: &str, seconds: Option<i64>) -> AppResult<()> {
+    state.redis_pool.set_ttl(id, node, key, seconds).await
+}
+
+/// 重命名 key(RENAMENX,目标已存在时报错)。
+pub async fn redis_rename(state: &AppState, id: &str, node: Option<&str>, key: &str, new_key: &str) -> AppResult<()> {
+    state.redis_pool.rename_key(id, node, key, new_key).await
+}
+
+/// 新建 key(已存在时报错)。
+pub async fn redis_create_key(state: &AppState, id: &str, node: Option<&str>, spec: &rds::edit::NewKey) -> AppResult<()> {
+    state.redis_pool.create_key(id, node, spec).await
+}
+
+/// Stream 按 ID 范围取一页(`rev` 为倒序,最新的在前)。
+pub async fn redis_stream_range(
+    state: &AppState,
+    id: &str,
+    node: Option<&str>,
+    key: &str,
+    q: &rds::edit::StreamRange,
+) -> AppResult<rds::edit::StreamPage> {
+    state.redis_pool.stream_range(id, node, key, q).await
+}
+
+/// Stream 的消费组、消费者与待确认摘要。
+pub async fn redis_stream_groups(state: &AppState, id: &str, node: Option<&str>, key: &str) -> AppResult<Vec<rds::edit::StreamGroup>> {
+    state.redis_pool.stream_groups(id, node, key).await
+}
+
 pub async fn redis_exec(state: &AppState, id: &str, command: &str) -> AppResult<String> {
     rds::commands::redis_exec(state, id.to_string(), command.to_string()).await
 }

@@ -311,6 +311,71 @@ export interface RedisKeyValue {
   rows: string[][];
   /** 元素太多只取了前 1000 个(字符串前 1 MB) */
   truncated?: boolean;
+  /** 有元素不是合法 UTF-8(显示的是替换后的文本):按它去改会对不上原值,编辑器只读 */
+  binary?: boolean;
+}
+
+/** Redis key 的一次元素级编辑(core 的 `KeyEdit`);分数用文本,允许 inf / -inf。 */
+export type RedisEdit =
+  | { op: "stringSet"; value: string }
+  | { op: "hashAdd"; field: string; value: string }
+  | { op: "hashSet"; field: string; value: string; oldField: string | null }
+  | { op: "hashDel"; field: string }
+  | { op: "listSet"; index: number; old: string; value: string }
+  | { op: "listPush"; value: string; head: boolean }
+  | { op: "listDel"; index: number; old: string }
+  | { op: "setAdd"; member: string }
+  | { op: "setDel"; member: string }
+  | { op: "zsetAdd"; member: string; score: string }
+  | { op: "zsetSet"; member: string; score: string; oldMember: string | null }
+  | { op: "zsetDel"; member: string }
+  | { op: "streamAdd"; id: string; fields: [string, string][] }
+  | { op: "streamDel"; id: string };
+
+/** 编辑结果:实际改动的元素数(删一个已不在的元素为 0);追加 Stream 条目时带回 ID。 */
+export interface RedisEditResult {
+  changed: number;
+  id: string | null;
+}
+
+/** 新建 key。`items` 每项按类型:string `[值]`、hash / stream `[字段, 值]`、list / set `[元素]`、zset `[成员, 分数]`。 */
+export interface RedisNewKey {
+  key: string;
+  keyType: string;
+  items: string[][];
+  /** 秒;null 不过期 */
+  ttl: number | null;
+}
+
+export interface RedisStreamEntry {
+  id: string;
+  fields: [string, string][];
+}
+
+/** Stream 的一页;`next` 是下一页的起点(含),正序作 start、倒序作 end;没有更多为 null。 */
+export interface RedisStreamPage {
+  entries: RedisStreamEntry[];
+  next: string | null;
+  length: number;
+}
+
+export interface RedisStreamConsumer {
+  name: string;
+  pending: number;
+  idleMs: number;
+  inactiveMs: number | null;
+}
+
+export interface RedisStreamGroup {
+  name: string;
+  consumers: number;
+  pending: number;
+  lastDeliveredId: string;
+  entriesRead: number | null;
+  lag: number | null;
+  pendingMin: string | null;
+  pendingMax: string | null;
+  consumerList: RedisStreamConsumer[];
 }
 
 /** Redis key 详情。`ttl`:-1 永不过期,-2 不存在。 */

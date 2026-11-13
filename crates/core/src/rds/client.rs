@@ -19,6 +19,9 @@ pub struct KeyValue {
     /// 元素太多只取了前 [`MAX_ELEMENTS`] 个
     #[serde(default)]
     pub truncated: bool,
+    /// 有元素不是合法 UTF-8,显示的是替换过的文本:按显示的文本去改 / 删会对不上原值,界面据此只读
+    #[serde(default)]
+    pub binary: bool,
 }
 
 /// 查看集合类 key 时最多取的元素数:大 key 一次全读会拖住实例,也撑爆界面。
@@ -44,7 +47,7 @@ pub struct RedisPool {
     analyses: Mutex<HashMap<String, std::sync::Arc<super::analysis::Analysis>>>,
 }
 
-fn qerr(e: redis::RedisError) -> AppError {
+pub(super) fn qerr(e: redis::RedisError) -> AppError {
     AppError::new(ErrorKind::Query, t!("core.err.redis_command_failed")).with_detail(e.to_string())
 }
 
@@ -167,6 +170,17 @@ fn lossy(b: Vec<u8>) -> String {
     String::from_utf8_lossy(&b).into_owned()
 }
 
+/// 同 [`lossy`],遇到非法 UTF-8 时记下 `binary`。
+fn utf8(b: Vec<u8>, binary: &mut bool) -> String {
+    match String::from_utf8(b) {
+        Ok(s) => s,
+        Err(e) => {
+            *binary = true;
+            lossy(e.into_bytes())
+        }
+    }
+}
+
 /// 把任意 Redis 回复转成可读字符串(版本无关,基于 FromRedisValue)。
 fn format_reply(v: &redis::Value) -> String {
     if let Ok(s) = String::from_redis_value(v) {
@@ -191,6 +205,8 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
     let t: String = redis::cmd("TYPE").arg(key).query_async(con).await.map_err(qerr)?;
     let max = MAX_ELEMENTS as i64;
     let mut truncated = false;
+    let mut binary = false;
+    let b = &mut binary;
     // HSCAN / SSCAN 分批取到上限;返回的是扁平列表
     async fn scan_all(con: &mut MultiplexedConnection, cmd: &str, key: &str, cap: usize) -> AppResult<(Vec<Vec<u8>>, bool)> {
         let mut out = vec![];
@@ -225,14 +241,14 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
             } else {
                 redis::cmd("GET").arg(key).query_async(con).await.map_err(qerr)?
             };
-            (vec!["value".into()], vec![vec![v.map(lossy).unwrap_or_default()]])
+            (vec!["value".into()], vec![vec![v.map(|v| utf8(v, b)).unwrap_or_default()]])
         }
         "hash" => {
             let (flat, more) = scan_all(con, "HSCAN", key, MAX_ELEMENTS * 2).await?;
             truncated = more;
             (
                 vec!["field".into(), "value".into()],
-                flat.chunks(2).map(|p| vec![lossy(p[0].clone()), lossy(p.get(1).cloned().unwrap_or_default())]).collect(),
+                flat.chunks(2).map(|p| vec![utf8(p[0].clone(), b), utf8(p.get(1).cloned().unwrap_or_default(), b)]).collect(),
             )
         }
         "list" => {
@@ -241,13 +257,13 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
             let l: Vec<Vec<u8>> = redis::cmd("LRANGE").arg(key).arg(0).arg(max - 1).query_async(con).await.map_err(qerr)?;
             (
                 vec!["index".into(), "value".into()],
-                l.into_iter().enumerate().map(|(i, v)| vec![i.to_string(), lossy(v)]).collect(),
+                l.into_iter().enumerate().map(|(i, v)| vec![i.to_string(), utf8(v, b)]).collect(),
             )
         }
         "set" => {
             let (members, more) = scan_all(con, "SSCAN", key, MAX_ELEMENTS).await?;
             truncated = more;
-            (vec!["member".into()], members.into_iter().map(|m| vec![lossy(m)]).collect())
+            (vec!["member".into()], members.into_iter().map(|m| vec![utf8(m, b)]).collect())
         }
         "zset" => {
             let len: i64 = redis::cmd("ZCARD").arg(key).query_async(con).await.unwrap_or(0);
@@ -260,11 +276,31 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
                 .query_async(con)
                 .await
                 .map_err(qerr)?;
-            (vec!["member".into(), "score".into()], z.into_iter().map(|(m, sc)| vec![lossy(m), sc]).collect())
+            (vec!["member".into(), "score".into()], z.into_iter().map(|(m, sc)| vec![utf8(m, b), sc]).collect())
         }
+        // stream 不在这里读:按 ID 范围分页浏览,见 edit::stream_range
         _ => (vec![], vec![]),
     };
-    Ok(KeyValue { key: key.into(), key_type: t, columns, rows, truncated })
+    Ok(KeyValue { key: key.into(), key_type: t, columns, rows, truncated, binary })
+}
+
+async fn read_detail(con: &mut MultiplexedConnection, key: &str) -> AppResult<KeyDetail> {
+    let t: String = redis::cmd("TYPE").arg(key).query_async(con).await.map_err(qerr)?;
+    let ttl: i64 = redis::cmd("TTL").arg(key).query_async(con).await.map_err(qerr)?;
+    let size_cmd = match t.as_str() {
+        "string" => Some("STRLEN"),
+        "hash" => Some("HLEN"),
+        "list" => Some("LLEN"),
+        "set" => Some("SCARD"),
+        "zset" => Some("ZCARD"),
+        "stream" => Some("XLEN"),
+        _ => None,
+    };
+    let size: i64 = match size_cmd {
+        Some(c) => redis::cmd(c).arg(key).query_async(con).await.unwrap_or(0),
+        None => 0,
+    };
+    Ok(KeyDetail { key: key.into(), key_type: t, ttl, size })
 }
 
 impl RedisPool {
@@ -403,51 +439,43 @@ impl RedisPool {
     }
 
     pub async fn key_detail(&self, id: &str, key: &str) -> AppResult<KeyDetail> {
-        let mut con = self.con(id).await?;
-        let t: String = redis::cmd("TYPE")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .map_err(qerr)?;
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .map_err(qerr)?;
-        let size: i64 = match t.as_str() {
-            "string" => redis::cmd("STRLEN")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(0),
-            "hash" => redis::cmd("HLEN")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(0),
-            "list" => redis::cmd("LLEN")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(0),
-            "set" => redis::cmd("SCARD")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(0),
-            "zset" => redis::cmd("ZCARD")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(0),
-            _ => 0,
-        };
-        Ok(KeyDetail {
-            key: key.into(),
-            key_type: t,
-            ttl,
-            size,
-        })
+        read_detail(&mut self.con(id).await?, key).await
+    }
+
+    /// 同 [`Self::key_detail`],集群模式下在 `node` 上读。
+    pub async fn key_detail_on(&self, id: &str, node: Option<&str>, key: &str) -> AppResult<KeyDetail> {
+        read_detail(&mut self.con_for(id, node).await?, key).await
+    }
+
+    /// 元素级编辑(见 [`super::edit::KeyEdit`]);集群模式下在 key 所在的 `node` 上执行。
+    pub async fn edit_key(&self, id: &str, node: Option<&str>, key: &str, edit: &super::edit::KeyEdit) -> AppResult<super::edit::EditResult> {
+        super::edit::apply(&mut self.con_for(id, node).await?, key, edit).await
+    }
+
+    /// 设置(`Some(秒)`)或移除(`None`)TTL。
+    pub async fn set_ttl(&self, id: &str, node: Option<&str>, key: &str, seconds: Option<i64>) -> AppResult<()> {
+        super::edit::set_ttl(&mut self.con_for(id, node).await?, key, seconds).await
+    }
+
+    /// 重命名(RENAMENX)。分析排行榜里的旧名一并拿掉。
+    pub async fn rename_key(&self, id: &str, node: Option<&str>, key: &str, new_key: &str) -> AppResult<()> {
+        super::edit::rename(&mut self.con_for(id, node).await?, key, new_key).await?;
+        if let Some(a) = self.analyses.lock().await.get(id) {
+            a.forget(key, node);
+        }
+        Ok(())
+    }
+
+    pub async fn create_key(&self, id: &str, node: Option<&str>, spec: &super::edit::NewKey) -> AppResult<()> {
+        super::edit::create(&mut self.con_for(id, node).await?, spec).await
+    }
+
+    pub async fn stream_range(&self, id: &str, node: Option<&str>, key: &str, q: &super::edit::StreamRange) -> AppResult<super::edit::StreamPage> {
+        super::edit::stream_range(&mut self.con_for(id, node).await?, key, q).await
+    }
+
+    pub async fn stream_groups(&self, id: &str, node: Option<&str>, key: &str) -> AppResult<Vec<super::edit::StreamGroup>> {
+        super::edit::stream_groups(&mut self.con_for(id, node).await?, key).await
     }
 
     /// 执行任意命令(按空白拆分),返回可读文本。

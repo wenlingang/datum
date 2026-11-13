@@ -85,6 +85,50 @@ core:
       en: "Column %{table}.%{column} does not exist"
       zh-CN: "列 %{table}.%{column} 不存在"
       zh-TW: "欄位 %{table}.%{column} 不存在"
+    redis_key_gone:
+      en: "Key %{key} no longer exists"
+      zh-CN: "key %{key} 已不存在"
+      zh-TW: "key %{key} 已不存在"
+    redis_type_changed:
+      en: "Key %{key} is now a %{actual}, not a %{expected}; refresh and try again"
+      zh-CN: "key %{key} 现在是 %{actual},不是 %{expected};刷新后再试"
+      zh-TW: "key %{key} 現在是 %{actual},不是 %{expected};重新整理後再試"
+    redis_field_exists:
+      en: "Field %{name} already exists"
+      zh-CN: "字段 %{name} 已存在"
+      zh-TW: "欄位 %{name} 已存在"
+    redis_member_exists:
+      en: "Member %{name} already exists"
+      zh-CN: "成员 %{name} 已存在"
+      zh-TW: "成員 %{name} 已存在"
+    redis_key_exists:
+      en: "Key %{key} already exists"
+      zh-CN: "key %{key} 已存在"
+      zh-TW: "key %{key} 已存在"
+    redis_list_changed:
+      en: "The list has changed: index %{index} no longer holds the value shown. Refresh and try again"
+      zh-CN: "列表已被改动:下标 %{index} 处已不是显示的值。刷新后再试"
+      zh-TW: "清單已被變動:索引 %{index} 處已不是顯示的值。重新整理後再試"
+    redis_bad_score:
+      en: "Score must be a number (inf / -inf allowed): %{score}"
+      zh-CN: "分数须为数字(可用 inf / -inf):%{score}"
+      zh-TW: "分數須為數字(可用 inf / -inf):%{score}"
+    redis_bad_ttl:
+      en: TTL must be a positive number of seconds
+      zh-CN: TTL 须为正整数秒
+      zh-TW: TTL 須為正整數秒
+    redis_empty_key:
+      en: Key name can't be empty
+      zh-CN: key 名不能为空
+      zh-TW: key 名稱不能為空
+    redis_no_items:
+      en: Enter at least one element
+      zh-CN: 至少填写一个元素
+      zh-TW: 至少填寫一個元素
+    redis_bad_type:
+      en: "Unsupported key type: %{kind}"
+      zh-CN: "不支持的 key 类型:%{kind}"
+      zh-TW: "不支援的 key 類型:%{kind}"
     redis_command_failed:
       en: Redis command failed
       zh-CN: Redis 命令失败

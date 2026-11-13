@@ -6,10 +6,11 @@ import { t } from "nsh/i18n";
 import { openConnectionForm, openImport, openImportData } from "../dialogs";
 import { errorText } from "../lib/native";
 import { type Connection, type DbKind, supportsSql } from "../lib/types";
-import { activate, conns, loadDatabases, loadTables } from "../store/conns";
+import { activate, conns, loadDatabases, loadTables, refreshTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
 import { openDiagnostics, openRedisInsight, openSchemaDiff, openTable } from "../tab";
+import { NewKeyDialog } from "../tab/RedisKeyEditor";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
 import { CtxMenu, DropMenu, MItem, MSep } from "../ui/menu";
@@ -173,6 +174,7 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
     return q ? list.filter((x) => x.toLowerCase().includes(q)) : list;
   };
   const dbLoading = signal(false);
+  const newKeyOpen = signal(false);
 
   const toggleDbList = async () => {
     if (props.dbOpen) {
@@ -208,9 +210,26 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
         </If>
         <If when={conn().kind === "redis"}>
           <IconButton
+            icon="plus"
+            label={t("rkey.new_key")}
+            tooltip={t("rkey.new_key")}
+            onPress={() => newKeyOpen.set(true)}
+          />
+          <IconButton
             icon="activity"
             tooltip={t("workspace.redis_insight")}
             onPress={() => openRedisInsight(conn().id)}
+          />
+          <NewKeyDialog
+            connId={conn().id}
+            open={newKeyOpen()}
+            onClose={() => newKeyOpen.set(false)}
+            onCreated={(key) => {
+              const id = conn().id;
+              newKeyOpen.set(false);
+              void refreshTables(id);
+              openTable(id, key);
+            }}
           />
         </If>
         <DropMenu

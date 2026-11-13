@@ -220,6 +220,72 @@ impl Db {
             .map_err(err)
     }
 
+    /// Redis:key 详情 `{ key, keyType, ttl, size }`(集群模式下在 `node` 上读)。
+    pub async fn redis_key_detail_on(id: String, node: Option<String>, key: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_key_detail_on(&state(), &id, node.as_deref(), &key).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis:元素级编辑,`edit` 形如 `{ op: "hashSet", field, value, oldField }`(见 core 的 `KeyEdit`)。
+    /// 返回 `{ changed, id }`。集群模式下在 key 所在的 `node` 上执行。
+    pub async fn redis_edit(id: String, node: Option<String>, key: String, edit: JsonValue) -> Result<JsonValue, String> {
+        let e: datum_core::rds::edit::KeyEdit = from(edit, "edit")?;
+        spawn(async move { service::redis_edit(&state(), &id, node.as_deref(), &key, &e).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis:设置 TTL(秒,EXPIRE);`seconds` 为 null 时移除(PERSIST)。
+    pub async fn redis_set_ttl(id: String, node: Option<String>, key: String, seconds: Option<f64>) -> Result<(), String> {
+        let secs = seconds.map(|s| s as i64);
+        spawn(async move { service::redis_set_ttl(&state(), &id, node.as_deref(), &key, secs).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis:重命名 key(RENAMENX,目标已存在时报错)。
+    pub async fn redis_rename(id: String, node: Option<String>, key: String, new_key: String) -> Result<(), String> {
+        spawn(async move { service::redis_rename(&state(), &id, node.as_deref(), &key, &new_key).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis:新建 key,`spec` 为 `{ key, keyType, items, ttl }`(见 core 的 `NewKey`)。
+    pub async fn redis_create_key(id: String, node: Option<String>, spec: JsonValue) -> Result<(), String> {
+        let s: datum_core::rds::edit::NewKey = from(spec, "spec")?;
+        spawn(async move { service::redis_create_key(&state(), &id, node.as_deref(), &s).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis Stream:按 ID 范围取一页 `{ entries: [{ id, fields }], next, length }`;`rev` 为倒序(XREVRANGE)。
+    pub async fn redis_stream_range(
+        id: String,
+        node: Option<String>,
+        key: String,
+        start: String,
+        end: String,
+        count: u32,
+        rev: bool,
+    ) -> Result<JsonValue, String> {
+        let q = datum_core::rds::edit::StreamRange { start, end, count: count as usize, rev };
+        spawn(async move { service::redis_stream_range(&state(), &id, node.as_deref(), &key, &q).await })
+        .await?
+        .map_err(err)
+        .and_then(json)
+    }
+
+    /// Redis Stream:消费组(XINFO GROUPS)、各组消费者(XINFO CONSUMERS)与待确认摘要(XPENDING)。
+    pub async fn redis_stream_groups(id: String, node: Option<String>, key: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_stream_groups(&state(), &id, node.as_deref(), &key).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// Redis 分析:概览(INFO 里的内存、命中率、key 数等)。
     pub async fn redis_overview(id: String) -> Result<JsonValue, String> {
         spawn(async move { service::redis_overview(&state(), &id).await })

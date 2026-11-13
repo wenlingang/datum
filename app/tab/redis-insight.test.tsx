@@ -1,5 +1,6 @@
 // Redis 分析(run-tests.sh 的 redis 组,需要测试用的 Redis):多级前缀展开、删除大 key 先确认;
-// 集群逐个主节点扫描,大 key 标出所在节点,在那个节点上查看 / 删除。
+// 集群逐个主节点扫描,大 key 标出所在节点,在那个节点上查看 / 删除 / 编辑。
+// 按类型编辑 key:Hash / List / Set / ZSet / String / Stream 的增删改,TTL、重命名、新建;prod 连接写入先确认。
 
 import { Db, Store } from "datum/native";
 import { expect, open, type App } from "nsh/test";
@@ -68,4 +69,187 @@ test("集群:逐个主节点扫描;大 key 标出节点,在所在节点上查看
   await app.waitUntil(() => has(app, "Key deleted"), { timeout: 5000 });
   expect(await Db.redisExec("rc1", "EXISTS bigkey")).toBe("0");
   app.dispose();
+});
+
+const r = (cmd: string) => Db.redisExec("rs", cmd);
+
+/** 打开侧栏里的 key 标签页,等编辑器出来。 */
+async function openKey(app: App, key: string) {
+  await app.press(`id:table-list >> label:${key}`);
+  await app.waitUntil(() => app.shows("id:rkey-editor") && has(app, key), { timeout: 5000 });
+}
+
+/** 表单:清空单行字段后填入。 */
+async function fill(app: App, field: string, text: string) {
+  await app.clear(`id:rkey-field:${field}`);
+  await app.type(`id:rkey-field:${field}`, text);
+}
+
+async function submitForm(app: App) {
+  await app.press("id:rkey-form-ok");
+  await app.waitUntil(() => !app.shows("id:rkey-form"), { timeout: 5000 });
+}
+
+test("单机:按类型编辑 key;删除元素先确认;TTL、重命名、新建", async () => {
+  if (!conns().includes("rs")) return;
+  // 先连上种数据,打开应用时侧栏就能列出这些 key
+  await Db.connect("redis", "rs");
+  await r("FLUSHDB");
+  await r("HSET h a 1 b 2");
+  await r("RPUSH l x y x");
+  await r("SADD s m1");
+  await r("ZADD z 1 a 2 b");
+  await r("SET str hello EX 1000");
+  for (let i = 1; i <= 60; i++) await r(`XADD x ${i}-0 n ${i}`);
+  await r("XGROUP CREATE x g1 0");
+  await r("XREADGROUP GROUP g1 alice COUNT 3 STREAMS x >");
+  const app = await open("../App.tsx", desktop);
+  await app.press("id:rail-rs");
+  await app.waitFor("id:table-list >> label:h", { timeout: 10000 });
+
+  // Hash:改字段名、新增字段、删除字段(先确认,取消不删)
+  await openKey(app, "h");
+  await app.press("label:Edit a");
+  await app.waitFor("id:rkey-form", { timeout: 5000 });
+  await fill(app, "field", "z");
+  await submitForm(app);
+  expect(await r("HGET h z")).toBe("1");
+  expect(await r("HEXISTS h a")).toBe("0");
+  await app.waitFor("label:Edit z", { timeout: 5000 });
+  await app.press("id:rkey-add");
+  await app.waitFor("id:rkey-form", { timeout: 5000 });
+  await app.type("id:rkey-field:field", "c");
+  await app.type("id:rkey-field:value", "3");
+  await submitForm(app);
+  expect(await r("HGET h c")).toBe("3");
+  await app.press("label:Delete b");
+  await app.waitFor("id:rkey-confirm", { timeout: 5000 });
+  expect(has(app, "HDEL h b")).toBe(true);
+  await app.press("id:rkey-confirm-cancel");
+  expect(await r("HEXISTS h b")).toBe("1");
+  await app.press("label:Delete b");
+  await app.press("id:rkey-confirm-ok");
+  await app.waitUntil(() => !app.shows("label:Delete b"), { timeout: 5000 });
+  expect(await r("HEXISTS h b")).toBe("0");
+
+  // List:按下标删(有重复值时删的是选中的那一格)、尾部追加
+  await openKey(app, "l");
+  await app.press("label:Delete 2");
+  await app.press("id:rkey-confirm-ok");
+  await app.waitUntil(() => !app.shows("label:Delete 2"), { timeout: 5000 });
+  expect(await r("LRANGE l 0 -1")).toBe("x\ny");
+  await app.press("id:rkey-push-tail");
+  await app.type("id:rkey-field:value", "t");
+  await submitForm(app);
+  expect(await r("LRANGE l 0 -1")).toBe("x\ny\nt");
+
+  // Set:新增成员
+  await openKey(app, "s");
+  await app.press("id:rkey-add");
+  await app.type("id:rkey-field:member", "m2");
+  await submitForm(app);
+  expect(await r("SISMEMBER s m2")).toBe("1");
+
+  // ZSet:改分数
+  await openKey(app, "z");
+  await app.press("label:Edit a");
+  await fill(app, "score", "5.5");
+  await submitForm(app);
+  expect(await r("ZSCORE z a")).toBe("5.5");
+
+  // String:改值保存,TTL 保留;设置 / 移除 TTL;重命名
+  await openKey(app, "str");
+  await app.type("id:rkey-string", " world");
+  await app.press("id:rkey-string-save");
+  await app.waitUntil(() => has(app, "Saved"), { timeout: 5000 });
+  expect(await r("GET str")).toContain("world");
+  expect(Number(await r("TTL str"))).toBeGreaterThan(900);
+  await app.press("id:rkey-ttl-btn");
+  await fill(app, "ttl", "500");
+  await submitForm(app);
+  const ttl = Number(await r("TTL str"));
+  expect(ttl > 0 && ttl <= 500).toBe(true);
+  await app.waitUntil(() => has(app, "TTL 500s") || has(app, "TTL 499s"), { timeout: 5000 });
+  await app.press("id:rkey-ttl-btn");
+  await app.press("id:rkey-ttl-persist");
+  await app.waitUntil(() => !app.shows("id:rkey-form"), { timeout: 5000 });
+  expect(await r("TTL str")).toBe("-1");
+  // 重命名到已存在的 key:报错,原 key 不动
+  await app.press("id:rkey-rename-btn");
+  await fill(app, "name", "h");
+  await app.press("id:rkey-form-ok");
+  await app.waitUntil(() => has(app, "already exists"), { timeout: 5000 });
+  expect(app.shows("id:rkey-form")).toBe(true);
+  await fill(app, "name", "str2");
+  await submitForm(app);
+  expect(await r("EXISTS str str2")).toBe("1");
+  expect(await r("TYPE str2")).toBe("string");
+  await app.waitUntil(() => has(app, "str2") && app.shows("id:rkey-editor"), { timeout: 5000 });
+
+  // Stream:倒序分页(最新在前),下一页;消费组与待确认;追加条目
+  await openKey(app, "x");
+  await app.waitUntil(() => has(app, "60-0") && has(app, "Page 1 · showing 50 · 60 in total"), { timeout: 5000 });
+  await app.waitFor("id:rkey-groups", { timeout: 5000 });
+  expect(has(app, "Entries: 60")).toBe(true);
+  expect(has(app, "Consumers: 1")).toBe(true);
+  // Stream 不按行列读取,状态栏不显示「0 rows」
+  expect(app.shows("id:stat-rows")).toBe(false);
+  expect(has(app, "g1")).toBe(true);
+  expect(has(app, "Pending: 3 (1-0 … 3-0)")).toBe(true);
+  expect(has(app, "alice")).toBe(true);
+  await app.press("id:rkey-stream-next");
+  await app.waitUntil(() => has(app, "Page 2 · showing 10"), { timeout: 5000 });
+  expect(has(app, "1-0")).toBe(true);
+  await app.press("id:rkey-stream-add");
+  await app.type("id:rkey-field:fields", "k hello world");
+  await submitForm(app);
+  expect(await r("XLEN x")).toBe("61");
+  const last = await r("XREVRANGE x + - COUNT 1");
+  expect(last).toContain("hello world");
+
+  // 新建 key:hash,建好后打开它的标签页
+  await app.press("label:New Key");
+  await app.waitFor("id:rkey-new", { timeout: 5000 });
+  await app.press("id:rkey-new-type >> label:hash");
+  await app.type("id:rkey-new-name", "nk");
+  await app.type("id:rkey-new-ttl", "300");
+  await app.type("id:rkey-new-value", "f 1\ng two words");
+  await app.press("id:rkey-new-ok");
+  await app.waitUntil(() => !app.shows("id:rkey-new") && app.shows("id:rkey-editor") && has(app, "nk"), { timeout: 5000 });
+  expect(await r("HGET nk g")).toBe("two words");
+  expect(Number(await r("TTL nk"))).toBeGreaterThan(0);
+  app.dispose();
+});
+
+test("prod 连接:任何写入都先确认,取消不执行", async () => {
+  if (!conns().includes("rs")) return;
+  const rs = (Store.connections() as { id: string }[]).find((c) => c.id === "rs")!;
+  Store.saveConnection({ ...rs, id: "rs-prod", name: "redis-prod", env: "prod" }, "");
+  try {
+    await Db.connect("redis", "rs-prod");
+    await Db.redisExec("rs-prod", "FLUSHDB");
+    await Db.redisExec("rs-prod", "HSET ph a 1");
+    const app = await open("../App.tsx", desktop);
+    await app.press("id:rail-rs-prod");
+    await app.waitFor("id:table-list >> label:ph", { timeout: 10000 });
+    await openKey(app, "ph");
+    await app.press("id:rkey-add");
+    await app.type("id:rkey-field:field", "b");
+    await app.type("id:rkey-field:value", "2");
+    await app.press("id:rkey-form-ok");
+    await app.waitFor("id:rkey-confirm", { timeout: 5000 });
+    expect(has(app, "This is a PROD connection. Check the command before running it.")).toBe(true);
+    expect(has(app, "HSETNX ph b 2")).toBe(true);
+    await app.press("id:rkey-confirm-cancel");
+    expect(await Db.redisExec("rs-prod", "HEXISTS ph b")).toBe("0");
+    // 取消后表单还在,再提交一次并确认
+    await app.press("id:rkey-form-ok");
+    await app.press("id:rkey-confirm-ok");
+    await app.waitUntil(() => !app.shows("id:rkey-form"), { timeout: 5000 });
+    expect(await Db.redisExec("rs-prod", "HGET ph b")).toBe("2");
+    app.dispose();
+  } finally {
+    await Db.disconnect("redis", "rs-prod");
+    Store.deleteConnection("rs-prod");
+  }
 });

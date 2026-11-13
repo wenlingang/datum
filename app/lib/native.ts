@@ -107,6 +107,25 @@ export const db = {
     (await Db.redisKeyOn(id, node, key)) as TabTypes.RedisKeyValue,
   /** 删除分析排行榜里的 key;返回删掉的个数 */
   redisDeleteKey: (id: string, node: string | null, key: string) => Db.redisDeleteKey(id, node, key) as Promise<number>,
+  /** key 详情(TTL、大小);集群模式传所在节点 */
+  redisKeyDetailOn: async (id: string, node: string | null, key: string) =>
+    (await Db.redisKeyDetailOn(id, node, key)) as TabTypes.KeyDetail,
+  /** 元素级编辑(集群模式在所在节点上执行) */
+  redisEdit: async (id: string, node: string | null, key: string, edit: TabTypes.RedisEdit) =>
+    (await Db.redisEdit(id, node, key, edit)) as TabTypes.RedisEditResult,
+  /** 设置 TTL(秒);null 为移除 */
+  redisSetTtl: (id: string, node: string | null, key: string, seconds: number | null) =>
+    Db.redisSetTtl(id, node, key, seconds) as Promise<void>,
+  /** 重命名(RENAMENX,目标已存在时报错) */
+  redisRename: (id: string, node: string | null, key: string, newKey: string) =>
+    Db.redisRename(id, node, key, newKey) as Promise<void>,
+  redisCreateKey: (id: string, node: string | null, spec: TabTypes.RedisNewKey) =>
+    Db.redisCreateKey(id, node, spec) as Promise<void>,
+  /** Stream 按 ID 范围取一页;`rev` 为倒序(最新的在前) */
+  redisStreamRange: async (id: string, node: string | null, key: string, start: string, end: string, count: number, rev: boolean) =>
+    (await Db.redisStreamRange(id, node, key, start, end, count, rev)) as TabTypes.RedisStreamPage,
+  redisStreamGroups: async (id: string, node: string | null, key: string) =>
+    (await Db.redisStreamGroups(id, node, key)) as TabTypes.RedisStreamGroup[],
   /** 表结构对比:脚本让目标库与源库一致(删除类语句已注释)。 */
   schemaDiff: async (kind: DbKind, sourceId: string, targetId: string) =>
     (await Db.schemaDiff(kind, sourceId, targetId)) as DiffReport,

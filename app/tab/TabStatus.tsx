@@ -12,6 +12,8 @@ import { canNext, canPrev, gotoPage, modelOf, PAGE_SIZE, viewIndices } from "./m
 export function TabStats() {
   const m = () => {
     const x = modelOf(workspace.activeTab());
+    // Redis Stream 不按行列读取(编辑器里分页浏览),没有可报的行列数
+    if (x?.redisValue()?.keyType === "stream") return undefined;
     return x && x.kind === "table" && x.err() === null && x.result() ? x : undefined;
   };
   return (

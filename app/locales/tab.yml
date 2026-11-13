@@ -1882,3 +1882,340 @@ sdiff:
     en: Opens a query tab on the target with the script; nothing runs until you run it (with the usual review)
     zh-CN: 在目标库新开查询标签并放入脚本;要你自己执行(照常经过危险语句审查)
     zh-TW: 在目標庫新開查詢標籤並放入腳本;要你自己執行(照常經過危險語句審查)
+rkey:
+  add:
+    en: "Add"
+    zh-CN: "新增"
+    zh-TW: "新增"
+  add_entry:
+    en: "Add Entry"
+    zh-CN: "追加条目"
+    zh-TW: "追加條目"
+  add_field:
+    en: "Add Field"
+    zh-CN: "新增字段"
+    zh-TW: "新增欄位"
+  add_member:
+    en: "Add Member"
+    zh-CN: "新增成员"
+    zh-TW: "新增成員"
+  apply_range:
+    en: "Apply"
+    zh-CN: "应用"
+    zh-TW: "套用"
+  binary_read_only:
+    en: "Some elements aren't valid UTF-8 text. They're shown with replacement characters, so editing is disabled to avoid corrupting them."
+    zh-CN: "部分元素不是合法的 UTF-8 文本,显示的是替换后的字符;为免改坏原值,已禁用编辑。"
+    zh-TW: "部分元素不是合法的 UTF-8 文字,顯示的是替換後的字元;為免改壞原值,已停用編輯。"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  chars:
+    en: "%{n} characters"
+    zh-CN: "%{n} 个字符"
+    zh-TW: "%{n} 個字元"
+  col_field:
+    en: "Field"
+    zh-CN: "字段"
+    zh-TW: "欄位"
+  col_index:
+    en: "Index"
+    zh-CN: "下标"
+    zh-TW: "索引"
+  col_member:
+    en: "Member"
+    zh-CN: "成员"
+    zh-TW: "成員"
+  col_score:
+    en: "Score"
+    zh-CN: "分数"
+    zh-TW: "分數"
+  col_value:
+    en: "Value"
+    zh-CN: "值"
+    zh-TW: "值"
+  confirm:
+    en: "Run"
+    zh-CN: "执行"
+    zh-TW: "執行"
+  confirm_add:
+    en: "Add to %{key}?"
+    zh-CN: "向 %{key} 添加?"
+    zh-TW: "向 %{key} 新增?"
+  confirm_create:
+    en: "Create key %{key}?"
+    zh-CN: "新建 key %{key}?"
+    zh-TW: "新建 key %{key}?"
+  confirm_delete:
+    en: "Delete %{name}?"
+    zh-CN: "删除 %{name}?"
+    zh-TW: "刪除 %{name}?"
+  confirm_prod:
+    en: "This is a PROD connection. Check the command before running it."
+    zh-CN: "这是生产环境连接,请核对命令后再执行。"
+    zh-TW: "這是正式環境連線,請核對指令後再執行。"
+  confirm_rename:
+    en: "Rename %{key} to %{next}?"
+    zh-CN: "把 %{key} 重命名为 %{next}?"
+    zh-TW: "把 %{key} 重新命名為 %{next}?"
+  confirm_save:
+    en: "Save changes to %{key}?"
+    zh-CN: "保存对 %{key} 的修改?"
+    zh-TW: "儲存對 %{key} 的修改?"
+  confirm_target:
+    en: "Runs on %{target}:"
+    zh-CN: "在 %{target} 上执行:"
+    zh-TW: "在 %{target} 上執行:"
+  confirm_ttl:
+    en: "Change the TTL of %{key}?"
+    zh-CN: "修改 %{key} 的过期时间?"
+    zh-TW: "修改 %{key} 的過期時間?"
+  consumer_idle:
+    en: "idle %{t}"
+    zh-CN: "空闲 %{t}"
+    zh-TW: "閒置 %{t}"
+  create:
+    en: "Create"
+    zh-CN: "新建"
+    zh-TW: "新建"
+  created:
+    en: "Key created"
+    zh-CN: "已新建 key"
+    zh-TW: "已新建 key"
+  delete:
+    en: "Delete"
+    zh-CN: "删除"
+    zh-TW: "刪除"
+  deleted:
+    en: "Deleted"
+    zh-CN: "已删除"
+    zh-TW: "已刪除"
+  edit:
+    en: "Edit"
+    zh-CN: "编辑"
+    zh-TW: "編輯"
+  edit_field:
+    en: "Edit Field %{name}"
+    zh-CN: "编辑字段 %{name}"
+    zh-TW: "編輯欄位 %{name}"
+  edit_index:
+    en: "Edit Element #%{index}"
+    zh-CN: "编辑第 %{index} 个元素"
+    zh-TW: "編輯第 %{index} 個元素"
+  edit_member:
+    en: "Edit Member %{name}"
+    zh-CN: "编辑成员 %{name}"
+    zh-TW: "編輯成員 %{name}"
+  entry_fields:
+    en: "Fields"
+    zh-CN: "字段"
+    zh-TW: "欄位"
+  entry_fields_empty:
+    en: "Enter at least one field: one per line, \"field value\""
+    zh-CN: "至少填写一个字段:每行一个,「字段 值」"
+    zh-TW: "至少填寫一個欄位:每行一個,「欄位 值」"
+  entry_id:
+    en: "ID (* to generate)"
+    zh-CN: "ID(* 为自动生成)"
+    zh-TW: "ID(* 為自動產生)"
+  filter:
+    en: "Filter shown elements"
+    zh-CN: "筛选已显示的元素"
+    zh-TW: "篩選已顯示的元素"
+  first_page:
+    en: "First"
+    zh-CN: "第一页"
+    zh-TW: "第一頁"
+  group_consumers:
+    en: "Consumers: %{n}"
+    zh-CN: "%{n} 个消费者"
+    zh-TW: "%{n} 個消費者"
+  group_lag:
+    en: "Lag: %{n}"
+    zh-CN: "积压 %{n}"
+    zh-TW: "積壓 %{n}"
+  group_last:
+    en: "last delivered %{id}"
+    zh-CN: "最后投递 %{id}"
+    zh-TW: "最後投遞 %{id}"
+  group_pending:
+    en: "Pending: %{n}"
+    zh-CN: "%{n} 条待确认"
+    zh-TW: "%{n} 筆待確認"
+  group_pending_range:
+    en: "Pending: %{n} (%{min} … %{max})"
+    zh-CN: "%{n} 条待确认(%{min} … %{max})"
+    zh-TW: "%{n} 筆待確認(%{min} … %{max})"
+  groups:
+    en: "Consumer Groups"
+    zh-CN: "消费组"
+    zh-TW: "消費群組"
+  items:
+    en: "Elements"
+    zh-CN: "元素"
+    zh-TW: "元素"
+  items_hint_hash:
+    en: "One field per line: field value"
+    zh-CN: "每行一个字段:字段 值"
+    zh-TW: "每行一個欄位:欄位 值"
+  items_hint_list:
+    en: "One element per line (pushed in order)"
+    zh-CN: "每行一个元素(按顺序追加)"
+    zh-TW: "每行一個元素(依序附加)"
+  items_hint_set:
+    en: "One member per line"
+    zh-CN: "每行一个成员"
+    zh-TW: "每行一個成員"
+  items_hint_zset:
+    en: "One member per line: score member"
+    zh-CN: "每行一个成员:分数 成员"
+    zh-TW: "每行一個成員:分數 成員"
+  items_hint_stream:
+    en: "The first entry's fields, one per line: field value"
+    zh-CN: "第一个条目的字段,每行一个:字段 值"
+    zh-TW: "第一個條目的欄位,每行一個:欄位 值"
+  key_name:
+    en: "Key"
+    zh-CN: "Key"
+    zh-TW: "Key"
+  key_type:
+    en: "Type"
+    zh-CN: "类型"
+    zh-TW: "類型"
+  missing:
+    en: "This key no longer exists."
+    zh-CN: "这个 key 已不存在。"
+    zh-TW: "這個 key 已不存在。"
+  new_key:
+    en: "New Key"
+    zh-CN: "新建 Key"
+    zh-TW: "新建 Key"
+  new_name:
+    en: "New name"
+    zh-CN: "新名称"
+    zh-TW: "新名稱"
+  newest_first:
+    en: "Newest first"
+    zh-CN: "最新在前"
+    zh-TW: "最新在前"
+  next_page:
+    en: "Next"
+    zh-CN: "下一页"
+    zh-TW: "下一頁"
+  no_elements:
+    en: "No elements"
+    zh-CN: "没有元素"
+    zh-TW: "沒有元素"
+  no_groups:
+    en: "No consumer groups"
+    zh-CN: "没有消费组"
+    zh-TW: "沒有消費群組"
+  oldest_first:
+    en: "Oldest first"
+    zh-CN: "最早在前"
+    zh-TW: "最早在前"
+  prev_page:
+    en: "Previous"
+    zh-CN: "上一页"
+    zh-TW: "上一頁"
+  push_head:
+    en: "Push to Head"
+    zh-CN: "插入头部"
+    zh-TW: "插入頭部"
+  push_tail:
+    en: "Push to Tail"
+    zh-CN: "追加到尾部"
+    zh-TW: "附加到尾部"
+  refresh:
+    en: "Refresh"
+    zh-CN: "刷新"
+    zh-TW: "重新整理"
+  rename:
+    en: "Rename"
+    zh-CN: "重命名"
+    zh-TW: "重新命名"
+  rename_title:
+    en: "Rename %{key}"
+    zh-CN: "重命名 %{key}"
+    zh-TW: "重新命名 %{key}"
+  renamed:
+    en: "Key renamed"
+    zh-CN: "已重命名"
+    zh-TW: "已重新命名"
+  revert:
+    en: "Revert"
+    zh-CN: "还原"
+    zh-TW: "還原"
+  save:
+    en: "Save"
+    zh-CN: "保存"
+    zh-TW: "儲存"
+  saved:
+    en: "Saved"
+    zh-CN: "已保存"
+    zh-TW: "已儲存"
+  shown:
+    en: "Showing %{shown} of %{total}"
+    zh-CN: "显示 %{shown} / 共 %{total}"
+    zh-TW: "顯示 %{shown} / 共 %{total}"
+  size:
+    en: "Elements: %{n}"
+    zh-CN: "%{n} 个元素"
+    zh-TW: "%{n} 個元素"
+  stream_page:
+    en: "Page %{page} · showing %{shown} · %{total} in total"
+    zh-CN: "第 %{page} 页 · 显示 %{shown} 条 · 共 %{total} 条"
+    zh-TW: "第 %{page} 頁 · 顯示 %{shown} 筆 · 共 %{total} 筆"
+  string_truncated:
+    en: "Showing the first 1 MB only; the value is read-only so the rest isn't lost on save."
+    zh-CN: "只显示了前 1 MB;为免保存时丢掉其余部分,值为只读。"
+    zh-TW: "只顯示了前 1 MB;為免儲存時遺失其餘部分,值為唯讀。"
+  truncated:
+    en: "Showing the first 1,000 elements. Edits apply only to the elements shown."
+    zh-CN: "只显示前 1000 个元素,编辑只作用于显示出来的这些。"
+    zh-TW: "只顯示前 1000 個元素,編輯只作用於顯示出來的這些。"
+  ttl:
+    en: "TTL"
+    zh-CN: "TTL"
+    zh-TW: "TTL"
+  ttl_invalid:
+    en: "TTL must be a positive whole number of seconds"
+    zh-CN: "TTL 须为正整数秒"
+    zh-TW: "TTL 須為正整數秒"
+  ttl_never_placeholder:
+    en: "never"
+    zh-CN: "不过期"
+    zh-TW: "不過期"
+  ttl_optional:
+    en: "TTL (seconds, optional)"
+    zh-CN: "TTL(秒,可选)"
+    zh-TW: "TTL(秒,選填)"
+  ttl_remove:
+    en: "Remove TTL"
+    zh-CN: "移除 TTL"
+    zh-TW: "移除 TTL"
+  ttl_seconds:
+    en: "Expire in (seconds)"
+    zh-CN: "过期时间(秒)"
+    zh-TW: "過期時間(秒)"
+  ttl_set:
+    en: "Set TTL"
+    zh-CN: "设置 TTL"
+    zh-TW: "設定 TTL"
+  ttl_title:
+    en: "TTL of %{key}"
+    zh-CN: "%{key} 的过期时间"
+    zh-TW: "%{key} 的過期時間"
+  unsupported_type:
+    en: "Editing %{type} keys isn't supported"
+    zh-CN: "不支持编辑 %{type} 类型的 key"
+    zh-TW: "不支援編輯 %{type} 類型的 key"
+  size_entries:
+    en: "Entries: %{n}"
+    zh-CN: "%{n} 条"
+    zh-TW: "%{n} 筆"
+  size_bytes:
+    en: "Length: %{n} bytes"
+    zh-CN: "长度 %{n} 字节"
+    zh-TW: "長度 %{n} 位元組"

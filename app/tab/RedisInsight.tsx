@@ -1,11 +1,12 @@
 // Redis 分析 tab:概览(INFO)、整库扫描(最大的 key、前缀占用、TTL / 类型分布、热 key)与慢日志。
 // 扫描在 core 后台进行,这里轮询进度;离开 tab 不取消(回来接着看),「取消」按钮才中止。
 
-import { cleanup, type JSX, Scroll, signal, Text, View } from "nsh";
+import { cleanup, effect, type JSX, Scroll, signal, Text, untracked, View } from "nsh";
 import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import { db, errorText } from "../lib/native";
 import type {
+  KeyDetail,
   RedisGroupStat,
   RedisKeyStat,
   RedisKeyValue,
@@ -19,6 +20,7 @@ import { Btn, Hint, Icon, IconButton, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { openTable } from "./index";
 import { ErrorText } from "../ui/error";
+import { RedisKeyEditor } from "./RedisKeyEditor";
 
 type Load<T> = { state: "loading" } | { state: "ok"; value: T } | { state: "error"; error: string };
 
@@ -251,46 +253,63 @@ function PrefixTree(props: { r: RedisReport }) {
   );
 }
 
-/** 查看排行榜里某个 key 的值(集群模式下在它所在的节点上读;集合类最多 1000 个元素)。 */
-function KeyValueDialog(props: { value: RedisKeyValue | null; onClose: () => void }) {
-  const v = () => props.value;
+/** 排行榜里集群节点上的 key:在它所在的节点上查看与编辑(集合类最多 1000 个元素)。 */
+function KeyValueDialog(props: {
+  connId: string;
+  target: { node: string; key: string } | null;
+  onClose: () => void;
+  onRenamed: (from: { node: string; key: string }) => void;
+}) {
+  const value = signal<RedisKeyValue | null>(null);
+  const detail = signal<KeyDetail | null>(null);
+  const error = signal<string | null>(null);
+  async function load(tg: { node: string; key: string }) {
+    try {
+      const [v, d] = await Promise.all([db.redisKeyOn(props.connId, tg.node, tg.key), db.redisKeyDetailOn(props.connId, tg.node, tg.key)]);
+      if (props.target !== tg) return;
+      value.set(v);
+      detail.set(d);
+      error.set(null);
+    } catch (e) {
+      if (props.target === tg) error.set(errorText(e));
+    }
+  }
+  effect(() => {
+    const tg = props.target;
+    untracked(() => {
+      value.set(null);
+      detail.set(null);
+      error.set(null);
+      if (tg) void load(tg);
+    });
+  });
   return (
     <Dialog
       testID="ri-value"
-      open={v() !== null}
+      open={props.target !== null}
       onOpenChange={(e) => !e.open && props.onClose()}
       closeOnEscape
       animation="fade"
       backdropClass="bg-overlay"
-      class="m-auto max-h-[80%] w-[720px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      class="m-auto h-[640px] max-h-[88%] w-[860px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
     >
-      <View class="flex-row items-center gap-2">
-        <Text class={`${FS.base} ${MONO} min-w-0 flex-1 font-bold text-popover-foreground line-clamp-1`}>{v()?.key ?? ""}</Text>
-        <Text class={`${FS.xs} text-muted-foreground`}>{v()?.keyType ?? ""}</Text>
-      </View>
-      <If when={v()?.truncated}>
-        <Text class={`${FS.xs} text-warning`}>{t("rinsight.value_truncated")}</Text>
+      <If when={error()}>{(e) => <ErrorText text={e()} />}</If>
+      <If when={value()} else={<If when={!error()}><Hint>{t("rinsight.loading")}</Hint></If>}>
+        <RedisKeyEditor
+          connId={props.connId}
+          node={props.target?.node ?? null}
+          value={value()}
+          detail={detail()}
+          reload={async () => {
+            const tg = props.target;
+            if (tg) await load(tg);
+          }}
+          onRenamed={() => {
+            const tg = props.target;
+            if (tg) props.onRenamed(tg);
+          }}
+        />
       </If>
-      <Scroll class="max-h-[420px] rounded-(--radius) border border-border">
-        <View class="gap-0.5 px-3 py-2">
-          <Each of={v()?.rows ?? []}>
-            {(row) => (
-              <View class="flex-row gap-3">
-                <Each of={row()}>
-                  {(cell, i) => (
-                    <Text
-                      class={`${FS.xs} ${MONO} select-text text-foreground`}
-                      classList={{ "w-[200px] text-muted-foreground line-clamp-1": (v()?.columns.length ?? 0) > 1 && i() === 0, "min-w-0 flex-1 line-clamp-4": !((v()?.columns.length ?? 0) > 1 && i() === 0) }}
-                    >
-                      {cell()}
-                    </Text>
-                  )}
-                </Each>
-              </View>
-            )}
-          </Each>
-        </View>
-      </Scroll>
       <View class="flex-row justify-end">
         <Btn testID="ri-value-close" variant="outline" label={t("rinsight.close")} onPress={props.onClose} />
       </View>
@@ -419,7 +438,7 @@ export function RedisInsight(props: { connId: string }) {
   const slowlog = signal<Load<RedisSlowEntry[]>>({ state: "loading" });
   const report = signal<RedisReport | null>(null);
   const startError = signal<string | null>(null);
-  const viewing = signal<RedisKeyValue | null>(null);
+  const viewing = signal<{ node: string; key: string } | null>(null);
   const deleting = signal<RedisKeyStat | null>(null);
   const busy = signal(false);
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -491,17 +510,21 @@ export function RedisInsight(props: { connId: string }) {
   };
   const conn = () => conns.get(id);
 
-  /** 查看:单机直接打开 key 的标签;集群里的 key 在所在节点上读,弹框显示。 */
-  async function view(k: RedisKeyStat) {
+  /** 查看:单机直接打开 key 的标签;集群里的 key 在所在节点上读写,弹框显示。 */
+  function view(k: RedisKeyStat) {
     if (!k.node) {
       openTable(id, k.key);
       return;
     }
-    try {
-      viewing.set(await db.redisKeyOn(id, k.node, k.key));
-    } catch (e) {
-      toast.error(errorText(e));
-    }
+    viewing.set({ node: k.node, key: k.key });
+  }
+
+  /** 排行榜里拿掉一个 key(删除或改名后;core 那边也已移除)。 */
+  function dropFromReport(key: string, node: string | null) {
+    const r = report();
+    if (!r) return;
+    const keep = (x: RedisKeyStat) => !(x.key === key && (x.node ?? null) === node);
+    report.set({ ...r, biggest: r.biggest.filter(keep), hottest: r.hottest.filter(keep) });
   }
 
   async function confirmDelete() {
@@ -512,12 +535,7 @@ export function RedisInsight(props: { connId: string }) {
       const n = await db.redisDeleteKey(id, k.node ?? null, k.key);
       toast.success(n > 0 ? t("rinsight.deleted") : t("rinsight.already_gone"));
       deleting.set(null);
-      // 排行榜里拿掉它(core 那边也已移除)
-      const r = report();
-      if (r) {
-        const keep = (x: RedisKeyStat) => !(x.key === k.key && (x.node ?? null) === (k.node ?? null));
-        report.set({ ...r, biggest: r.biggest.filter(keep), hottest: r.hottest.filter(keep) });
-      }
+      dropFromReport(k.key, k.node ?? null);
     } catch (e) {
       toast.error(errorText(e));
     } finally {
@@ -593,7 +611,7 @@ export function RedisInsight(props: { connId: string }) {
                         connId={id}
                         keys={r().biggest}
                         metric="bytes"
-                        onView={(k) => void view(k)}
+                        onView={view}
                         onDelete={(k) => deleting.set(k)}
                       />
                     </Section>
@@ -625,7 +643,7 @@ export function RedisInsight(props: { connId: string }) {
                         connId={id}
                         keys={r().hottest}
                         metric="freq"
-                        onView={(k) => void view(k)}
+                        onView={view}
                         onDelete={(k) => deleting.set(k)}
                       />
                     </If>
@@ -643,7 +661,15 @@ export function RedisInsight(props: { connId: string }) {
         </Loaded>
       </Section>
 
-      <KeyValueDialog value={viewing()} onClose={() => viewing.set(null)} />
+      <KeyValueDialog
+        connId={id}
+        target={viewing()}
+        onClose={() => viewing.set(null)}
+        onRenamed={(from) => {
+          viewing.set(null);
+          dropFromReport(from.key, from.node);
+        }}
+      />
       <DeleteDialog
         target={deleting()}
         prod={conn()?.env === "prod"}
