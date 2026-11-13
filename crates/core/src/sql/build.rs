@@ -239,6 +239,78 @@ fn predicate(f: &crate::grid::FilterRow, d: Dialect, data_type: Option<&str>) ->
     }
 }
 
+/// JSON 字段条件 → PG 谓词(只支持 PG;其他方言返回 None,该条件不下推)。
+///
+/// - 等于 / 不等于、jsonb 列、路径全是键、值与字段类型对得上:用包含查询 `col @> '{"a":{"b":3}}'`。
+///   能用上 jsonb 的 GIN 索引(默认 `jsonb_ops` 与 `jsonb_path_ops` 都支持 `@>`),也天然按类型比较
+///   (数字比数值、字符串区分大小写、`3` 与 `"3"` 不相等),不会因为某行该字段不是数字而转换报错;
+/// - 其余(大小比较、包含文字、路径里有数组下标、json 类型列):取出字段比较。数值比较写成
+///   `CASE WHEN jsonb_typeof(…) = 'number' THEN (…->>…)::numeric END > 3`,CASE 保证先判断类型再转换,
+///   别的行里同名字段是文本时只是不命中,而不是整条查询报错;
+/// - 不等于一律写成「等于 IS NOT TRUE」:字段缺失 / 为 NULL 的行也算不等于(与客户端筛选一致)。
+///
+/// 路径里的键都经 [`literal`] 转义成字符串字面量、下标是整数,包含查询的文档整体再作为字面量,键名无法注入。
+fn json_predicate(f: &crate::grid::FilterRow, d: Dialect, data_type: Option<&str>) -> Option<String> {
+    use crate::grid::FilterOp::*;
+    use crate::json::{self, Kind};
+    if d != Dialect::Pg {
+        return None;
+    }
+    let t = data_type.unwrap_or("").to_ascii_lowercase();
+    // json 列没有 @>,类型函数也不同;不是 JSON 类型的列(如存 JSON 文本的 text)先转成 jsonb
+    let (col, is_jsonb) = if t.contains("jsonb") {
+        (ident(&f.col, d), true)
+    } else if t.contains("json") {
+        (ident(&f.col, d), false)
+    } else {
+        (format!("CAST({} AS jsonb)", ident(&f.col, d)), true)
+    };
+    let typeof_fn = if is_jsonb { "jsonb_typeof" } else { "json_typeof" };
+    let field = format!("({})", json::pg_path(&col, &f.path, false));
+    let text = format!("({})", json::pg_path(&col, &f.path, true));
+    let v = f.value.trim();
+    let typed = f.json_type.and_then(|k| json::typed_value(k, &f.value));
+    let numeric = matches!(f.json_type, None | Some(Kind::Number)) && json::typed_value(Kind::Number, v).is_some();
+
+    let equal = || -> String {
+        let doc = typed.as_ref().filter(|_| is_jsonb).and_then(|val| json::containment_doc(&f.path, val));
+        match (&typed, f.json_type, doc) {
+            (_, _, Some(doc)) => format!("{col} @> {}::jsonb", literal(&doc, d)),
+            (Some(val), Some(Kind::Number), _) => {
+                format!("CASE WHEN {typeof_fn}({field}) = 'number' THEN {text}::numeric END = {}", json::to_text(val, false))
+            }
+            (Some(_), Some(Kind::Null), _) => format!("{typeof_fn}({field}) = 'null'"),
+            (Some(val), Some(kind), _) => {
+                let ty = if kind == Kind::Bool { "boolean" } else { "string" };
+                let lit = literal(&val.as_text().unwrap_or_default(), d);
+                format!("{typeof_fn}({field}) = '{ty}' AND {text} = {lit}")
+            }
+            // 手填的条件(或值与类型对不上):与普通列一样按文本、忽略大小写
+            _ => format!("LOWER({text}) = LOWER({})", literal(v, d)),
+        }
+    };
+    let cmp = |op: &str| -> String {
+        if numeric {
+            format!("CASE WHEN {typeof_fn}({field}) = 'number' THEN {text}::numeric END {op} {v}")
+        } else {
+            format!("{text} {op} {}", literal(v, d))
+        }
+    };
+    Some(match f.op {
+        Contains => like(&text, v, true, true, d),
+        Starts => like(&text, v, false, true, d),
+        Ends => like(&text, v, true, false, d),
+        Eq => equal(),
+        Ne => format!("({}) IS NOT TRUE", equal()),
+        Gt => cmp(">"),
+        Lt => cmp("<"),
+        Gte => cmp(">="),
+        Lte => cmp("<="),
+        Empty => format!("({text} IS NULL OR {text} = '')"),
+        NotEmpty => format!("({text} IS NOT NULL AND {text} <> '')"),
+    })
+}
+
 /// 把筛选条件拼成 WHERE 子句的内容(不含 `WHERE`);没有有效条件为 None。
 /// `types` 给出列的类型(列名 → 类型名),决定数值 / 日期 / 文本的比较方式。
 pub fn where_clause(
@@ -250,7 +322,14 @@ pub fn where_clause(
     let parts: Vec<String> = filters
         .iter()
         .filter(|f| f.is_active())
-        .map(|f| predicate(f, d, types.get(&f.col).map(String::as_str)))
+        .filter_map(|f| {
+            let ty = types.get(&f.col).map(String::as_str);
+            if f.path.is_empty() {
+                Some(predicate(f, d, ty))
+            } else {
+                json_predicate(f, d, ty)
+            }
+        })
         .collect();
     if parts.is_empty() {
         return None;
@@ -372,7 +451,75 @@ mod tests {
     }
 
     fn f(col: &str, op: crate::grid::FilterOp, value: &str) -> crate::grid::FilterRow {
-        crate::grid::FilterRow { id: 1, col: col.into(), op, value: value.into() }
+        crate::grid::FilterRow { id: 1, col: col.into(), op, value: value.into(), path: vec![], json_type: None }
+    }
+
+    fn jf(
+        col: &str,
+        path: &[&str],
+        ty: Option<crate::json::Kind>,
+        op: crate::grid::FilterOp,
+        value: &str,
+    ) -> crate::grid::FilterRow {
+        use crate::json::PathSeg;
+        let path = path
+            .iter()
+            .map(|p| p.parse::<u64>().map_or_else(|_| PathSeg::Key(p.to_string()), PathSeg::Index))
+            .collect();
+        crate::grid::FilterRow { id: 1, col: col.into(), op, value: value.into(), path, json_type: ty }
+    }
+
+    #[test]
+    fn json_path_where_clause() {
+        use crate::grid::{Conj, FilterOp::*};
+        use crate::json::Kind;
+        let types: std::collections::HashMap<String, String> =
+            [("doc", "jsonb"), ("raw", "json"), ("txt", "text")].into_iter().map(|(a, b)| (a.into(), b.into())).collect();
+        let w = |f: crate::grid::FilterRow| where_clause(&[f], Conj::And, Dialect::Pg, &types).unwrap();
+        // jsonb 的等于:包含查询(可走 GIN 索引),按类型比较
+        assert_eq!(w(jf("doc", &["a", "n"], Some(Kind::Number), Eq, "3")), r#"("doc" @> '{"a":{"n":3}}'::jsonb)"#);
+        assert_eq!(w(jf("doc", &["a", "s"], Some(Kind::String), Eq, "Paid")), r#"("doc" @> '{"a":{"s":"Paid"}}'::jsonb)"#);
+        assert_eq!(w(jf("doc", &["ok"], Some(Kind::Bool), Ne, "true")), r#"(("doc" @> '{"ok":true}'::jsonb) IS NOT TRUE)"#);
+        // 键名里的引号:JSON 转义后整体再按 SQL 字面量转义
+        assert_eq!(
+            w(jf("doc", &["it's \"x\""], Some(Kind::String), Eq, "o'k")),
+            r#"("doc" @> '{"it''s \"x\"":"o''k"}'::jsonb)"#
+        );
+        // 大小比较:先判断类型再转数值
+        assert_eq!(
+            w(jf("doc", &["a", "n"], Some(Kind::Number), Gte, "2.5")),
+            r#"(CASE WHEN jsonb_typeof(("doc"->'a'->'n')) = 'number' THEN ("doc"->'a'->>'n')::numeric END >= 2.5)"#
+        );
+        // 路径里有下标:不能用包含查询,取出字段比较
+        assert_eq!(
+            w(jf("doc", &["items", "0", "sku"], Some(Kind::Number), Eq, "7")),
+            r#"(CASE WHEN jsonb_typeof(("doc"->'items'->0->'sku')) = 'number' THEN ("doc"->'items'->0->>'sku')::numeric END = 7)"#
+        );
+        // json 列:没有 @>,类型函数用 json_typeof
+        assert_eq!(
+            w(jf("raw", &["s"], Some(Kind::String), Eq, "a")),
+            r#"(json_typeof(("raw"->'s')) = 'string' AND ("raw"->>'s') = 'a')"#
+        );
+        assert_eq!(w(jf("raw", &["z"], Some(Kind::Null), Eq, "null")), r#"(json_typeof(("raw"->'z')) = 'null')"#);
+        // 包含文字 / 为空:比较 ->> 取出的文本
+        assert_eq!(
+            w(jf("doc", &["a", "s"], Some(Kind::String), Contains, "50%")),
+            r#"(CAST(("doc"->'a'->>'s') AS TEXT) ILIKE '%50\%%' ESCAPE '\')"#
+        );
+        assert_eq!(w(jf("doc", &["a"], None, Empty, "")), r#"((("doc"->>'a') IS NULL OR ("doc"->>'a') = ''))"#);
+        // 数字类型配非数字的值:退回文本比较,不生成非法 SQL
+        assert_eq!(w(jf("doc", &["a", "n"], Some(Kind::Number), Gt, "1; DROP")), r#"(("doc"->'a'->>'n') > '1; DROP')"#);
+        assert_eq!(
+            w(jf("doc", &["a", "n"], Some(Kind::Number), Eq, "x")),
+            r#"(LOWER(("doc"->'a'->>'n')) = LOWER('x'))"#
+        );
+        // 不是 JSON 类型的列:先转 jsonb
+        assert_eq!(w(jf("txt", &["k"], Some(Kind::Number), Eq, "1")), r#"(CAST("txt" AS jsonb) @> '{"k":1}'::jsonb)"#);
+        // 注入:键名里的 '); DROP … 留在字面量里
+        let s = w(jf("doc", &["x'); DROP TABLE t; --"], None, Gt, "a"));
+        assert_eq!(s, r#"(("doc"->>'x''); DROP TABLE t; --') > 'a')"#);
+        // 非 PG 不下推 JSON 路径条件
+        assert!(where_clause(&[jf("doc", &["a"], None, Eq, "1")], Conj::And, Dialect::Mysql, &types).is_none());
     }
 
     fn types() -> std::collections::HashMap<String, String> {

@@ -527,6 +527,35 @@ pub async fn distinct_values(
     Ok(Some(values))
 }
 
+/// JSON 键名推断:取前这么多行(非 NULL)做样本。
+pub const JSON_SAMPLE_ROWS: u32 = 200;
+/// 单个值超过这个大小(PG 存储尺寸,字节)不取样:几个大文档就能拖慢补全,而键名多半在小文档里也看得到。
+const JSON_SAMPLE_MAX_BYTES: u32 = 256 * 1024;
+const JSON_TIMEOUT_MS: u32 = 3000;
+
+/// 补全 JSON 键名用:从前若干行取样,推断各层出现过的键(只读会话 + 限时)。
+/// 只做 PG;其他库返回 None。界面按 连接 / 表 / 列 缓存整棵键树,逐级补全时在本地沿路径查。
+pub async fn json_key_tree(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    table: &str,
+    column: &str,
+) -> AppResult<Option<crate::json::KeyTree>> {
+    if *kind != DbKind::Pg {
+        return Ok(None);
+    }
+    let col = ident(column, Dialect::Pg);
+    // ::text 让 json / jsonb / 存 JSON 的文本列都以文本取回;pg_column_size 只看存储头,不解压大值
+    let sql = format!(
+        "SELECT {col}::text FROM {table} WHERE {col} IS NOT NULL AND pg_column_size({col}) <= {JSON_SAMPLE_MAX_BYTES} LIMIT {JSON_SAMPLE_ROWS}",
+        table = ident(table, Dialect::Pg),
+    );
+    let r = query_read_only_timeout(state, kind, id, &sql, JSON_SAMPLE_ROWS, JSON_TIMEOUT_MS).await?;
+    let samples: Vec<String> = r.rows.into_iter().filter_map(|row| row.into_iter().next().flatten()).collect();
+    Ok(Some(crate::json::infer_keys(samples.iter().map(String::as_str))))
+}
+
 /// 导出整个数据库为 INSERT 语句:逐表查询全部行,表间用注释分隔;单表失败不影响其他表。
 pub async fn export_database(
     state: &AppState,

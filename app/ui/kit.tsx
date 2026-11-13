@@ -60,11 +60,13 @@ export function IconButton(props: {
   color?: string;
   class?: string;
   label?: string;
+  testID?: string;
 }) {
   return (
     <Button
       onPress={props.onPress}
       disabled={props.disabled}
+      testID={props.testID}
       accessibilityLabel={props.label ?? props.tooltip ?? props.icon}
       tooltip={props.tooltip ? tip(props.tooltip) : undefined}
       class={`flex-row items-center justify-center rounded-(--radius) p-1.5 hover:bg-list-hover active:bg-secondary-active disabled:opacity-40 ${props.class ?? ""}`}

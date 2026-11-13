@@ -119,11 +119,20 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 CREATE TABLE products (id int PRIMARY KEY, name text, price int);
 CREATE INDEX idx_unused_name ON products (name);
 CREATE TABLE big AS SELECT g AS id, g % 997 AS v FROM generate_series(1, 3000) g;
+-- JSONB:250 行,第 n 行 customer.zipcode = 10000 + n,只有前 3 行 tier 是 gold
+CREATE TABLE events (id int PRIMARY KEY, payload jsonb, note text);
+INSERT INTO events SELECT g, jsonb_build_object(
+    'kind', CASE WHEN g % 2 = 0 THEN 'click' ELSE 'view' END,
+    'amount', g * 10,
+    'flags', jsonb_build_array(g % 3 = 0),
+    'customer', jsonb_build_object('tier', CASE WHEN g <= 3 THEN 'gold' ELSE 'basic' END, 'zipcode', 10000 + g)),
+  'n' || g FROM generate_series(1, 250) g;
 SELECT pg_stat_statements_reset();
 SELECT count(*) FROM big a JOIN big b ON a.v < b.v WHERE a.id > 10;
 SQL
   printf '[{"id":"pg","name":"pg","kind":"pg","env":"local","host":"127.0.0.1","port":%s,"user":"postgres","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_PG" > "$D/connections.json"
   run pg "$D" tab/diag-pg.test.tsx
+  run pg-jsonb "$D" tab/jsonb-pg.test.tsx
   $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 

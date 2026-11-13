@@ -1,12 +1,14 @@
 // 结果区筛选条:条件之间用统一的连接词(且/或),编辑只改草稿,
 // 点「应用」或在值输入框回车才作用到结果。对应 GPUI 版 tab/filter.rs。
+// 在 JSON 树上点字段生成的条件带字段路径,列名后面标出取值表达式(PG 下推成 WHERE)。
 
 import { signal, Text, View } from "nsh";
 import { Button } from "nsh/base";
 import { t } from "nsh/i18n";
-import { FILTER_OPS, type FilterOp } from "../lib/types";
+import { type DbKind, FILTER_OPS, type FilterOp, type JsonPath } from "../lib/types";
 import { Btn, Icon, IconButton, TextField } from "../ui/kit";
-import { FS } from "../ui/text";
+import { FS, MONO } from "../ui/text";
+import { grid } from "../lib/native";
 import {
   filterAdd,
   filterApply,
@@ -37,6 +39,13 @@ const OP_KEY: Record<FilterOp, string> = {
 };
 
 const needsValue = (op: FilterOp) => op !== "empty" && op !== "notEmpty";
+
+/** 字段路径去掉开头的列名:PG 为 `->'a'->>'b'`;MySQL / SQLite 的 `$.a.b` 本就不含列名。 */
+function pathSuffix(kind: DbKind, col: string, path: JsonPath): string {
+  const full = grid.jsonPathText(kind, col, path);
+  const head = grid.jsonPathText(kind, col, []);
+  return head !== "$" && full.startsWith(head) ? full.slice(head.length) : full;
+}
 
 export function FilterBar(props: { m: TabModel }) {
   const m = props.m;
@@ -105,8 +114,21 @@ export function FilterBar(props: { m: TabModel }) {
               width={184}
               label={d().col === "" ? t("filter.pick_column") : d().col}
               options={columns().map((c) => ({ value: c, label: c }))}
-              onSelect={(col) => updateDraft(m, d().id, { col })}
+              // 换了列:原来的 JSON 字段路径不再适用
+              onSelect={(col) => updateDraft(m, d().id, { col, path: undefined, jsonType: undefined })}
             />
+            {/* JSON 树上点字段生成的条件:列之后标出字段路径(PG 的取值写法 `->'a'->>'b'`,列名已在左边,不重复) */}
+            <If when={d().path?.length ? d().path : null}>
+              {(path) => (
+                <Text
+                  testID={`filter-path:${d().id}`}
+                  class={`${FS.xs} ${MONO} h-7 min-w-0 max-w-[240px] shrink rounded-(--radius) bg-selection px-2 text-data line-clamp-1`}
+                  style={{ lineHeight: 28 }}
+                >
+                  {pathSuffix(m.dbKind, d().col, path())}
+                </Text>
+              )}
+            </If>
             <SelectMenu
               testID={`filter-op:${d().id}`}
               width={120}
@@ -122,7 +144,7 @@ export function FilterBar(props: { m: TabModel }) {
             >
               <TextField
                 testID={`filter-value:${d().id}`}
-                class="h-7 min-w-0 flex-1"
+                class="h-7 min-w-[96px] flex-1"
                 placeholder={t("filter.value_placeholder")}
                 value={d().value}
                 onChange={({ value }) => updateDraft(m, d().id, { value })}

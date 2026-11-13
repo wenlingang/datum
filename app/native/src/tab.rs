@@ -8,6 +8,7 @@ use crate::text::utf16_to_byte;
 use datum_core::completion::{self, ItemKind};
 use datum_core::core::connection::DbKind;
 use datum_core::grid::{self, Align, CellTier, Conj, FilterOp, FilterRow};
+use datum_core::json::{self, Kind, PathSeg};
 use datum_core::pg::browse::{ColumnInfo, TableDetail};
 use datum_core::schema::{ColumnBrief, ColumnsByTable, ForeignKey};
 use datum_core::sql::{Dialect, build};
@@ -27,13 +28,18 @@ fn rows_of(rows: JsonValue) -> Result<Rows, String> {
     from(rows, "rows")
 }
 
-/// TSX 侧的一条筛选条件。
+/// TSX 侧的一条筛选条件。`path` / `jsonType` 只有在 JSON 树上点字段生成的条件才有。
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct FilterJs {
     id: f64,
     col: String,
     op: String,
     value: String,
+    #[serde(default)]
+    path: Option<Vec<PathSeg>>,
+    #[serde(default)]
+    json_type: Option<Kind>,
 }
 
 fn op_of(s: &str) -> FilterOp {
@@ -65,6 +71,8 @@ fn filters_of(filters: JsonValue) -> Result<Vec<FilterRow>, String> {
             col: f.col,
             op: op_of(&f.op),
             value: f.value,
+            path: f.path.unwrap_or_default(),
+            json_type: f.json_type,
         })
         .collect())
 }
@@ -318,6 +326,82 @@ impl Grid {
         }))
     }
 
+    /// 光标是否在 JSON 列的键名位置(`col->'…`、`col->'a'->>'…`):
+    /// `{ table, column, dataType, path, start, end, prefix }`(UTF-16),否则 null。是否 JSON 类型由界面判断。
+    pub fn json_key_context(text: String, caret: u32, columns: JsonValue) -> Result<JsonValue, String> {
+        if columns.is_null() {
+            return Ok(JsonValue::Null);
+        }
+        let raw: std::collections::BTreeMap<String, Vec<BriefJs>> = from(columns, "columns")?;
+        let cols: ColumnsByTable = raw
+            .into_iter()
+            .map(|(t, list)| {
+                (t, list.into_iter().map(|c| ColumnBrief { name: c.name, data_type: c.data_type }).collect())
+            })
+            .collect();
+        let offset = utf16_to_byte(&text, caret as usize);
+        let Some(v) = completion::json_key_context(&text, offset, &cols) else {
+            return Ok(JsonValue::Null);
+        };
+        let data_type = cols
+            .get(&v.table)
+            .and_then(|cs| cs.iter().find(|c| c.name == v.column))
+            .map(|c| c.data_type.clone())
+            .unwrap_or_default();
+        Ok(json!({
+            "table": v.table,
+            "column": v.column,
+            "dataType": data_type,
+            "path": v.path,
+            "start": byte_to_utf16(&text, v.replace.start),
+            "end": byte_to_utf16(&text, v.replace.end),
+            "prefix": v.prefix,
+        }))
+    }
+
+    /// 解析 JSON 单元格:`{ ok: true, node }`(node 见 `json::Node::to_js`,对象保留原文键顺序、数字保留原文)
+    /// 或 `{ ok: false, error: { kind, line, column, found } }`。
+    pub fn json_parse(text: String) -> JsonValue {
+        match json::parse(&text) {
+            Ok(node) => json!({ "ok": true, "node": node.to_js() }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    }
+
+    /// 值看起来是 JSON 对象 / 数组(以 `{` / `[` 开头)且能解析:没有列类型时据此决定是否展开成树。
+    pub fn is_json_document(text: String) -> bool {
+        json::looks_like_document(&text) && json::parse(&text).is_ok()
+    }
+
+    /// 格式化(`pretty`,2 空格缩进)或压缩成一行;键顺序与数字写法不变。不是合法 JSON 时报错。
+    pub fn json_format(text: String, pretty: bool) -> Result<String, String> {
+        json::parse(&text)
+            .map(|n| json::to_text(&n, pretty))
+            .map_err(|e| format!("{:?} at {}:{}", e.kind, e.line, e.column))
+    }
+
+    /// 路径处的值,复制用:标量为其文本(字符串不带引号,null 为 `null`),对象 / 数组为格式化的 JSON。
+    /// 路径不存在或不是合法 JSON 为 null。
+    pub fn json_value_at(text: String, path: JsonValue) -> Result<Option<String>, String> {
+        let path: Vec<PathSeg> = from(path, "path")?;
+        let Ok(doc) = json::parse(&text) else { return Ok(None) };
+        Ok(doc.at(&path).map(|n| match n {
+            json::Node::Object(_) | json::Node::Array(_) => json::to_text(n, true),
+            _ => n.as_text().unwrap_or_else(|| "null".into()),
+        }))
+    }
+
+    /// 字段路径的写法(复制路径、筛选条上显示):PG 为 `"col"->'a'->0->>'b'`,
+    /// MySQL / SQLite 为 `$.a[0].b`(`JSON_EXTRACT` / `json_extract` 的路径)。
+    pub fn json_path_text(kind: String, column: String, path: JsonValue) -> Result<String, String> {
+        let path: Vec<PathSeg> = from(path, "path")?;
+        let d = dialect(&kind)?;
+        Ok(match d {
+            Dialect::Pg => json::pg_path(&build::ident(&column, d), &path, true),
+            _ => json::dollar_path(&path),
+        })
+    }
+
     /// 刚输入边界字符时,紧邻前面的 SQL 关键字转大写:`{ start, end, text }`(UTF-16),否则 null。
     pub fn uppercase_keyword_before(text: String, caret: u32) -> JsonValue {
         let offset = utf16_to_byte(&text, caret as usize);
@@ -372,5 +456,27 @@ mod tests {
         )
         .unwrap();
         assert_eq!(hit, vec![0, 2]);
+    }
+
+    #[test]
+    fn json_cells_and_path_filters() {
+        let ok = Grid::json_parse(r#"{"b": 1.10, "a": [null]}"#.into());
+        assert_eq!(ok["node"]["entries"][0]["key"], "b");
+        assert_eq!(ok["node"]["entries"][0]["node"]["text"], "1.10");
+        let bad = Grid::json_parse("{\"a\": }".into());
+        assert_eq!((bad["ok"].clone(), bad["error"]["kind"].clone(), bad["error"]["column"].clone()), (json!(false), json!("unexpected"), json!(7)));
+        assert_eq!(Grid::json_format(r#"{ "a" : [1, 2] }"#.into(), false).unwrap(), r#"{"a":[1,2]}"#);
+        assert!(Grid::json_format("{".into(), true).is_err());
+        assert_eq!(Grid::json_value_at(r#"{"a":{"s":"x"}}"#.into(), json!(["a", "s"])).unwrap().as_deref(), Some("x"));
+        assert_eq!(Grid::json_path_text("pg".into(), "doc".into(), json!(["a", 0.0])).unwrap(), "\"doc\"->'a'->>0");
+        assert_eq!(Grid::json_path_text("mysql".into(), "doc".into(), json!(["a", 0])).unwrap(), "$.a[0]");
+        assert!(Grid::is_json_document(" [1]".into()));
+        assert!(!Grid::is_json_document("42".into()));
+        // JS 传来的 JSON 路径条件:客户端按路径筛,服务端拼成 PG 的 WHERE
+        let filters = json!([{ "id": 1, "col": "doc", "op": "eq", "value": "3", "path": ["a"], "jsonType": "number" }]);
+        let rows = json!([[r#"{"a": 3}"#], [r#"{"a": "3"}"#]]);
+        assert_eq!(Grid::filter_indices(rows, vec!["doc".into()], filters.clone(), "and".into()).unwrap(), vec![0]);
+        let sql = Grid::filtered_page_sql("t".into(), 0, 100, "pg".into(), None, None, filters, "and".into(), json!({ "doc": "jsonb" })).unwrap();
+        assert_eq!(sql, r#"SELECT * FROM "t" WHERE ("doc" @> '{"a":3}'::jsonb) LIMIT 100 OFFSET 0"#);
     }
 }

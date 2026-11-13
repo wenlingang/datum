@@ -10,7 +10,8 @@ import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
 import { SectionLabel } from "../ui/kit";
 import { FS } from "../ui/text";
-import { columnTypes, modelOf, viewRow, type TabModel } from "./model";
+import { JsonTree } from "./JsonTree";
+import { canFilterJson, columnTypes, filterByJson, isJsonDoc, modelOf, viewRow, type TabModel } from "./model";
 
 function Header(props: { children: string }) {
   return (
@@ -39,12 +40,33 @@ function RowDetail(props: { m: TabModel; row: number }) {
                   {types()[f().c] ?? "—"}
                 </Text>
               </View>
-              <Text
-                class={`${FS.xs} font-mono`}
-                classList={{ "text-foreground": f().v !== null, "text-muted-foreground": f().v === null }}
+              {/* JSON 对象 / 数组展开成树(PG 上可点字段生成筛选),其余原样显示 */}
+              <If
+                when={isJsonDoc(f().v) ? f().v : null}
+                else={
+                  <Text
+                    class={`${FS.xs} font-mono`}
+                    classList={{ "text-foreground": f().v !== null, "text-muted-foreground": f().v === null }}
+                  >
+                    {f().v ?? "NULL"}
+                  </Text>
+                }
               >
-                {f().v ?? "NULL"}
-              </Text>
+                {(text) => (
+                  <JsonTree
+                    testID={`row-json:${f().c}`}
+                    text={text()}
+                    column={f().c}
+                    kind={m.dbKind}
+                    depth={1}
+                    onFilter={
+                      canFilterJson(m, f().c)
+                        ? (path, kind, value) => filterByJson(m, f().c, path, kind, value)
+                        : undefined
+                    }
+                  />
+                )}
+              </If>
             </View>
           )}
         </Each>

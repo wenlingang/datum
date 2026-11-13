@@ -367,6 +367,16 @@ impl Db {
             .and_then(json)
     }
 
+    /// 补全 JSON 键名用的键树(取前若干行推断,只读 + 限时):`{ keys: [{ name, count, tree }], items? }`;
+    /// 只做 PG,其他库为 null。
+    pub async fn json_key_tree(kind: String, id: String, table: String, column: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::json_key_tree(&state(), &k, &id, &table, &column).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// 执行计划:`{ tree, raw, analyzed, totalMs }`;`analyze` 会真正执行(只接受只读语句,只读会话里限时)。
     pub async fn explain_plan(kind: String, id: String, sql: String, analyze: bool) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;

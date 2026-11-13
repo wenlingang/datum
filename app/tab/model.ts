@@ -19,6 +19,8 @@ import {
   type Conj,
   type DbKind,
   type FilterRow,
+  type JsonKind,
+  type JsonPath,
   type KeyDetail,
   type Plan,
   type RedisKeyValue,
@@ -1178,6 +1180,43 @@ export async function filterFromText(m: TabModel, text: string) {
   } finally {
     m.nlBusy.set(false);
   }
+}
+
+// ------------------------------------------------------------ JSON
+
+/** 单元格值是 JSON 对象 / 数组:展开成树显示。不看列类型——SQLite 的 JSON 文本、查询结果(没有类型)
+ *  一样展开;json 列里的标量(`3`、`"x"`)没什么可展开的,不算。 */
+export function isJsonDoc(value: string | null): value is string {
+  return value !== null && grid.isJsonDocument(value);
+}
+
+/** 能否在 JSON 树上点字段生成筛选:只做 PG。表浏览下推到服务端,要求列是 json / jsonb
+ *  (其他类型的列要先转 jsonb,有一行不是合法 JSON 整条查询就会报错);查询结果在本地按路径筛,不限类型。 */
+export function canFilterJson(m: TabModel, column: string): boolean {
+  if (m.dbKind !== "pg" || !m.result()) return false;
+  return !filterOnServer(m) || /json/i.test(columnTypes(m)[column] ?? "");
+}
+
+/** JSON 树上「按此值筛选」:追加一条 `列 → 路径 = 值` 的条件(记下字段类型,等于按类型比较),
+ *  打开筛选条并立即应用(表浏览下推成 WHERE,从第一页重查)。空字符串改用「为空」。 */
+export function filterByJson(m: TabModel, col: string, path: JsonPath, kind: JsonKind, value: string) {
+  m.filterSeq += 1;
+  const blank = kind === "string" && value === "";
+  const row: FilterRow = {
+    id: m.filterSeq,
+    col,
+    op: blank ? "empty" : "eq",
+    value: blank ? "" : value,
+    path,
+    jsonType: kind,
+  };
+  batch(() => {
+    // 打开筛选条时放的那条空白占位不留
+    m.drafts.set([...m.drafts().filter(isActive), row]);
+    m.filterOpen.set(true);
+    m.nlNote.set(null);
+  });
+  filterApply(m);
 }
 
 export function filterPreviewCount(m: TabModel): number {

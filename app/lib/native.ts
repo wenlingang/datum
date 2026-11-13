@@ -137,6 +137,9 @@ export const db = {
   /** 低基数列的实际取值(最多 30 个);不是枚举类的列为 null。 */
   distinctValues: async (kind: DbKind, id: string, table: string, column: string, dataType: string) =>
     (await Db.distinctValues(kind, id, table, column, dataType)) as string[] | null,
+  /** 补全 JSON 键名用的键树(取前若干行推断,只读 + 限时);只做 PG,其他库为 null。 */
+  jsonKeyTree: async (kind: DbKind, id: string, table: string, column: string) =>
+    (await Db.jsonKeyTree(kind, id, table, column)) as TabTypes.JsonKeyTree | null,
   diagSections: (kind: DbKind) => Db.diagSections(kind) as DiagSection[],
   diagRun: async (kind: DbKind, id: string, section: string) => (await Db.diagRun(kind, id, section)) as DiagResult,
   diagAct: (kind: DbKind, id: string, action: DiagAction, args: string[]) =>
@@ -293,6 +296,19 @@ export const grid = {
   /** 光标是否在某列的取值位置(`col = '…`、`col IN (…`)。 */
   valueContext: (text: string, caret: number, columns: ColumnsByTable | null) =>
     Grid.valueContext(text, caret, columns) as ValueContext | null,
+  /** 光标是否在 JSON 列的键名位置(`col->'…`)。 */
+  jsonKeyContext: (text: string, caret: number, columns: ColumnsByTable | null) =>
+    Grid.jsonKeyContext(text, caret, columns) as TabTypes.JsonKeyContext | null,
+  /** 无损解析 JSON(保留键顺序与数字原文);失败给出位置与原因。 */
+  jsonParse: (text: string) => Grid.jsonParse(text) as TabTypes.JsonParse,
+  /** 以 `{` / `[` 开头且能解析:没有列类型时据此判断是否 JSON 文档。 */
+  isJsonDocument: (text: string) => Grid.isJsonDocument(text),
+  /** 格式化(2 空格缩进)或压缩成一行;不是合法 JSON 时抛错。 */
+  jsonFormat: (text: string, pretty: boolean) => Grid.jsonFormat(text, pretty),
+  /** 路径处的值(复制用):标量为文本,对象 / 数组为格式化 JSON;路径不存在为 null。 */
+  jsonValueAt: (text: string, path: TabTypes.JsonPath) => Grid.jsonValueAt(text, path),
+  /** 字段路径的写法:PG 为 `"col"->'a'->>'b'`,MySQL / SQLite 为 `$.a.b`。 */
+  jsonPathText: (kind: DbKind, column: string, path: TabTypes.JsonPath) => Grid.jsonPathText(kind, column, path),
   uppercaseKeywordBefore: (text: string, caret: number) =>
     Grid.uppercaseKeywordBefore(text, caret) as { start: number; end: number; text: string } | null,
 };

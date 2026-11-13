@@ -432,6 +432,50 @@ export interface FilterRow {
   col: string;
   op: FilterOp;
   value: string;
+  /** JSON 列里的字段路径(在 JSON 树上点字段生成);没有表示比较整列 */
+  path?: JsonPath;
+  /** 被点字段的类型:等于 / 大小比较按数值、布尔还是文本 */
+  jsonType?: JsonKind | null;
+}
+
+// ---- JSON 单元格(datum_core::json)
+
+/** JSON 路径:对象键或数组下标。 */
+export type JsonPath = (string | number)[];
+
+export type JsonKind = "object" | "array" | "string" | "number" | "bool" | "null";
+
+/** 无损解析出的 JSON 值:对象保留原文键顺序,数字保留原文写法。 */
+export type JsonNode =
+  | { kind: "object"; entries: { key: string; node: JsonNode }[] }
+  | { kind: "array"; items: JsonNode[] }
+  | { kind: "string" | "number" | "bool" | "null"; text: string };
+
+/** JSON 解析失败的位置与原因(kind 对应 `json.err.*` 文案)。 */
+export interface JsonError {
+  kind: "eof" | "unexpected" | "trailing" | "escape" | "number" | "control" | "too_deep";
+  line: number;
+  column: number;
+  found: string | null;
+}
+
+export type JsonParse = { ok: true; node: JsonNode } | { ok: false; error: JsonError };
+
+/** 取样推断的 JSON 键结构(补全键名用):每层的键按出现次数降序,数组元素的结构在 items。 */
+export interface JsonKeyTree {
+  keys: { name: string; count: number; tree: JsonKeyTree }[];
+  items?: JsonKeyTree;
+}
+
+/** 光标处于 JSON 列的键名位置(偏移为 UTF-16)。 */
+export interface JsonKeyContext {
+  table: string;
+  column: string;
+  dataType: string;
+  path: JsonPath;
+  start: number;
+  end: number;
+  prefix: string;
 }
 
 /** 编辑器补全的一项。 */

@@ -362,6 +362,10 @@ tab:
     en: "Value in %{column}"
     zh-CN: "%{column} 的取值"
     zh-TW: "%{column} 的取值"
+  completion_json_key:
+    en: "JSON key in %{column}"
+    zh-CN: "%{column} 的 JSON 键"
+    zh-TW: "%{column} 的 JSON 鍵"
   editor_placeholder_redis:
     en: "Enter a Redis command, ⌘↵ to run"
     zh-CN: "输入 Redis 命令,⌘↵ 运行"
@@ -516,6 +520,10 @@ grid:
     en: "Delete Row"
     zh-CN: "删除行"
     zh-TW: "刪除列"
+  expand_json:
+    en: "Expand JSON"
+    zh-CN: "展开 JSON"
+    zh-TW: "展開 JSON"
   no_rows:
     en: "No rows"
     zh-CN: "没有行"
@@ -2219,3 +2227,93 @@ rkey:
     en: "Length: %{n} bytes"
     zh-CN: "长度 %{n} 字节"
     zh-TW: "長度 %{n} 位元組"
+json:
+  view_tree:
+    en: Tree
+    zh-CN: 树形
+    zh-TW: 樹狀
+  view_text:
+    en: Text
+    zh-CN: 文本
+    zh-TW: 文字
+  valid:
+    en: Valid JSON
+    zh-CN: JSON 格式正确
+    zh-TW: JSON 格式正確
+  format:
+    en: Format
+    zh-CN: 格式化
+    zh-TW: 格式化
+  compact:
+    en: Compact
+    zh-CN: 压缩
+    zh-TW: 壓縮
+  invalid_cannot_stage:
+    en: Not valid JSON; fix it before staging
+    zh-CN: 不是合法的 JSON,改正后才能暂存
+    zh-TW: 不是合法的 JSON,修正後才能暫存
+  error_at:
+    en: "Line %{line}, column %{column}: %{reason}"
+    zh-CN: "第 %{line} 行第 %{column} 列:%{reason}"
+    zh-TW: "第 %{line} 行第 %{column} 欄:%{reason}"
+  err:
+    eof:
+      en: the JSON ends too early
+      zh-CN: JSON 没写完就结束了
+      zh-TW: JSON 沒寫完就結束了
+    unexpected:
+      en: "unexpected “%{found}”"
+      zh-CN: "此处不应出现「%{found}」"
+      zh-TW: "此處不應出現「%{found}」"
+    trailing:
+      en: "extra content after the value: “%{found}”"
+      zh-CN: "值后面还有多余内容「%{found}」"
+      zh-TW: "值後面還有多餘內容「%{found}」"
+    escape:
+      en: invalid escape in a string
+      zh-CN: 字符串里的转义写法不对
+      zh-TW: 字串裡的跳脫寫法不對
+    number:
+      en: invalid number
+      zh-CN: 数字写法不对
+      zh-TW: 數字寫法不對
+    control:
+      en: unescaped line break or control character in a string
+      zh-CN: 字符串里有未转义的换行或控制字符
+      zh-TW: 字串裡有未跳脫的換行或控制字元
+    too_deep:
+      en: nested too deeply
+      zh-CN: 嵌套层数过深
+      zh-TW: 巢狀層數過深
+  copy_path:
+    en: Copy Path
+    zh-CN: 复制路径
+    zh-TW: 複製路徑
+  copy_value:
+    en: Copy Value
+    zh-CN: 复制值
+    zh-TW: 複製值
+  filter_by_value:
+    en: Filter by This Value
+    zh-CN: 按此值筛选
+    zh-TW: 依此值篩選
+  copied_path:
+    en: Path copied
+    zh-CN: 已复制路径
+    zh-TW: 已複製路徑
+  copied_value:
+    en: Value copied
+    zh-CN: 已复制值
+    zh-TW: 已複製值
+  n_keys:
+    en: "%{n} keys"
+    zh-CN: "%{n} 个键"
+    zh-TW: "%{n} 個鍵"
+  n_items:
+    en: "%{n} items"
+    zh-CN: "%{n} 项"
+    zh-TW: "%{n} 項"
+  more_items:
+    en: "… %{n} more (see Text for all)"
+    zh-CN: "… 还有 %{n} 项(完整内容看「文本」)"
+    zh-TW: "… 還有 %{n} 項(完整內容看「文字」)"

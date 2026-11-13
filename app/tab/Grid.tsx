@@ -11,11 +11,13 @@ import { grid } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
+import { isJsonType } from "./values";
 import {
   columnTypes,
   copyInsertRow,
   cycleSort,
   dirtyKey,
+  isJsonDoc,
   openCell,
   openRowDetail,
   pkIndex,
@@ -119,7 +121,8 @@ function GridCell(props: { m: TabModel; row: number; col: number }) {
         "text-cell-hash": style().tier === "hash",
         "text-cell-null": style().tier === "null",
         "text-negative": style().tier === "negative",
-        "font-mono": style().mono,
+        // JSON 列压成一行的文本用等宽,结构更好认(双击展开成树)
+        "font-mono": style().mono || isJsonType(type()),
         "bg-deleted opacity-55 line-through": deleted(),
         "bg-dirty border border-primary": dirty(),
       }}
@@ -174,9 +177,12 @@ function showRowMenu(m: TabModel, row: number, col: number, at: { x: number; y: 
   const pi = pkIndex(m);
   const pk = pi === null ? null : (viewRow(m, row)?.[pi] ?? "");
   const deleted = pk !== null && m.deletes().includes(pk);
+  const json = isJsonDoc(viewRow(m, row)?.[col] ?? null);
   void NativeMenu.popup(
     [
       { label: t("grid.view_detail"), onSelect: () => openRowDetail(m, row) },
+      // JSON 对象 / 数组:弹窗默认就是树形,这里点明入口
+      json && { label: t("grid.expand_json"), onSelect: () => openCell(m, row, col) },
       { label: editable ? t("grid.edit") : t("grid.view"), onSelect: () => openCell(m, row, col) },
       supportsSql(m.dbKind) && {
         label: t("grid.copy_insert"),

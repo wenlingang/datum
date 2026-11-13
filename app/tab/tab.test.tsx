@@ -422,3 +422,20 @@ test("多条写语句一起执行也能撤销;过后还能从历史里撤销", a
   expect(app.texts().some((x) => x.startsWith("Undo ("))).toBe(false);
   app.dispose();
 });
+
+test("SQLite 的 JSON 文本也展开成树(只是显示):可复制 $ 路径,不提供按字段筛选", async () => {
+  const app = await start();
+  await replaceSql(app, `SELECT 'tags' AS k, '{"origin": {"farm": "Kiambu", "lots": [12, 13]}}' AS doc`);
+  await app.press("id:run");
+  await app.waitUntil(() => app.texts().includes("tags"), { timeout: 15000 });
+  await app.rightClick(`id:result-grid >> text:/"farm": "Kiambu"/`);
+  await app.chooseMenuItem("Expand JSON");
+  await app.waitFor("id:cell-json-tree", { timeout: 5000 });
+  await app.press("id:json-node:origin.lots");
+  await app.waitFor("id:json-node:origin.lots.1", { timeout: 3000 });
+  await app.press("id:json-node:origin.lots.1");
+  await app.press("id:json-copy-path");
+  await app.waitUntil(() => app.clipboard() === "$.origin.lots[1]", { timeout: 3000 });
+  expect(app.shows("id:json-filter")).toBe(false);
+  app.dispose();
+});

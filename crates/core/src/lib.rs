@@ -15,6 +15,7 @@ pub mod erd;
 pub mod error;
 pub mod explain;
 pub mod grid;
+pub mod json;
 pub mod mongo;
 pub mod my;
 pub mod pg;

@@ -1,6 +1,7 @@
 //! 编辑器补全的纯逻辑:给定文本、光标(字节偏移)与 schema,算出候选项与替换范围。
 //! UI 层把结果转换成编辑器的补全菜单项。
 
+use crate::json::PathSeg;
 use crate::schema::{ColumnsByTable, ForeignKey};
 use crate::sql::stmt::{current_statement, split_statements};
 use regex::Regex;
@@ -698,24 +699,87 @@ pub fn value_context(text: &str, offset: usize, columns: &ColumnsByTable) -> Opt
     if NOT_ALIAS.contains(&col_raw.to_ascii_lowercase().as_str()) {
         return None;
     }
+    let (table, column) = resolve_column(text, offset, caps.get(1).map(|q| q.as_str()), col_raw, columns)?;
+    let start = stmt_start + token.start();
+    let prefix = token.as_str().trim_start_matches('\'').replace("''", "'");
+    Some(ValueContext { table, column, replace: start..offset, prefix, quoted })
+}
+
+/// 光标所在语句里的列:`qualifier` 为别名 / 表名限定,没有时取语句引用的表里第一个有这列的。
+/// 返回(表名, 列名),大小写对齐到已知 schema。
+fn resolve_column(
+    text: &str,
+    offset: usize,
+    qualifier: Option<&str>,
+    col_raw: &str,
+    columns: &ColumnsByTable,
+) -> Option<(String, String)> {
     let stmt = current_statement(text, offset);
     let refs = table_refs(&stmt, columns);
     let has_col = |t: &str| columns.get(t).and_then(|cs| cs.iter().find(|c| c.name.eq_ignore_ascii_case(col_raw)).map(|c| c.name.clone()));
-    let (table, column) = match caps.get(1) {
+    match qualifier {
         Some(q) => {
-            let q = q.as_str();
             let t = refs
                 .iter()
                 .find(|(t, a)| a.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(q)) || t.eq_ignore_ascii_case(q))
                 .map(|(t, _)| t.clone())?;
             let c = has_col(&t)?;
-            (t, c)
+            Some((t, c))
         }
-        None => refs.iter().find_map(|(t, _)| has_col(t).map(|c| (t.clone(), c)))?,
-    };
+        None => refs.iter().find_map(|(t, _)| has_col(t).map(|c| (t.clone(), c))),
+    }
+}
+
+/// 光标处于 JSON 列的键名位置(`col->'`、`col->>'na`、`col->'a'->0->'`):补全该层出现过的键名。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsonKeyContext {
+    pub table: String,
+    pub column: String,
+    /// 光标前已写好的路径(不含正在输入的键)
+    pub path: Vec<PathSeg>,
+    /// 被替换的字节范围:正在输入的键(含开头的引号)
+    pub replace: Range<usize>,
+    /// 已输入的部分(不含引号)
+    pub prefix: String,
+}
+
+/// `[限定.]列` + 若干段 `->'键'` / `->下标` + 结尾 `->'`(或 `->>'`)与正在输入的键。
+static JSON_KEY_POS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?:(\w+)\.)?(\w+|"[^"]+")((?:\s*->>?\s*(?:'(?:[^']|'')*'|\d+))*)\s*->>?\s*('(?:[^']|'')*)$"#).unwrap()
+});
+static JSON_SEG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"->>?\s*(?:'((?:[^']|'')*)'|(\d+))"#).unwrap());
+
+/// 判断光标是否在 JSON 键名位置;列需能对应到语句里引用的表。是否 JSON 类型由调用方按列类型判断。
+pub fn json_key_context(text: &str, offset: usize, columns: &ColumnsByTable) -> Option<JsonKeyContext> {
+    let offset = offset.min(text.len());
+    let stmt_start = split_statements(text)
+        .into_iter()
+        .find(|r| offset <= r.end)
+        .map_or(0, |r| r.start);
+    let before = &text[stmt_start.min(offset)..offset];
+    let line = &before[before.rfind('\n').map_or(0, |i| i + 1)..];
+    if line.contains("--") {
+        return None;
+    }
+    let caps = JSON_KEY_POS.captures(before)?;
+    let token = caps.get(4)?;
+    // 已闭合的键(`->'a'` 之后)不在键名位置
+    if token.as_str().len() > 1 && token.as_str().replace("''", "").ends_with('\'') {
+        return None;
+    }
+    let col_raw = caps.get(2)?.as_str().trim_matches('"');
+    let path = JSON_SEG
+        .captures_iter(caps.get(3).map_or("", |m| m.as_str()))
+        .filter_map(|c| match (c.get(1), c.get(2)) {
+            (Some(k), _) => Some(PathSeg::Key(k.as_str().replace("''", "'"))),
+            (None, Some(n)) => n.as_str().parse().ok().map(PathSeg::Index),
+            _ => None,
+        })
+        .collect();
+    let (table, column) = resolve_column(text, offset, caps.get(1).map(|q| q.as_str()), col_raw, columns)?;
     let start = stmt_start + token.start();
-    let prefix = token.as_str().trim_start_matches('\'').replace("''", "'");
-    Some(ValueContext { table, column, replace: start..offset, prefix, quoted })
+    let prefix = token.as_str()[1..].replace("''", "'");
+    Some(JsonKeyContext { table, column, path, replace: start..offset, prefix })
 }
 
 /// 常用 Redis 命令:(名称, 签名, 首参是否为 key)。
@@ -1130,5 +1194,31 @@ mod tests {
         assert!(value_context("select * from users where status = 'a' ", 39, &c).is_none());
         assert!(value_context("select * from users where nope = '", 34, &c).is_none());
         assert!(value_context("select 1 -- where status = '", 28, &c).is_none());
+    }
+
+    #[test]
+    fn json_key_positions() {
+        let (_, mut c, _) = shop();
+        c.insert("events".into(), vec![ColumnBrief { name: "payload".into(), data_type: "jsonb".into() }]);
+        let k = |s: &str| PathSeg::Key(s.into());
+        let text = "select * from events where payload->'";
+        let v = json_key_context(text, text.len(), &c).unwrap();
+        assert_eq!((v.table.as_str(), v.column.as_str(), v.path.clone(), v.prefix.as_str()), ("events", "payload", vec![], ""));
+        assert_eq!(&text[v.replace.clone()], "'");
+        // 逐级:已写好的键与下标进路径,->> 也算;键里的 '' 还原成 '
+        let text = "SELECT e.payload -> 'user' ->0->'it''s'->>'na";
+        let full = format!("{text} FROM events e");
+        let v = json_key_context(&full, text.len(), &c).unwrap();
+        assert_eq!(v.path, vec![k("user"), PathSeg::Index(0), k("it's")]);
+        assert_eq!(v.prefix, "na");
+        assert_eq!(&full[v.replace.clone()], "'na");
+        // 带引号的列名
+        let text = "select \"payload\"->'a'->' from events";
+        assert_eq!(json_key_context(text, 24, &c).unwrap().path, vec![k("a")]);
+        // 键已闭合、普通取值位置、未知列、注释里:不算
+        assert!(json_key_context("select payload->'a' from events", 19, &c).is_none());
+        assert!(json_key_context("select * from users where status = '", 36, &c).is_none());
+        assert!(json_key_context("select nope->' from events", 14, &c).is_none());
+        assert!(json_key_context("select 1 -- payload->'", 22, &c).is_none());
     }
 }

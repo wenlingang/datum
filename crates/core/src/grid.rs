@@ -1,5 +1,6 @@
 //! 结果网格的客户端逻辑:筛选、排序、导出、单元格分级与列宽适配。
 
+use crate::json::{self, Kind, Node, PathSeg};
 use rust_i18n::t;
 use std::cmp::Ordering;
 
@@ -132,6 +133,10 @@ pub struct FilterRow {
     pub col: String,
     pub op: FilterOp,
     pub value: String,
+    /// JSON 列里的字段路径(在树上点字段生成);为空表示比较整列
+    pub path: Vec<PathSeg>,
+    /// 被点字段的类型:决定等于 / 大小比较按数值、布尔还是文本(手填的条件为 None)
+    pub json_type: Option<Kind>,
 }
 
 impl FilterRow {
@@ -166,6 +171,29 @@ pub fn match_cell(cell: Option<&str>, op: FilterOp, value: &str) -> bool {
     }
 }
 
+/// JSON 字段条件:按路径取出字段再比较,语义与下推到 PG 的 SQL 一致(见 `sql::build`)。
+/// 带类型的等于 / 不等于按类型精确比较(字符串区分大小写,数字按数值,`3` 与 `"3"` 不相等);
+/// 其余操作比较 `->>` 取出的文本(JSON null 与缺失的键都当作 NULL)。单元格不是合法 JSON 时视同缺失。
+pub fn match_json(cell: Option<&str>, path: &[PathSeg], json_type: Option<Kind>, op: FilterOp, value: &str) -> bool {
+    let doc = cell.and_then(|c| json::parse(c).ok());
+    let field = doc.as_ref().and_then(|d| d.at(path));
+    if let (Some(kind), FilterOp::Eq | FilterOp::Ne) = (json_type, op) {
+        if let Some(want) = json::typed_value(kind, value) {
+            let hit = field.is_some_and(|f| json_equal(f, &want));
+            return if op == FilterOp::Eq { hit } else { !hit };
+        }
+    }
+    match_cell(field.and_then(Node::as_text).as_deref(), op, value)
+}
+
+/// 标量按类型相等:数字比数值(`1.0` 等于 `1`),其余按原值。
+fn json_equal(a: &Node, b: &Node) -> bool {
+    match (a, b) {
+        (Node::Number(x), Node::Number(y)) => compare_cells(x, y) == Ordering::Equal,
+        _ => a == b,
+    }
+}
+
 /// 条件集的规范化签名:仅有效条件的(列, 操作符, 去空白后的值)+ 连接词。
 /// 用于比较"草稿"与"已应用"是否一致。
 pub fn filters_signature(filters: &[FilterRow], conj: Conj) -> Vec<(String, FilterOp, String)> {
@@ -178,7 +206,13 @@ pub fn filters_signature(filters: &[FilterRow], conj: Conj) -> Vec<(String, Filt
             } else {
                 String::new()
             };
-            (f.col.clone(), f.op, v)
+            // 路径与字段类型也是条件的一部分:同列不同字段不能算作同一条件
+            let col = if f.path.is_empty() {
+                f.col.clone()
+            } else {
+                format!("{}\u{0}{}\u{0}{:?}", f.col, serde_json::to_string(&f.path).unwrap_or_default(), f.json_type)
+            };
+            (col, f.op, v)
         })
         .collect();
     // 连接词编码进签名尾部
@@ -213,8 +247,13 @@ pub fn filter_indices(
         .enumerate()
         .filter(|(_, row)| {
             let mut results = active.iter().map(|(ci, f)| {
-                row.get(*ci)
-                    .is_some_and(|c| match_cell(c.as_deref(), f.op, &f.value))
+                row.get(*ci).is_some_and(|c| {
+                    if f.path.is_empty() {
+                        match_cell(c.as_deref(), f.op, &f.value)
+                    } else {
+                        match_json(c.as_deref(), &f.path, f.json_type, f.op, &f.value)
+                    }
+                })
             });
             match conj {
                 Conj::And => results.all(|r| r),
@@ -600,6 +639,8 @@ mod tests {
             col: col.into(),
             op,
             value: v.into(),
+            path: vec![],
+            json_type: None,
         };
         let and = filter_indices(
             &rows,
@@ -649,12 +690,16 @@ mod tests {
             col: "a".into(),
             op: FilterOp::Eq,
             value: " x ".into(),
+            path: vec![],
+            json_type: None,
         }];
         let b = vec![FilterRow {
             id: 9,
             col: "a".into(),
             op: FilterOp::Eq,
             value: "x".into(),
+            path: vec![],
+            json_type: None,
         }];
         assert_eq!(
             filters_signature(&a, Conj::And),
@@ -664,6 +709,42 @@ mod tests {
             filters_signature(&a, Conj::And),
             filters_signature(&b, Conj::Or)
         );
+    }
+
+    #[test]
+    fn json_path_filters_match_like_server() {
+        let k = |s: &str| PathSeg::Key(s.into());
+        let doc = r#"{"a": {"n": 3, "s": "Paid", "ok": true, "z": null, "ns": "3"}, "tags": ["x", "y"]}"#;
+        let m = |path: &[PathSeg], ty, op, v: &str| match_json(Some(doc), path, ty, op, v);
+        use FilterOp::*;
+        // 带类型的等于:数字按数值,字符串区分大小写,`3` 与 `"3"` 不相等
+        assert!(m(&[k("a"), k("n")], Some(Kind::Number), Eq, "3.0"));
+        assert!(!m(&[k("a"), k("ns")], Some(Kind::Number), Eq, "3"));
+        assert!(m(&[k("a"), k("s")], Some(Kind::String), Eq, "Paid"));
+        assert!(!m(&[k("a"), k("s")], Some(Kind::String), Eq, "paid"));
+        assert!(m(&[k("a"), k("ok")], Some(Kind::Bool), Eq, "true"));
+        assert!(m(&[k("a"), k("z")], Some(Kind::Null), Eq, ""));
+        // 缺失的键:不等于成立,等于不成立
+        assert!(m(&[k("a"), k("nope")], Some(Kind::String), Ne, "x"));
+        assert!(!m(&[k("a"), k("nope")], Some(Kind::String), Eq, "x"));
+        // 其余操作比较 ->> 文本
+        assert!(m(&[k("a"), k("n")], Some(Kind::Number), Gt, "2"));
+        assert!(m(&[k("a"), k("s")], Some(Kind::String), Contains, "ai"));
+        assert!(m(&[k("tags"), PathSeg::Index(1)], None, Eq, "Y"));
+        assert!(m(&[k("a"), k("z")], None, Empty, ""));
+        // 数字类型配非数字的值:退回文本比较
+        assert!(!m(&[k("a"), k("n")], Some(Kind::Number), Eq, "abc"));
+        // 不是 JSON 的单元格 / NULL:视同缺失
+        assert!(match_json(Some("oops"), &[k("a")], None, Empty, ""));
+        assert!(match_json(None, &[k("a")], Some(Kind::Number), Ne, "1"));
+
+        let columns = vec!["doc".to_string()];
+        let rows = vec![vec![Some(doc.to_string())], vec![Some(r#"{"a":{"n":4}}"#.to_string())]];
+        let f = FilterRow { id: 1, col: "doc".into(), op: Eq, value: "4".into(), path: vec![k("a"), k("n")], json_type: Some(Kind::Number) };
+        assert_eq!(filter_indices(&rows, &columns, std::slice::from_ref(&f), Conj::And), vec![1]);
+        // 签名里带上路径:同列不同字段的条件不相同
+        let g = FilterRow { path: vec![k("a"), k("s")], ..f.clone() };
+        assert_ne!(filters_signature(&[f], Conj::And), filters_signature(&[g], Conj::And));
     }
 
     #[test]

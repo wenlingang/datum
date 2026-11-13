@@ -15,7 +15,7 @@ import { Icon } from "../ui/kit";
 import { FS } from "../ui/text";
 import { beautify, commit, explain, run, runAll, selectionText, sendSelectionToAi, type TabModel, toggleFilter } from "./model";
 import { primaryRange, rangeOf } from "./textpos";
-import { columnValues, valueInsert } from "./values";
+import { columnValues, isJsonType, jsonKeyTree, keysAt, valueInsert } from "./values";
 import { straightenTypedQuote } from "../ui/editor";
 
 const BOUNDARY = /[\s,;()]/;
@@ -59,10 +59,40 @@ async function valueItems(m: TabModel, text: string, offset: number): Promise<{ 
   return { items, quoted: vc.quoted };
 }
 
+/** JSON 键名位置(`col->'…`、`col->'a'->>'…`,只做 PG):该列取样推断出的、这一层出现过的键,
+ *  按出现次数排序(键树的顺序);已输入的部分前缀匹配的排前面。不在键名位置为 null。 */
+async function jsonKeyItems(m: TabModel, text: string, offset: number): Promise<EditorCompletionItem[] | null> {
+  if (m.dbKind !== "pg") return null;
+  const jc = grid.jsonKeyContext(text, offset, conns.columns(m.connId) ?? null);
+  if (!jc || !isJsonType(jc.dataType)) return null;
+  const tree = await jsonKeyTree(m.dbKind, m.connId, jc.table, jc.column);
+  const level = tree ? keysAt(tree, jc.path) : null;
+  const p = jc.prefix.toLowerCase();
+  const hits = (level?.keys ?? []).filter((k) => k.name.toLowerCase().includes(p));
+  hits.sort((a, b) => Number(!a.name.toLowerCase().startsWith(p)) - Number(!b.name.toLowerCase().startsWith(p)));
+  // 编辑器自动补上的右引号一并替换
+  const end = text[jc.end] === "'" ? jc.end + 1 : jc.end;
+  const range = rangeOf(text, jc.start, end);
+  return hits.map((k) => ({
+    label: k.name,
+    kind: "field" as EditorCompletionKind,
+    detail: t("tab.completion_json_key", { column: jc.column }),
+    insertText: sqlText.literal(k.name, m.dbKind),
+    filterText: `'${k.name}`,
+    range,
+  }));
+}
+
 async function complete(m: TabModel, req: EditorCompletionRequest) {
   const editor = m.editor;
   if (!editor) return;
   const text = await editor.value();
+  // JSON 键名在引号里:只给键名
+  const keys = await jsonKeyItems(m, text, req.offset);
+  if (keys) {
+    editor.presentCompletions(req.id, keys.map((it, i) => ({ ...it, sortText: String(i).padStart(5, "0") })), true);
+    return;
+  }
   const cols = conns.columns(m.connId) ?? null;
   const tables = conns.tables(m.connId) ?? [];
   const values = await valueItems(m, text, req.offset);
@@ -194,7 +224,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
         softWrap={false}
         fontSize={13}
         completion
-        completionTriggerCharacters={[".", " ", ":"]}
+        completionTriggerCharacters={[".", " ", ":", "'"]}
         onChange={({ value }) => onTextChange(m, value)}
         onSelectionChange={({ selections }) => {
           m.selections.set(selections);
