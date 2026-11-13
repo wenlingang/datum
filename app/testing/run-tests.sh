@@ -84,6 +84,11 @@ fi
 if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
   D="$ROOT/mysql"; mkdir -p "$D"
   M="mysql -h127.0.0.1 -P$DATUM_TEST_MYSQL -uroot"
+  # 上一次留下的 SLEEP 会话结束时会记进慢 SQL 排行:先结束掉
+  kill_sleepers() {
+    $M -N -e "SELECT CONCAT('KILL ', id, ';') FROM information_schema.processlist WHERE info LIKE '%datum_sleeper%' AND info NOT LIKE '%processlist%'" | $M >/dev/null 2>&1 || true
+  }
+  kill_sleepers
   $M -e "SET SESSION cte_max_recursion_depth = 5000; DROP DATABASE IF EXISTS datum_ui_test; CREATE DATABASE datum_ui_test; USE datum_ui_test;
     CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(40), price INT, INDEX idx_unused_name (name));
     INSERT INTO products VALUES (1,'a',1),(2,'b',2),(3,'c',3);
@@ -96,6 +101,7 @@ if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
   printf '[{"id":"my","name":"mysql","kind":"mysql","env":"local","host":"127.0.0.1","port":%s,"user":"root","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_MYSQL" > "$D/connections.json"
   run mysql "$D" tab/diag-mysql.test.tsx
   kill $SLEEPER 2>/dev/null; wait $SLEEPER 2>/dev/null || true
+  kill_sleepers
   $M -e "DROP DATABASE IF EXISTS datum_ui_test" >/dev/null
 fi
 
