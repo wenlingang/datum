@@ -16,6 +16,7 @@ import { Diagnostics } from "./Diagnostics";
 import { RedisInsight } from "./RedisInsight";
 import { RiskDialog } from "./RiskDialog";
 import { UndoDialog } from "./UndoDialog";
+import { ParamsDialog } from "./ParamsDialog";
 import { SqlEditor } from "./SqlEditor";
 import { Toolbar } from "./Toolbar";
 
@@ -68,6 +69,7 @@ function ModelView(props: { m: TabModel }) {
       </View>
       <RiskDialog m={m} />
       <UndoDialog m={m} />
+      <ParamsDialog m={m} />
       <CellDialog m={m} />
     </View>
   );

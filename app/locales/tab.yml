@@ -1569,3 +1569,20 @@ diag:
       en: "Result"
       zh-CN: "结果"
       zh-TW: "結果"
+params:
+  title:
+    en: Query Parameters
+    zh-CN: 查询参数
+    zh-TW: 查詢參數
+  hint:
+    en: "Numbers go in as numbers, NULL as null, anything else as a quoted string."
+    zh-CN: "数字按数字代入,NULL 代入空值,其余作为字符串(自动加引号并转义)。"
+    zh-TW: "數字按數字代入,NULL 代入空值,其餘作為字串(自動加引號並轉義)。"
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  run:
+    en: Run
+    zh-CN: 运行
+    zh-TW: 執行

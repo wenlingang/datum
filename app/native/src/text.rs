@@ -105,6 +105,18 @@ impl Sql {
         Ok(build::page_sql(&table, page as usize, page_size as usize, d, sort))
     }
 
+    /// SQL 里的 `:name` 参数(去重,按第一次出现的顺序)。
+    pub fn find_params(sql: String) -> Vec<String> {
+        datum_core::sql::params::find_params(&sql)
+    }
+
+    /// 代入参数值:`values` 为 `{ 名字: 值 }`;数字原样、NULL 为空值,其余写成转义后的字符串。
+    pub fn bind_params(sql: String, values: JsonValue, kind: String) -> Result<String, String> {
+        let d = dialect(&kind)?;
+        let values: std::collections::HashMap<String, String> = from(values, "values")?;
+        Ok(datum_core::sql::params::bind_params(&sql, &values, d))
+    }
+
     /// 从 SQL 里猜主表名(结果集可编辑、导出 INSERT 用)。
     pub fn guess_table_name(sql: String) -> Option<String> {
         build::guess_table_name(&sql)

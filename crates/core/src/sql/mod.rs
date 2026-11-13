@@ -3,6 +3,7 @@
 pub mod build;
 pub mod format;
 pub mod impact;
+pub mod params;
 pub mod risk;
 pub mod stmt;
 pub mod undo;

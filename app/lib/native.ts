@@ -108,6 +108,10 @@ export const sql = {
   pageSql: (table: string, page: number, pageSize: number, kind: DbKind, sortCol?: string | null, desc?: boolean) =>
     Sql.pageSql(table, page, pageSize, kind, sortCol ?? null, desc ?? null),
   guessTableName: (s: string) => Sql.guessTableName(s),
+  /** SQL 里的 `:name` 参数(去重,按出现顺序)。 */
+  findParams: (s: string) => Sql.findParams(s) as string[],
+  /** 代入参数值:数字原样、NULL 为空值,其余写成转义后的字符串。 */
+  bindParams: (s: string, values: Record<string, string>, kind: DbKind) => Sql.bindParams(s, values, kind) as string,
 };
 
 export const prefsStore = {

@@ -149,6 +149,11 @@ export interface TabModel {
   /** 撤销确认框是否打开 */
   readonly undoOpen: Signal<boolean>;
 
+  /** 查询参数(`:name`)待填写:执行前弹框 */
+  readonly params: Signal<ParamsGate | null>;
+  /** 本标签上次填过的参数值(下次弹框预填) */
+  paramValues: Record<string, string>;
+
   /** 一次执行多条语句时每条的结果(两条以上才有);结果区上方按条切换 */
   readonly multi: Signal<StmtResult[] | null>;
   readonly multiIndex: Signal<number>;
@@ -163,6 +168,34 @@ export interface TabModel {
   token: number;
   filterSeq: number;
   viewCache: { result: QueryResult | null; applied: FilterRow[]; conj: Conj; out: number[] } | null;
+}
+
+/** 等待填写的查询参数:填完后用代入值的 SQL 继续 `onRun`。 */
+export interface ParamsGate {
+  sql: string;
+  names: string[];
+  values: Signal<Record<string, string>>;
+  onRun: (bound: string) => void;
+}
+
+/** SQL 里有 `:name` 参数时先弹框填值,填完再继续;没有参数返回 false(调用方照常执行)。 */
+function askParams(m: TabModel, sql: string, onRun: (bound: string) => void): boolean {
+  if (!supportsSql(m.dbKind)) return false;
+  const names = sqlText.findParams(sql);
+  if (names.length === 0) return false;
+  const values = Object.fromEntries(names.map((n) => [n, m.paramValues[n] ?? ""]));
+  m.params.set({ sql, names, values: signal(values), onRun });
+  return true;
+}
+
+/** 参数弹框里点「运行」:记住填的值,代入后继续。 */
+export function confirmParams(m: TabModel) {
+  const gate = m.params();
+  if (!gate) return;
+  const values = gate.values();
+  Object.assign(m.paramValues, values);
+  m.params.set(null);
+  gate.onRun(sqlText.bindParams(gate.sql, values, m.dbKind));
 }
 
 /** 多语句执行里的一条:结果或错误;前面出错后没执行的标为 skipped。 */
@@ -214,6 +247,8 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     lastRun: signal<{ sql: string; explain: boolean } | null>(null),
     undo: signal<UndoPrep | null>(null),
     undoOpen: signal(false),
+    params: signal<ParamsGate | null>(null),
+    paramValues: {},
     multi: signal<StmtResult[] | null>(null),
     multiIndex: signal(0),
     gridWidth: signal(0),
@@ -422,6 +457,8 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     m.err.set(m.dbKind === "redis" ? t("tab.empty_command") : t("tab.empty_sql"));
     return;
   }
+  // `:name` 参数:先填值,代入后再走风险审查与执行
+  if (askParams(m, sql, (bound) => run(m, bound, skipHistory, skipRisk))) return;
   if (m.dbKind === "mongo") {
     toast.info(t("tab.mongo_unsupported"));
     return;
@@ -614,13 +651,14 @@ async function runRedis(m: TabModel, cmd: string, skipHistory: boolean) {
 }
 
 /** EXPLAIN 当前/选中的 SQL(纯 EXPLAIN 不执行查询)。 */
-export function explain(m: TabModel) {
+export function explain(m: TabModel, override?: string) {
   if (!supportsSql(m.dbKind) || m.kind !== "query") return;
-  const sql = sqlToRun(m);
+  const sql = override ?? sqlToRun(m);
   if (!sql.trim()) {
     m.err.set(t("tab.empty_sql"));
     return;
   }
+  if (askParams(m, sql, (bound) => explain(m, bound))) return;
   m.lastRun.set({ sql, explain: true });
   // SQLite 的 EXPLAIN 输出虚拟机字节码,看不出查询计划;要用 EXPLAIN QUERY PLAN
   const prefix = m.dbKind === "sqlite" ? "EXPLAIN QUERY PLAN" : "EXPLAIN";

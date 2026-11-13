@@ -311,3 +311,23 @@ test("表浏览筛选在服务端执行:对整张表生效,不只是当前这一
   await app.waitUntil(() => app.texts().includes("Coffee 2"), { timeout: 10000 });
   expect(app.texts()).not.toContain("Coffee 250");
 });
+
+test("查询参数:执行前弹框填值,预览代入结果;同一标签记住上次的值", async () => {
+  const app = await start();
+  await replaceSql(app, "SELECT name FROM categories WHERE id >= :min AND name <> :skip");
+  await app.press("id:run");
+  await app.waitFor("id:params-dialog", { timeout: 5000 });
+  await app.type("id:param:min", "2");
+  await app.type("id:param:skip", "Blend");
+  await app.waitUntil(() => app.texts().some((s) => s.includes("id >= 2 AND name <> 'Blend'")), { timeout: 5000 });
+  await app.press("id:params-run");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 2 rows returned"), { timeout: 15000 });
+  expect(app.texts()).not.toContain("Single Origin");
+  expect(app.texts()).not.toContain("Blend");
+  // 再执行一次:弹框预填上次的值,取消则不执行
+  await app.press("id:run");
+  await app.waitFor("id:params-dialog", { timeout: 5000 });
+  expect(app.value("id:param:min")).toBe("2");
+  await app.press("id:params-cancel");
+  await app.waitUntil(() => !app.shows("id:params-dialog"), { timeout: 5000 });
+});
