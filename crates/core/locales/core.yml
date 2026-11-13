@@ -1,6 +1,14 @@
 _version: 2
 core:
   err:
+    ssh_proxy_jump_invalid:
+      en: "Can't read the jump hosts (ProxyJump); write them as [user@]host[:port], separated by commas"
+      zh-CN: "看不懂跳板设置(ProxyJump);写法是 [用户@]主机[:端口],多个用逗号隔开"
+      zh-TW: "看不懂跳板設定(ProxyJump);寫法是 [使用者@]主機[:埠],多個用逗號隔開"
+    ssh_jump_auth_failed:
+      en: "Couldn't log in to the jump host. Intermediate jump hosts use ssh-agent or a private key (IdentityFile in ~/.ssh/config, or the default keys in ~/.ssh); passwords aren't sent to them"
+      zh-CN: "登录不了中间的跳板。中间跳板用 ssh-agent 或私钥认证(~/.ssh/config 里的 IdentityFile,或 ~/.ssh 下的默认私钥),不会发送密码"
+      zh-TW: "登入不了中間的跳板。中間跳板用 ssh-agent 或私鑰認證(~/.ssh/config 裡的 IdentityFile,或 ~/.ssh 下的預設私鑰),不會傳送密碼"
     redis_cluster_tunnel:
       en: "Connected through an SSH tunnel, which only reaches the current node"
       zh-CN: "经 SSH 隧道连接,隧道只通当前节点"

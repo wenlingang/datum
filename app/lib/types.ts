@@ -60,6 +60,8 @@ export interface SshTunnel {
   keyPath: string;
   /** SSH 密码 / 私钥密码短语:保存时 null 为沿用原值;从 core 读回来的永远是 null */
   secret?: string | null;
+  /** 先经过的跳板(ProxyJump 写法);空则按 ~/.ssh/config */
+  proxyJump?: string;
 }
 
 export interface HistoryEntry {

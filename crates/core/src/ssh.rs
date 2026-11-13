@@ -6,7 +6,12 @@
 //!   [`known_hosts`]:有记录就必须对上(不论密钥类型)、吊销的拒绝;两处都没有记录才首次信任,
 //!   记到 Datum 自己的文件里,不改动用户的 `~/.ssh`。
 //! - 证书校验仍按数据库的原主机名进行([`Target::tls_host`]),驱动只是改连本地端口。
+//! - 跳板主机可以填 `~/.ssh/config` 里的别名:HostName / Port / User / IdentityFile / ProxyJump 照用
+//!   (表单里填了的优先,端口填默认的 22 时听 config 的)。
+//! - 多级跳板(ProxyJump):依次连上每一跳,下一跳经上一跳的 direct-tcpip 通道握手;中间的跳板用
+//!   ssh-agent 或私钥(config 里的 IdentityFile、`~/.ssh` 下的默认私钥)认证,不发送密码。
 
+pub mod config;
 mod known_hosts;
 
 use self::known_hosts::Status;
@@ -175,22 +180,27 @@ fn expand_home(path: &str) -> PathBuf {
     }
 }
 
-/// 私钥路径:填了就用填的;没填就找 ~/.ssh 下的默认私钥。
-fn key_path(cfg: &SshTunnel) -> AppResult<PathBuf> {
+/// `~/.ssh` 下的默认私钥(存在的)。
+fn default_keys() -> Vec<PathBuf> {
+    let Some(home) = dirs::home_dir() else { return vec![] };
+    ["id_ed25519", "id_ecdsa", "id_rsa"].iter().map(|n| home.join(".ssh").join(n)).filter(|p| p.exists()).collect()
+}
+
+/// 私钥路径:填了就用填的;没填就用 ssh config 里的 IdentityFile,再找 ~/.ssh 下的默认私钥。
+fn key_path(cfg: &SshTunnel, ep: &Endpoint) -> AppResult<PathBuf> {
     let given = cfg.key_path.trim();
     if !given.is_empty() {
         return Ok(expand_home(given));
     }
-    let home = dirs::home_dir().ok_or_else(|| ssh_err("core.err.ssh_key_not_found"))?;
-    ["id_ed25519", "id_ecdsa", "id_rsa"]
+    ep.identity
         .iter()
-        .map(|n| home.join(".ssh").join(n))
         .find(|p| p.exists())
+        .cloned()
+        .or_else(|| default_keys().into_iter().next())
         .ok_or_else(|| ssh_err("core.err.ssh_key_not_found"))
 }
 
-fn load_key(cfg: &SshTunnel, passphrase: &str) -> AppResult<keys::PrivateKey> {
-    let path = key_path(cfg)?;
+fn load_key_file(path: &Path, passphrase: &str) -> AppResult<keys::PrivateKey> {
     let pass = (!passphrase.is_empty()).then_some(passphrase);
     keys::load_secret_key(&path, pass).map_err(|e| {
         let key = match e {
@@ -200,6 +210,68 @@ fn load_key(cfg: &SshTunnel, passphrase: &str) -> AppResult<keys::PrivateKey> {
         };
         ssh_err(key).with_detail(format!("{}: {e}", path.display()))
     })
+}
+
+// ---------- 主机解析(ssh config、ProxyJump) ----------
+
+/// 要连的一台 SSH 主机(跳板或最终的跳板机),已按 ssh config 解析好。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Endpoint {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    /// config 里的 IdentityFile(已展开 `~`)
+    pub identity: Vec<PathBuf>,
+}
+
+fn local_user() -> String {
+    std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_default()
+}
+
+/// 按 ssh config 解析一台主机;`port` / `user` 是明确指定的(优先)。
+fn endpoint(alias: &str, port: Option<u16>, user: Option<&str>, c: &config::HostConfig) -> Endpoint {
+    let home = dirs::home_dir();
+    Endpoint {
+        host: c.hostname.clone().unwrap_or_else(|| alias.to_string()),
+        port: port.or(c.port).unwrap_or(22),
+        user: user
+            .filter(|u| !u.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| c.user.clone())
+            .unwrap_or_else(local_user),
+        identity: c.identity_files.iter().map(|f| config::expand_home(f, home.as_deref())).collect(),
+    }
+}
+
+/// 隧道要经过的主机:先依次经过 `jumps`,最后到 `bastion`(在它上面开 direct-tcpip 到数据库)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    pub jumps: Vec<Endpoint>,
+    pub bastion: Endpoint,
+}
+
+/// 由表单配置与 ssh config 得出路线。`lookup` 查某个主机的 ssh config(测试时可替换)。
+pub fn plan_with(cfg: &SshTunnel, lookup: impl Fn(&str) -> config::HostConfig) -> AppResult<Plan> {
+    let alias = cfg.host.trim();
+    let c = lookup(alias);
+    // 表单里端口是默认的 22(或没填)时,听 ssh config 的
+    let port = (cfg.port != 0 && cfg.port != 22).then_some(cfg.port).or(c.port).or(Some(cfg.port).filter(|p| *p != 0));
+    let bastion = endpoint(alias, port, Some(&cfg.user), &c);
+    let jump_spec = if cfg.proxy_jump.trim().is_empty() { c.proxy_jump.clone().unwrap_or_default() } else { cfg.proxy_jump.clone() };
+    let hops = config::parse_proxy_jump(&jump_spec)
+        .ok_or_else(|| ssh_err("core.err.ssh_proxy_jump_invalid").with_detail(jump_spec.clone()))?;
+    let jumps = hops
+        .iter()
+        .map(|h| {
+            let hc = lookup(&h.host);
+            endpoint(&h.host, h.port, h.user.as_deref(), &hc)
+        })
+        .collect();
+    Ok(Plan { jumps, bastion })
+}
+
+pub fn plan(cfg: &SshTunnel) -> AppResult<Plan> {
+    plan_with(cfg, config::lookup)
 }
 
 type Session = Handle<HostKeyCheck>;
@@ -256,13 +328,13 @@ async fn agent_auth(handle: &mut Session, user: &str) -> AppResult<bool> {
     }
 }
 
-async fn authenticate(handle: &mut Session, cfg: &SshTunnel, secret: &str) -> AppResult<()> {
-    let user = cfg.user.as_str();
+async fn authenticate(handle: &mut Session, cfg: &SshTunnel, ep: &Endpoint, secret: &str) -> AppResult<()> {
+    let user = ep.user.as_str();
     let failed = |e: russh::Error| ssh_err("core.err.ssh_auth_failed").with_detail(e.to_string());
     let ok = match cfg.auth {
         SshAuth::Password => handle.authenticate_password(user, secret).await.map_err(failed)?.success(),
         SshAuth::Key => {
-            let key = load_key(cfg, secret)?;
+            let key = load_key_file(&key_path(cfg, ep)?, secret)?;
             if key.algorithm().is_rsa() {
                 return Err(ssh_err("core.err.ssh_rsa_unsupported"));
             }
@@ -278,44 +350,123 @@ async fn authenticate(handle: &mut Session, cfg: &SshTunnel, secret: &str) -> Ap
     if ok {
         Ok(())
     } else {
-        Err(ssh_err("core.err.ssh_auth_failed").with_detail(format!("{user}@{}:{}", cfg.host, cfg.port)))
+        Err(ssh_err("core.err.ssh_auth_failed").with_detail(format!("{user}@{}:{}", ep.host, ep.port)))
     }
 }
 
-/// 连上跳板机并完成认证。
-async fn open_session(cfg: &SshTunnel, secret: &str, app_known_hosts: &Path) -> AppResult<Session> {
-    let config = Arc::new(client::Config {
+/// 中间的跳板:不发密码。先试 ssh config 里为它写的 IdentityFile,再试 ssh-agent,最后试 `~/.ssh` 下的默认私钥
+/// (agent 里钥匙多时先试一圈容易用光服务器的认证次数)。私钥先不带密码短语试,主认证是私钥时再用同一个密码短语试。
+async fn authenticate_jump(handle: &mut Session, ep: &Endpoint, passphrase: Option<&str>) -> AppResult<()> {
+    let user = ep.user.as_str();
+    let hash = rsa_hash(handle).await;
+    async fn try_files(handle: &mut Session, user: &str, files: &[PathBuf], passphrase: Option<&str>, hash: Option<HashAlg>) -> bool {
+        for path in files {
+            for pass in [None, passphrase.filter(|p| !p.is_empty())] {
+                let Ok(key) = keys::load_secret_key(path, pass) else { continue };
+                if key.algorithm().is_rsa() {
+                    break;
+                }
+                if handle
+                    .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash))
+                    .await
+                    .is_ok_and(|r| r.success())
+                {
+                    return true;
+                }
+                break;
+            }
+        }
+        false
+    }
+    let configured: Vec<PathBuf> = ep.identity.iter().filter(|p| p.exists()).cloned().collect();
+    if try_files(handle, user, &configured, passphrase, hash).await {
+        return Ok(());
+    }
+    if agent_auth(handle, user).await.unwrap_or(false) {
+        return Ok(());
+    }
+    let defaults: Vec<PathBuf> = default_keys().into_iter().filter(|p| !configured.contains(p)).collect();
+    if try_files(handle, user, &defaults, passphrase, hash).await {
+        return Ok(());
+    }
+    Err(ssh_err("core.err.ssh_jump_auth_failed").with_detail(format!("{user}@{}:{}", ep.host, ep.port)))
+}
+
+fn session_config(ep: &Endpoint, app_known_hosts: &Path) -> Arc<client::Config> {
+    Arc::new(client::Config {
         preferred: russh::Preferred {
-            key: preferred_key_algorithms(&cfg.host, cfg.port, app_known_hosts).into(),
+            key: preferred_key_algorithms(&ep.host, ep.port, app_known_hosts).into(),
             ..russh::Preferred::DEFAULT
         },
         keepalive_interval: Some(KEEPALIVE),
         keepalive_max: 3,
         nodelay: true,
         ..Default::default()
-    });
+    })
+}
+
+/// 一条 SSH 会话链:依次经过的跳板会话 + 最后到跳板机的会话。前面的会话要一直活着,
+/// 后一跳的连接就是走在前一跳的通道上的。
+pub(crate) struct Chain {
+    jumps: Vec<Session>,
+    session: Session,
+}
+
+impl Chain {
+    fn is_closed(&self) -> bool {
+        self.session.is_closed() || self.jumps.iter().any(|s| s.is_closed())
+    }
+}
+
+/// 握手一跳:第一跳直接 TCP,之后经上一跳的 direct-tcpip 通道。
+async fn handshake(ep: &Endpoint, via: Option<&Session>, app_known_hosts: &Path) -> AppResult<Session> {
     let rejected = Arc::new(std::sync::Mutex::new(None));
     let handler = HostKeyCheck {
-        host: cfg.host.clone(),
-        port: cfg.port,
+        host: ep.host.clone(),
+        port: ep.port,
         app_known_hosts: app_known_hosts.to_path_buf(),
         rejected: rejected.clone(),
     };
-    let addr = (cfg.host.clone(), cfg.port);
-    let connect = async {
-        let mut handle = client::connect(config, addr, handler).await.map_err(|e| {
-            rejected
-                .lock()
-                .unwrap()
-                .take()
-                .unwrap_or_else(|| ssh_err("core.err.ssh_connect_failed").with_detail(e.to_string()))
-        })?;
-        authenticate(&mut handle, cfg, secret).await?;
-        Ok(handle)
+    let config = session_config(ep, app_known_hosts);
+    let fail = |e: russh::Error| {
+        rejected
+            .lock()
+            .unwrap()
+            .take()
+            .unwrap_or_else(|| ssh_err("core.err.ssh_connect_failed").with_detail(format!("{}:{} ({e})", ep.host, ep.port)))
     };
-    match tokio::time::timeout(CONNECT_TIMEOUT, connect).await {
+    match via {
+        None => client::connect(config, (ep.host.clone(), ep.port), handler).await.map_err(fail),
+        Some(prev) => {
+            let ch = prev
+                .channel_open_direct_tcpip(ep.host.clone(), ep.port as u32, "127.0.0.1", 0)
+                .await
+                .map_err(|e| ssh_err("core.err.ssh_connect_failed").with_detail(format!("{}:{} ({e})", ep.host, ep.port)))?;
+            client::connect_stream(config, ch.into_stream(), handler).await.map_err(fail)
+        }
+    }
+}
+
+/// 按路线连上跳板机并完成认证(经过 ProxyJump 时逐跳握手)。
+async fn open_session(cfg: &SshTunnel, secret: &str, app_known_hosts: &Path) -> AppResult<Chain> {
+    let plan = plan(cfg)?;
+    let jump_pass = (cfg.auth == SshAuth::Key).then_some(secret);
+    let connect = async {
+        let mut jumps: Vec<Session> = Vec::new();
+        for ep in &plan.jumps {
+            let mut s = handshake(ep, jumps.last(), app_known_hosts).await?;
+            authenticate_jump(&mut s, ep, jump_pass).await?;
+            jumps.push(s);
+        }
+        let mut session = handshake(&plan.bastion, jumps.last(), app_known_hosts).await?;
+        authenticate(&mut session, cfg, &plan.bastion, secret).await?;
+        Ok(Chain { jumps, session })
+    };
+    // 每多一跳多给一段时间
+    let limit = CONNECT_TIMEOUT * (1 + plan.jumps.len() as u32);
+    match tokio::time::timeout(limit, connect).await {
         Ok(r) => r,
-        Err(_) => Err(ssh_err("core.err.ssh_timeout").with_detail(format!("{}:{}", cfg.host, cfg.port))),
+        Err(_) => Err(ssh_err("core.err.ssh_timeout").with_detail(format!("{}:{}", plan.bastion.host, plan.bastion.port))),
     }
 }
 
@@ -331,17 +482,17 @@ struct Route {
 }
 
 impl Route {
-    async fn open_channel(&self, session: &Mutex<Session>, from_port: u16) -> AppResult<russh::Channel<client::Msg>> {
+    async fn open_channel(&self, session: &Mutex<Chain>, from_port: u16) -> AppResult<russh::Channel<client::Msg>> {
         let mut guard = session.lock().await;
         if guard.is_closed() {
             *guard = open_session(&self.ssh, &self.secret, &self.known_hosts).await?;
         }
-        match self.direct_tcpip(&guard, from_port).await {
+        match self.direct_tcpip(&guard.session, from_port).await {
             Ok(ch) => Ok(ch),
             // 会话在检查之后才断开:重连一次再试
             Err(_) if guard.is_closed() => {
                 *guard = open_session(&self.ssh, &self.secret, &self.known_hosts).await?;
-                self.direct_tcpip(&guard, from_port).await.map_err(|e| self.unreachable(e))
+                self.direct_tcpip(&guard.session, from_port).await.map_err(|e| self.unreachable(e))
             }
             Err(e) => Err(self.unreachable(e)),
         }
@@ -492,13 +643,46 @@ mod tests {
     }
 
     #[test]
+    fn plan_follows_ssh_config_and_proxy_jump() {
+        let lookup = |h: &str| match h {
+            "prod-db" => config::HostConfig {
+                hostname: Some("10.1.2.3".into()),
+                port: Some(2200),
+                user: Some("dba".into()),
+                identity_files: vec!["/k/prod".into()],
+                proxy_jump: Some("gw,ops@edge:2222".into()),
+            },
+            "gw" => config::HostConfig { hostname: Some("gw.example.com".into()), user: Some("me".into()), ..Default::default() },
+            _ => config::HostConfig::default(),
+        };
+        let cfg = SshTunnel { host: "prod-db".into(), port: 22, user: String::new(), ..Default::default() };
+        let p = plan_with(&cfg, lookup).unwrap();
+        assert_eq!((p.bastion.host.as_str(), p.bastion.port, p.bastion.user.as_str()), ("10.1.2.3", 2200, "dba"));
+        assert_eq!(p.bastion.identity, vec![PathBuf::from("/k/prod")]);
+        let hops: Vec<(&str, u16, &str)> = p.jumps.iter().map(|e| (e.host.as_str(), e.port, e.user.as_str())).collect();
+        assert_eq!(hops, vec![("gw.example.com", 22, "me"), ("edge", 2222, "ops")]);
+
+        // 表单里填的优先:非默认端口、用户、跳板;跳板写 none 则不经过
+        let cfg = SshTunnel { host: "prod-db".into(), port: 2201, user: "root".into(), proxy_jump: "none".into(), ..Default::default() };
+        let p = plan_with(&cfg, lookup).unwrap();
+        assert_eq!((p.bastion.port, p.bastion.user.as_str()), (2201, "root"));
+        assert!(p.jumps.is_empty());
+        // 不在 config 里的主机原样使用
+        let cfg = SshTunnel { host: "1.2.3.4".into(), port: 22, user: "u".into(), ..Default::default() };
+        let p = plan_with(&cfg, lookup).unwrap();
+        assert_eq!((p.bastion.host.as_str(), p.bastion.port), ("1.2.3.4", 22));
+        let bad = SshTunnel { host: "x".into(), proxy_jump: "h:port".into(), ..Default::default() };
+        assert!(plan_with(&bad, lookup).is_err());
+    }
+
+    #[test]
     fn explicit_key_path_expands_home() {
         let cfg = SshTunnel {
             key_path: "~/.ssh/work_key".into(),
             auth: SshAuth::Key,
             ..Default::default()
         };
-        let p = key_path(&cfg).unwrap();
+        let p = key_path(&cfg, &endpoint("h", None, None, &config::HostConfig::default())).unwrap();
         assert!(p.ends_with(".ssh/work_key"));
         assert!(!p.starts_with("~"));
     }

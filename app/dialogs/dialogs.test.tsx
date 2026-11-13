@@ -102,10 +102,12 @@ describe("connection form", () => {
     await app.press("id:conn-save");
     await app.waitFor("text:Enter the SSH host");
     await app.type("id:conn-ssh-host", "bastion.example.com");
-    await app.press("id:conn-save");
-    await app.waitFor("text:Enter the SSH user");
+    // 用户名可不填(按 ~/.ssh/config 或本机登录名)
+    await app.waitFor("text:/⇢ ssh bastion\\.example\\.com:22$/");
     await app.type("id:conn-ssh-user", "ops");
     await app.waitFor("text:/⇢ ssh ops@bastion\\.example\\.com:22$/");
+    await app.type("id:conn-ssh-jump", "me@gw:2200");
+    await app.waitFor("text:/⇢ me@gw:2200  ⇢ ssh ops@bastion\\.example\\.com:22$/");
     // 私钥:出现私钥文件框;agent:密码框消失
     await app.press("label:Key");
     await app.waitFor("id:conn-ssh-key");
@@ -123,6 +125,7 @@ describe("connection form", () => {
     expect(conn?.ssh?.host).toBe("bastion.example.com");
     expect(conn?.ssh?.port).toBe(22);
     expect(conn?.ssh?.user).toBe("ops");
+    expect(conn?.ssh?.proxyJump).toBe("me@gw:2200");
     expect(conn?.ssh?.auth).toBe("password");
     // local 环境:与数据库密码同样明文存在配置里
     expect(conn?.ssh?.secret).toBe("jump-pw");

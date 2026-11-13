@@ -480,17 +480,29 @@ conn_form:
     zh-CN: 私钥没有密码短语就留空
     zh-TW: 私鑰沒有密碼短語就留空
   ssh_hint:
-    en: "Host and port above are the database as seen from the SSH server (often 127.0.0.1 or an internal address). Secrets are stored like the database password: in the system keychain for staging / prod."
-    zh-CN: 上面的主机和端口填跳板机视角下的数据库地址(常见是 127.0.0.1 或内网地址)。SSH 密码与数据库密码一样,staging / prod 存在系统钥匙串。
-    zh-TW: 上面的主機與連接埠填跳板機視角下的資料庫位址(常見是 127.0.0.1 或內網位址)。SSH 密碼與資料庫密碼一樣,staging / prod 存在系統鑰匙圈。
+    en: "Host and port above are the database as seen from the SSH server (often 127.0.0.1 or an internal address). HostName, Port, User, IdentityFile and ProxyJump in ~/.ssh/config are honoured; intermediate jump hosts log in with ssh-agent or a private key, never a password. Secrets are stored like the database password: in the system keychain for staging / prod."
+    zh-CN: 上面的主机和端口填跳板机视角下的数据库地址(常见是 127.0.0.1 或内网地址)。会读 ~/.ssh/config 里的 HostName、Port、User、IdentityFile、ProxyJump;中间的跳板用 ssh-agent 或私钥登录,不发送密码。SSH 密码与数据库密码一样,staging / prod 存在系统钥匙串。
+    zh-TW: 上面的主機與連接埠填跳板機視角下的資料庫位址(常見是 127.0.0.1 或內網位址)。會讀 ~/.ssh/config 裡的 HostName、Port、User、IdentityFile、ProxyJump;中間的跳板用 ssh-agent 或私鑰登入,不傳送密碼。SSH 密碼與資料庫密碼一樣,staging / prod 存在系統鑰匙圈。
   ssh_host_required:
     en: Enter the SSH host
     zh-CN: 请填写跳板机地址
     zh-TW: 請填寫跳板機位址
-  ssh_user_required:
-    en: Enter the SSH user
-    zh-CN: 请填写 SSH 用户名
-    zh-TW: 請填寫 SSH 使用者名稱
+  ssh_host_placeholder:
+    en: "bastion.example.com, or a Host alias from ~/.ssh/config"
+    zh-CN: "bastion.example.com,或 ~/.ssh/config 里的 Host 别名"
+    zh-TW: "bastion.example.com,或 ~/.ssh/config 裡的 Host 別名"
+  ssh_user_placeholder:
+    en: "Optional: User in ~/.ssh/config, else your login name"
+    zh-CN: "可不填:按 ~/.ssh/config 的 User,否则用本机登录名"
+    zh-TW: "可不填:依 ~/.ssh/config 的 User,否則用本機登入名稱"
+  ssh_proxy_jump:
+    en: "Jump Hosts (ProxyJump)"
+    zh-CN: "先经过的跳板(ProxyJump)"
+    zh-TW: "先經過的跳板(ProxyJump)"
+  ssh_proxy_jump_placeholder:
+    en: "Optional: user@jump1:22, jump2 — empty uses ~/.ssh/config"
+    zh-CN: "可不填:user@jump1:22, jump2(依次经过);留空按 ~/.ssh/config"
+    zh-TW: "可不填:user@jump1:22, jump2(依序經過);留空依 ~/.ssh/config"
   db_pick:
     en: List databases on this server
     zh-CN: 列出实例上的库

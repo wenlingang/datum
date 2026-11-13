@@ -122,6 +122,10 @@ pub struct SshTunnel {
     /// 前端保存时:Some 为新值,None 为保留原值;返回给前端时永远是 None。
     #[serde(default)]
     pub secret: Option<String>,
+    /// 先经过的跳板(OpenSSH 的 ProxyJump 写法:`[user@]host[:port]`,逗号分隔依次经过);
+    /// 空则看 `~/.ssh/config` 里这台主机的 ProxyJump
+    #[serde(default)]
+    pub proxy_jump: String,
 }
 
 impl SshTunnel {
@@ -132,6 +136,7 @@ impl SshTunnel {
             && self.user == other.user
             && self.auth == other.auth
             && self.key_path == other.key_path
+            && self.proxy_jump == other.proxy_jump
     }
 }
 

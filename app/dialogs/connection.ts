@@ -25,6 +25,8 @@ export interface ConnDraft {
   sshKeyPath: string;
   /** SSH 密码或私钥密码短语;编辑时留空 = 沿用已保存的 */
   sshSecret: string;
+  /** 先经过的跳板(ProxyJump 写法) */
+  sshProxyJump: string;
 }
 
 const NO_SSH = {
@@ -35,6 +37,7 @@ const NO_SSH = {
   sshAuth: "password" as SshAuth,
   sshKeyPath: "",
   sshSecret: "",
+  sshProxyJump: "",
 };
 
 /** 新建时的初始值(PostgreSQL 本地库)。 */
@@ -81,6 +84,7 @@ export function draftFrom(conn: Connection | undefined, database?: string): Conn
           sshAuth: conn.ssh.auth,
           sshKeyPath: conn.ssh.keyPath,
           sshSecret: "",
+          sshProxyJump: conn.ssh.proxyJump ?? "",
         }
       : NO_SSH),
   };
@@ -130,6 +134,7 @@ export function buildConnection(d: ConnDraft, id: string): Connection {
             auth: d.sshAuth,
             keyPath: d.sshAuth === "key" ? d.sshKeyPath.trim() : "",
             secret: null,
+            proxyJump: d.sshProxyJump.trim(),
           },
   };
 }
@@ -154,7 +159,6 @@ export function validate(conn: Connection): string | null {
   if (!conn.name) return t("conn_form.name_required");
   if (conn.kind === "sqlite" && !conn.filePath) return t("conn_form.file_required");
   if (conn.ssh && !conn.ssh.host) return t("conn_form.ssh_host_required");
-  if (conn.ssh && !conn.ssh.user) return t("conn_form.ssh_user_required");
   return null;
 }
 
@@ -178,7 +182,9 @@ export function previewString(d: ConnDraft): string {
   const redis = d.kind === "redis";
   const scheme = redis && (d.ssl === "require" || d.ssl === "verifyFull") ? "rediss" : KIND_SCHEME[d.kind];
   const query = redis ? "" : SSL_QUERY[d.ssl];
-  const via = d.ssh ? `  ⇢ ssh ${or(d.sshUser, "?")}@${or(d.sshHost, "?")}:${or(d.sshPort, "22")}` : "";
+  const jump = d.ssh && d.sshProxyJump.trim() ? ` ⇢ ${d.sshProxyJump.trim()}` : "";
+  const sshUser = d.sshUser.trim() ? `${d.sshUser.trim()}@` : "";
+  const via = d.ssh ? `${jump}  ⇢ ssh ${sshUser}${or(d.sshHost, "?")}:${or(d.sshPort, "22")}` : "";
   return `${scheme}://${auth}${host}${port}/${db}${query}${via}`;
 }
 

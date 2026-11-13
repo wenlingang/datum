@@ -385,7 +385,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
                     <TextField
                       testID="conn-ssh-host"
                       value={d().sshHost}
-                      placeholder="bastion.example.com"
+                      placeholder={t("conn_form.ssh_host_placeholder")}
                       onChange={({ value }) => set({ sshHost: value })}
                     />
                   </Field>
@@ -404,7 +404,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
                     <TextField
                       testID="conn-ssh-user"
                       value={d().sshUser}
-                      placeholder="ubuntu"
+                      placeholder={t("conn_form.ssh_user_placeholder")}
                       onChange={({ value }) => set({ sshUser: value })}
                     />
                   </Field>
@@ -417,6 +417,14 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
                     />
                   </Field>
                 </View>
+                <Field label={t("conn_form.ssh_proxy_jump")} class="">
+                  <TextField
+                    testID="conn-ssh-jump"
+                    value={d().sshProxyJump}
+                    placeholder={t("conn_form.ssh_proxy_jump_placeholder")}
+                    onChange={({ value }) => set({ sshProxyJump: value })}
+                  />
+                </Field>
                 <If when={d().sshAuth === "key"}>
                   <Field label={t("conn_form.ssh_key_path")} class="">
                     <View class="flex-row gap-2">

@@ -6,6 +6,7 @@
 //!   DATUM_SSH_REDIS=端口              跳板机视角下 127.0.0.1 上的 Redis(无密码)
 //!   DATUM_SSH_PG=端口                 跳板机视角下 127.0.0.1 上的 PostgreSQL(postgres、空密码、trust)
 //!   DATUM_SSH_AGENT=1                 SSH_AUTH_SOCK 指向的 agent 里已加载 DATUM_SSH_KEY
+//!   DATUM_SSH_JUMP2=端口              同一台机器上第二个 sshd(测多级跳板:先经 DATUM_SSH,再到它)
 //!   cargo test -p datum-core --test ssh -- --ignored --test-threads=1 --nocapture
 
 use datum_core::commands::{self, AppState};
@@ -50,6 +51,25 @@ fn tunnel(j: &Jump, auth: SshAuth, key: &str) -> SshTunnel {
         auth,
         key_path: key.into(),
         secret: None,
+        proxy_jump: String::new(),
+    }
+}
+
+/// 写一份临时的 ssh config,让本进程的隧道读它(DATUM_SSH_CONFIG);返回时恢复。
+struct SshConfigFile(std::path::PathBuf);
+
+impl SshConfigFile {
+    fn new(st: &AppState, text: &str) -> Self {
+        let path = st.config_dir.join("ssh_config");
+        std::fs::write(&path, text).unwrap();
+        std::env::set_var("DATUM_SSH_CONFIG", &path);
+        Self(path)
+    }
+}
+
+impl Drop for SshConfigFile {
+    fn drop(&mut self) {
+        std::env::remove_var("DATUM_SSH_CONFIG");
     }
 }
 
@@ -332,4 +352,52 @@ async fn pg_through_tunnel() {
     assert_eq!(r.rows[0][0].as_deref(), Some("postgres"));
     assert_eq!(r.rows[0][1].as_deref(), Some("2"));
     service::disconnect(&st, &DbKind::Pg, &id).await;
+}
+
+/// 跳板机填 ~/.ssh/config 里的别名:HostName / Port / User / IdentityFile 都从 config 来。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn bastion_alias_from_ssh_config() {
+    let (Some(j), Some(key), Some(db)) = (jump(), env("DATUM_SSH_KEY"), port("DATUM_SSH_REDIS")) else {
+        return;
+    };
+    let st = state();
+    let _cfg = SshConfigFile::new(
+        &st,
+        &format!("Host datum-test-bastion\n  HostName {}\n  Port {}\n  User {}\n  IdentityFile {key}\n", j.host, j.port, j.user),
+    );
+    let mut t = tunnel(&j, SshAuth::Key, "");
+    t.host = "datum-test-bastion".into();
+    t.port = 22;
+    t.user = String::new();
+    let id = save_and_connect(&st, conn(DbKind::Redis, db, t), "").await.unwrap();
+    assert_eq!(service::redis_exec(&st, &id, "PING").await.unwrap(), "PONG");
+    service::disconnect(&st, &DbKind::Redis, &id).await;
+}
+
+/// 多级跳板:先经第一个 sshd(ProxyJump,用 config 里的 IdentityFile 认证),再到第二个 sshd 开转发。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn proxy_jump_chain() {
+    let (Some(j), Some(key), Some(db), Some(second)) =
+        (jump(), env("DATUM_SSH_KEY"), port("DATUM_SSH_PG"), port("DATUM_SSH_JUMP2"))
+    else {
+        return;
+    };
+    let st = state();
+    let _cfg = SshConfigFile::new(
+        &st,
+        &format!("Host datum-test-jump\n  HostName {}\n  Port {}\n  User {}\n  IdentityFile {key}\n", j.host, j.port, j.user),
+    );
+    let mut t = tunnel(&j, SshAuth::Key, &key);
+    t.port = second;
+    t.proxy_jump = "datum-test-jump".into();
+    let id = save_and_connect(&st, conn(DbKind::Pg, db, t.clone()), "").await.unwrap();
+    let r = service::query(&st, &DbKind::Pg, &id, "SELECT 40 + 2", None).await.unwrap();
+    assert_eq!(r.rows[0][0].as_deref(), Some("42"));
+    service::disconnect(&st, &DbKind::Pg, &id).await;
+    // 跳板写错:报看不懂
+    t.proxy_jump = "x:notaport".into();
+    let e = service::test_connection(&conn(DbKind::Pg, db, t), "", &ctx(&st, "")).await.unwrap_err();
+    assert!(e.display().contains("ProxyJump"), "{}", e.display());
 }
