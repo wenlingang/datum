@@ -70,6 +70,11 @@ fn comment_text(s: &str) -> String {
 
 /// 语句在引号外是否含分号或换行(来自数据库的类型、默认值里出现这些,说明定义异常)。
 fn suspicious(stmt: &str) -> bool {
+    unquoted_hit(stmt, &[';', '\n', '\r'])
+}
+
+/// 引号外是否出现给定字符;引号没闭合也算异常。
+fn unquoted_hit(stmt: &str, bad: &[char]) -> bool {
     let body = stmt.trim_end().trim_end_matches(';');
     let mut quote: Option<char> = None;
     let mut chars = body.chars().peekable();
@@ -85,7 +90,7 @@ fn suspicious(stmt: &str) -> bool {
             Some(_) => {}
             None => match c {
                 '\'' | '"' | '`' => quote = Some(c),
-                ';' | '\n' | '\r' => return true,
+                c if bad.contains(&c) => return true,
                 _ => {}
             },
         }
@@ -271,6 +276,12 @@ pub fn diff(
                 tables.push(TableDiff { name: name.clone(), status: "added", changes: vec![t!("core.diff.table_added").to_string()] });
                 let header = format!("-- {}", comment_text(name));
                 match create_sql.get(name) {
+                    // 建表语句本来就跨多行;只查引号外的分号(会拆出第二条语句),有就整段注释掉
+                    Some(ddl) if unquoted_hit(ddl.trim().trim_end_matches(';'), &[';']) => blocks.push(format!(
+                        "{header}\n-- {}\n{}",
+                        t!("core.diff.suspicious"),
+                        commented(ddl.trim())
+                    )),
                     Some(ddl) => blocks.push(format!("{header}\n{};", ddl.trim().trim_end_matches(';'))),
                     None => blocks.push(format!("{header}\n-- {}", comment_text(&t!("core.diff.no_ddl", table = name)))),
                 }
@@ -436,8 +447,11 @@ mod tests {
             },
         );
         dst.insert("t".to_string(), TableDetail { columns: vec![col("id", "integer", true, None, true)], indexes: vec![] });
+        src.insert("fresh".to_string(), TableDetail { columns: vec![col("id", "integer", true, None, true)], indexes: vec![] });
+        let ddl: HashMap<String, String> =
+            [("fresh".to_string(), "CREATE TABLE fresh (\n  id integer DEFAULT 1); DROP TABLE victims; --\n)".to_string())].into();
         for d in [Dialect::Pg, Dialect::Mysql, Dialect::Sqlite] {
-            let r = diff(&src, &dst, &HashMap::new(), d);
+            let r = diff(&src, &dst, &ddl, d);
             for line in r.sql.lines() {
                 if line.trim_start().starts_with("--") {
                     continue;
