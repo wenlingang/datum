@@ -78,7 +78,8 @@ export function Segmented<T extends string>(props: {
               onPress={() => props.onChange(o().value)}
               selected={active()}
               accessibilityLabel={o().label}
-              class="h-8 flex-1 flex-row items-center justify-center gap-2 rounded-full hover:bg-list-hover selected:bg-background selected:shadow-sm"
+              // 选中与未选中分开写:变体按 Tailwind 顺序生效,hover: 排在 selected: 后,混写时悬停会盖掉选中底色
+              class={`h-8 flex-1 flex-row items-center justify-center gap-2 rounded-full ${active() ? "bg-background shadow-sm" : "hover:bg-list-hover"}`}
             >
               <If when={o().color}>
                 <View class="rounded-full" style={{ width: 7, height: 7, backgroundColor: tokenColor(tone()) }} />
