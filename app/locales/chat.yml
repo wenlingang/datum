@@ -281,6 +281,14 @@ chat:
     en: "AI workbench: chat fills the window — query, view results and change data in the conversation (⌘J)"
     zh-CN: "AI 对话工作台:对话铺满窗口,在对话里查询、看结果、改数据(⌘J)"
     zh-TW: "AI 對話工作台:對話佔滿視窗,在對話裡查詢、看結果、改資料(⌘J)"
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Copied
+    zh-CN: 已复制
+    zh-TW: 已複製
   copy_csv:
     en: Copy as CSV
     zh-CN: 复制为 CSV
