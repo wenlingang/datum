@@ -73,34 +73,17 @@ fn comment_text(s: &str) -> String {
     s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
 }
 
-/// 语句在引号外是否含分号或换行(来自数据库的类型、默认值里出现这些,说明定义异常)。
-fn suspicious(stmt: &str) -> bool {
-    unquoted_hit(stmt, &[';', '\n', '\r'])
+/// 能否把这段文字当作「一条语句」放进可执行脚本:除末尾的分号外不能再有分号——
+/// 连字符串、引号标识符、注释里的也不行。不去猜引号与注释的边界:各数据库(以及编辑器的语句切分)
+/// 对 `\'`、`"it's"`、`/* ' */` 这类写法的理解不一致,只要没有分号,谁都拆不出第二条语句。
+/// 代价是定义里恰好有分号的(如字符串常量 'a;b')也会被注释掉,交给人工确认。
+fn single_statement(stmt: &str) -> bool {
+    !stmt.trim().trim_end_matches(';').contains(';')
 }
 
-/// 引号外是否出现给定字符;引号没闭合也算异常。
-fn unquoted_hit(stmt: &str, bad: &[char]) -> bool {
-    let body = stmt.trim_end().trim_end_matches(';');
-    let mut quote: Option<char> = None;
-    let mut chars = body.chars().peekable();
-    while let Some(c) = chars.next() {
-        match quote {
-            Some(q) if c == q => {
-                if chars.peek() == Some(&q) {
-                    chars.next();
-                } else {
-                    quote = None;
-                }
-            }
-            Some(_) => {}
-            None => match c {
-                '\'' | '"' | '`' => quote = Some(c),
-                c if bad.contains(&c) => return true,
-                _ => {}
-            },
-        }
-    }
-    quote.is_some()
+/// 单行语句(列定义、索引等)是否异常:多条语句,或含换行(来自数据库的类型、默认值里出现这些,说明定义异常)。
+fn suspicious(stmt: &str) -> bool {
+    !single_statement(stmt) || stmt.contains(['\n', '\r'])
 }
 
 /// 可执行语句的出口:定义里有异常字符时整条注释掉并提示人工检查。
@@ -229,10 +212,9 @@ fn view_sql(name: &str, def: &str, d: Dialect) -> String {
     }
 }
 
-/// 多行定义(视图、触发器)的出口:引号外有分号(会拆出第二条语句)就整段注释并提示。
+/// 多行定义(视图、触发器)的出口:不是单条语句(见 [`single_statement`])就整段注释并提示。
 fn checked_block(stmt: &str, note: &str) -> Vec<String> {
-    let body = stmt.trim().trim_end_matches(';');
-    if unquoted_hit(body, &[';']) {
+    if !single_statement(stmt) {
         vec![format!("-- {}", comment_text(note)), commented(stmt.trim())]
     } else {
         vec![stmt.trim().to_string()]
@@ -263,15 +245,18 @@ fn diff_objects(src: &Extras, dst: &Extras, d: Dialect) -> (Vec<TableDiff>, Vec<
             Some(o) if squash(o) == squash(def) => {}
             found => {
                 let mut sql = vec![header];
+                let create = checked_block(&view_sql(name, def, d), &t!("core.diff.suspicious"));
                 if found.is_some() {
                     items.push(entry("view", name, "changed", t!("core.diff.view_changed").to_string()));
                     if d == Dialect::Sqlite {
-                        sql.push(format!("DROP VIEW {};", ident(name, d)));
+                        // 先删后建:新定义被注释(要人工确认)时,删除也注释,不能只删不建
+                        let drop = format!("DROP VIEW {};", ident(name, d));
+                        sql.push(if create.len() == 1 { drop } else { commented(&drop) });
                     }
                 } else {
                     items.push(entry("view", name, "added", t!("core.diff.view_added").to_string()));
                 }
-                sql.extend(checked_block(&view_sql(name, def, d), &t!("core.diff.suspicious")));
+                sql.extend(create);
                 blocks.push(sql.join("\n"));
             }
         }
@@ -298,7 +283,7 @@ fn diff_objects(src: &Extras, dst: &Extras, d: Dialect) -> (Vec<TableDiff>, Vec<
                 let mut sql = vec![header];
                 let create = format!("{};", tr.sql.trim().trim_end_matches(';'));
                 // 触发器体是多条语句时(BEGIN … END)按分号执行会被拆开:整段(连同删除)注释,手动执行
-                let manual = unquoted_hit(tr.sql.trim().trim_end_matches(';'), &[';']);
+                let manual = !single_statement(&tr.sql);
                 if let Some(o) = found {
                     items.push(entry("trigger", name, "changed", t!("core.diff.trigger_changed").to_string()));
                     let drop = drop_trigger(name, o);
@@ -563,7 +548,7 @@ pub fn diff(
                 let header = format!("-- {}", comment_text(name));
                 match create_sql.get(name) {
                     // 建表语句本来就跨多行;只查引号外的分号(会拆出第二条语句),有就整段注释掉
-                    Some(ddl) if unquoted_hit(ddl.trim().trim_end_matches(';'), &[';']) => blocks.push(format!(
+                    Some(ddl) if !single_statement(ddl) => blocks.push(format!(
                         "{header}\n-- {}\n{}",
                         t!("core.diff.suspicious"),
                         commented(ddl.trim())
@@ -951,7 +936,12 @@ mod tests {
         assert_eq!(default_sql("x') ; DROP TABLE v; --(", Dialect::Mysql), "'x'') ; DROP TABLE v; --('");
         assert_eq!(default_sql("CURRENT_TIMESTAMP(3)", Dialect::Mysql), "CURRENT_TIMESTAMP(3)");
         assert!(suspicious("ALTER TABLE t ADD COLUMN b int; DROP TABLE v;"));
-        assert!(!suspicious("ALTER TABLE \"a;b\" ADD COLUMN c text DEFAULT 'x;y';"));
+        assert!(!suspicious("ALTER TABLE \"ab\" ADD COLUMN c text DEFAULT 'x y';"));
+        // 引号、注释里的分号也算:各家对引号 / 注释边界的理解不一致,不去猜
+        assert!(suspicious("ALTER TABLE \"a;b\" ADD COLUMN c text;"));
+        assert!(suspicious("SELECT 1 -- it's\n; DROP TABLE x; -- '"));
+        assert!(!single_statement("CREATE VIEW v AS SELECT \"it's\" FROM t ; DROP TABLE x; SELECT 'z'"));
+        assert!(!single_statement("SELECT 'a\\'' ; DROP TABLE x; SELECT '"));
     }
 
     fn fk(name: &str, cols: &[&str], rt: &str, rc: &[&str], del: &str) -> Fk {
@@ -1029,6 +1019,23 @@ mod tests {
         let r = diff(&tables, &tables, &HashMap::new(), (&sx, &dx), Dialect::Sqlite);
         assert!(!r.sql.lines().any(|l| l.starts_with("ALTER TABLE") && l.contains("FOREIGN KEY")));
         assert!(!r.sql.contains("COMMENT"));
+    }
+
+    #[test]
+    fn sqlite_view_drop_only_with_executable_create() {
+        let tables = one_table();
+        let mut sx = Extras::default();
+        let mut dx = Extras::default();
+        dx.views.insert("v".into(), "CREATE VIEW v AS SELECT 1".into());
+        // 新定义里有分号(哪怕在字符串里):建视图要人工确认,删除也不能直接执行
+        sx.views.insert("v".into(), "CREATE VIEW v AS SELECT 'a;b' AS x".into());
+        let r = diff(&tables, &tables, &HashMap::new(), (&sx, &dx), Dialect::Sqlite);
+        assert!(r.sql.contains("-- DROP VIEW \"v\";"), "{}", r.sql);
+        assert!(!r.sql.lines().any(|l| l.starts_with("DROP VIEW")));
+        // 正常的新定义:先删后建都可执行
+        sx.views.insert("v".into(), "CREATE VIEW v AS SELECT 2".into());
+        let r = diff(&tables, &tables, &HashMap::new(), (&sx, &dx), Dialect::Sqlite);
+        assert!(r.sql.contains("DROP VIEW \"v\";\nCREATE VIEW v AS SELECT 2;"), "{}", r.sql);
     }
 
     #[test]
