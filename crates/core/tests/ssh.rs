@@ -401,3 +401,38 @@ async fn proxy_jump_chain() {
     let e = service::test_connection(&conn(DbKind::Pg, db, t), "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("ProxyJump"), "{}", e.display());
 }
+
+/// 经隧道的走法:PG / Redis 不开本地端口;MySQL 不加密时用只有本用户能进的 Unix 套接字,要 TLS 时开本地端口。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn tunnels_open_no_port_unless_needed() {
+    let (Some(j), Some(key), Some(my), Some(pg), Some(rds)) =
+        (jump(), env("DATUM_SSH_KEY"), port("DATUM_SSH_MYSQL"), port("DATUM_SSH_PG"), port("DATUM_SSH_REDIS"))
+    else {
+        return;
+    };
+    let st = state();
+    let c = ctx(&st, "");
+    for (kind, db) in [(DbKind::Pg, pg), (DbKind::Redis, rds)] {
+        let (target, tunnel) = datum_core::ssh::resolve(&conn(kind, db, tunnel(&j, SshAuth::Key, &key)), &c).await.unwrap();
+        let tunnel = tunnel.unwrap();
+        assert_eq!((tunnel.local_port, tunnel.socket.is_none()), (0, true), "{kind:?}");
+        assert!(matches!(target.via, Some(datum_core::ssh::Via::Stream(_))));
+    }
+    let mut m = conn(DbKind::Mysql, my, tunnel(&j, SshAuth::Key, &key));
+    let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
+    let t = t.unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let sock = t.socket.clone().expect("不加密时走 Unix 套接字");
+        assert_eq!(t.local_port, 0);
+        let mode = std::fs::metadata(sock.parent().unwrap()).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "套接字所在目录只有本用户能进");
+        drop(t);
+        assert!(!sock.exists(), "隧道关闭后套接字清理掉");
+    }
+    m.ssl_mode = SslMode::Require;
+    let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
+    assert!(t.unwrap().local_port > 0, "要 TLS 时只能走本地端口");
+}

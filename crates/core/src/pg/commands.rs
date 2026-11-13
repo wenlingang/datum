@@ -29,7 +29,7 @@ pub async fn pg_connect(state: &AppState, id: String) -> AppResult<()> {
     let password = credentials::load_password(&state.backend, &conn)?;
     let (target, tunnel) = crate::ssh::resolve(&conn, &state.ssh_context(&conn)?).await?;
     let config = build_config(&conn, &target, &password);
-    state.pg_pool.connect(&id, &config, conn.ssl_mode).await?;
+    state.pg_pool.connect_target(&id, &config, conn.ssl_mode, &target).await?;
     state.tunnels.set(&id, tunnel).await;
     Ok(())
 }
@@ -118,11 +118,7 @@ mod tests {
 
     #[test]
     fn tunneled_config_dials_local_port_but_keeps_host_for_tls() {
-        let target = Target {
-            host: "127.0.0.1".into(),
-            port: 50123,
-            tls_host: "db.internal".into(),
-        };
+        let target = Target::forwarded(50123, "db.internal");
         let cfg = build_config(&conn(), &target, "pw");
         assert_eq!(cfg.get_hosts(), &[tokio_postgres::config::Host::Tcp("db.internal".into())]);
         assert_eq!(cfg.get_hostaddrs(), &["127.0.0.1".parse::<std::net::IpAddr>().unwrap()]);

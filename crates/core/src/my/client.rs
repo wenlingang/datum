@@ -92,6 +92,10 @@ fn opts(target: &Target, user: &str, pass: &str, db: &str, ssl: Option<SslOpts>)
         .user(Some(user.to_string()))
         .db_name(Some(db.to_string()))
         .ssl_opts(ssl);
+    // 经隧道的 Unix 套接字(只有本用户能连):驱动直接连它
+    if let Some(crate::ssh::Via::Socket(path)) = &target.via {
+        b = b.socket(Some(path.display().to_string())).prefer_socket(true);
+    }
     if !pass.is_empty() {
         b = b.pass(Some(pass.to_string()));
     }
@@ -124,7 +128,12 @@ async fn open_pool(
 ) -> AppResult<Pool> {
     crate::tls::install_default_provider();
     let mut last_err = None;
-    for ssl in ssl_attempts(mode) {
+    // Unix 套接字上驱动不做 TLS:只走明文(SSH 这一段本来就是加密的;要 TLS 的模式不会走套接字)
+    let attempts = match target.via {
+        Some(crate::ssh::Via::Socket(_)) => vec![None],
+        _ => ssl_attempts(mode),
+    };
+    for ssl in attempts {
         let pool = Pool::new(opts(target, user, pass, db, ssl));
         match pool.get_conn().await {
             Ok(conn) => {
@@ -368,11 +377,7 @@ mod tests {
 
     #[test]
     fn tunneled_opts_dial_local_port_but_verify_db_host() {
-        let target = Target {
-            host: "127.0.0.1".into(),
-            port: 50124,
-            tls_host: "db.internal".into(),
-        };
+        let target = Target::forwarded(50124, "db.internal");
         for ssl in ssl_attempts(SslMode::VerifyFull).into_iter().chain(ssl_attempts(SslMode::Require)) {
             let o = opts(&target, "u", "p", "d", ssl);
             assert_eq!(o.ip_or_hostname(), "127.0.0.1");

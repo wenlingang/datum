@@ -100,6 +100,28 @@ pub fn apply_target(cfg: &mut Config, target: &Target) {
     }
 }
 
+/// 按目标建一条连接:直连 / 本地端口走 `Config::connect`;经 SSH 通道时在通道上 `connect_raw`
+/// (TLS 照常按数据库原主机名校验)。连接的驱动任务在后台跑,Client 丢弃即断开。
+async fn dial(cfg: &Config, target: &Target, ssl: SslMode) -> Result<Client, String> {
+    use tokio_postgres::tls::MakeTlsConnect;
+    if let Some(stream) = target.open_stream().await {
+        let stream = stream.map_err(|e| e.display())?;
+        let mut make = tls_connector(ssl);
+        let tls = <MakeRustlsConnect as MakeTlsConnect<crate::ssh::SshStream>>::make_tls_connect(&mut make, &target.tls_host)
+            .map_err(|e| e.to_string())?;
+        let (client, connection) = cfg.connect_raw(stream, tls).await.map_err(|e| describe(&e))?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        return Ok(client);
+    }
+    let (client, connection) = cfg.connect(tls_connector(ssl)).await.map_err(|e| describe(&e))?;
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    Ok(client)
+}
+
 /// 用给定参数尝试建立一次连接以验证可达性与认证(不缓存)。
 pub async fn test_connect(
     target: &Target,
@@ -113,12 +135,8 @@ pub async fn test_connect(
     cfg.user(user).password(pass).dbname(db);
     apply_ssl_mode(&mut cfg, ssl);
     // 建连成功(完成握手与认证)即视为连通;立即丢弃。
-    let (_client, _connection) = cfg.connect(tls_connector(ssl)).await.map_err(|e| {
-        AppError::new(
-            ErrorKind::Connection,
-            t!("core.err.connect_failed", db = "PostgreSQL"),
-        )
-        .with_detail(describe(&e))
+    dial(&cfg, target, ssl).await.map_err(|e| {
+        AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
     })?;
     Ok(())
 }
@@ -147,11 +165,8 @@ pub async fn probe_databases(
         apply_target(&mut cfg, target);
         cfg.user(user).password(pass).dbname(name);
         apply_ssl_mode(&mut cfg, ssl);
-        match cfg.connect(tls_connector(ssl)).await {
-            Ok((client, connection)) => {
-                let task = tokio::spawn(async move {
-                    let _ = connection.await;
-                });
+        match dial(&cfg, target, ssl).await {
+            Ok(client) => {
                 let rows = client
                     .simple_query(
                         "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname",
@@ -162,7 +177,6 @@ pub async fn probe_databases(
                             .with_detail(describe(&e))
                     });
                 drop(client);
-                task.abort();
                 return Ok(rows?
                     .into_iter()
                     .filter_map(|m| match m {
@@ -178,7 +192,7 @@ pub async fn probe_databases(
         ErrorKind::Connection,
         t!("core.err.connect_failed", db = "PostgreSQL"),
     )
-    .with_detail(last_err.map(|e| describe(&e)).unwrap_or_default()))
+    .with_detail(last_err.unwrap_or_default()))
 }
 
 impl PgPool {
@@ -187,16 +201,14 @@ impl PgPool {
     /// 避免 `password= dbname=...` 这类空格分隔串在空值时解析丢失 dbname 的问题。
     /// `config` 需已按 `ssl` 调用过 [`apply_ssl_mode`]。
     pub async fn connect(&self, id: &str, config: &Config, ssl: SslMode) -> AppResult<()> {
-        let (client, connection) = config.connect(tls_connector(ssl)).await.map_err(|e| {
-            AppError::new(
-                ErrorKind::Connection,
-                t!("core.err.connect_failed", db = "PostgreSQL"),
-            )
-            .with_detail(describe(&e))
+        self.connect_target(id, config, ssl, &Target::direct("", 0)).await
+    }
+
+    /// 同 [`connect`](Self::connect),经 SSH 通道时在通道上建连(见 `target`)。
+    pub async fn connect_target(&self, id: &str, config: &Config, ssl: SslMode, target: &Target) -> AppResult<()> {
+        let client = dial(config, target, ssl).await.map_err(|e| {
+            AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
         })?;
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
         self.clients.lock().await.insert(id.to_string(), client);
         Ok(())
     }

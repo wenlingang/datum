@@ -79,10 +79,12 @@ pub async fn test_connect(
     Ok(())
 }
 
-/// 按连接地址建连。走 SSH 隧道且要校验证书时,redis 自己建的 TLS 只能按连接地址
-/// (127.0.0.1)校验主机名,所以这里自己在转发端口上做 TLS 握手,按数据库原主机名校验。
+/// 按目标建连。经 SSH 通道时(不开本地端口)在通道上建多路复用连接,需要加密时自己在通道上做 TLS
+/// (「校验证书」按数据库原主机名校验,「必须」只加密不校验)。走本地转发端口且要校验证书时同理:
+/// redis 自己建的 TLS 只能按连接地址(127.0.0.1)校验主机名。
 pub async fn open_target(target: &Target, url: &str, ssl: SslMode) -> AppResult<MultiplexedConnection> {
-    if !(target.tunneled() && ssl == SslMode::VerifyFull) {
+    let via_stream = matches!(target.via, Some(crate::ssh::Via::Stream(_)));
+    if !via_stream && !(target.tunneled() && ssl == SslMode::VerifyFull) {
         return open(url).await;
     }
     crate::tls::install_default_provider();
@@ -96,24 +98,44 @@ pub async fn open_target(target: &Target, url: &str, ssl: SslMode) -> AppResult<
     let failed = |e: String| {
         AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "Redis")).with_detail(e)
     };
+    async fn over<S>(info: &redis::RedisConnectionInfo, stream: S, tls: Option<(&str, bool)>) -> Result<MultiplexedConnection, String>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+    {
+        match tls {
+            None => {
+                let (con, driver) = MultiplexedConnection::new(info, stream).await.map_err(|e| e.to_string())?;
+                tokio::spawn(driver);
+                Ok(con)
+            }
+            Some((host, verify)) => {
+                let name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|e| e.to_string())?;
+                let tls = tokio_rustls::TlsConnector::from(std::sync::Arc::new(crate::tls::client_config(verify)))
+                    .connect(name, stream)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let (con, driver) = MultiplexedConnection::new(info, tls).await.map_err(|e| e.to_string())?;
+                tokio::spawn(driver);
+                Ok(con)
+            }
+        }
+    }
+    let tls = match ssl {
+        SslMode::Disable | SslMode::Prefer => None,
+        SslMode::Require => Some((target.tls_host.as_str(), false)),
+        SslMode::VerifyFull => Some((target.tls_host.as_str(), true)),
+    };
     let connect = async {
-        let tcp = tokio::net::TcpStream::connect((target.host.as_str(), target.port))
-            .await
-            .map_err(|e| failed(e.to_string()))?;
-        let name = rustls::pki_types::ServerName::try_from(target.tls_host.clone())
-            .map_err(|e| failed(e.to_string()))?;
-        let tls = tokio_rustls::TlsConnector::from(std::sync::Arc::new(crate::tls::client_config(true)))
-            .connect(name, tcp)
-            .await
-            .map_err(|e| failed(e.to_string()))?;
-        let (con, driver) = MultiplexedConnection::new(&info, tls)
-            .await
-            .map_err(|e| failed(e.to_string()))?;
-        tokio::spawn(driver);
-        Ok(con)
+        match target.open_stream().await {
+            Some(stream) => over(&info, stream.map_err(|e| e.display())?, tls).await,
+            None => {
+                let tcp = tokio::net::TcpStream::connect((target.host.as_str(), target.port)).await.map_err(|e| e.to_string())?;
+                over(&info, tcp, tls).await
+            }
+        }
     };
     match tokio::time::timeout(CONNECT_TIMEOUT, connect).await {
-        Ok(r) => r,
+        Ok(r) => r.map_err(failed),
         Err(_) => Err(failed(t!("core.err.connect_timeout").to_string())),
     }
 }

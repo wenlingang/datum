@@ -33,27 +33,64 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// 空闲时的心跳间隔:防止跳板机或中间的 NAT 把长连接掐掉。
 const KEEPALIVE: Duration = Duration::from_secs(30);
 
-/// 驱动该去连的地址:直连时就是数据库本身;走隧道时是本地转发端口,
+/// 驱动该怎么连数据库:直连时就是数据库本身;走隧道时见 [`Via`],
 /// `tls_host` 仍是数据库的原主机名(证书校验、SNI 用)。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Target {
     pub host: String,
     pub port: u16,
     pub tls_host: String,
+    /// 经 SSH 隧道时的走法;直连为 None
+    pub via: Option<Via>,
 }
+
+/// 经隧道连数据库的方式。
+#[derive(Clone)]
+pub enum Via {
+    /// 本机 127.0.0.1 上的转发端口(`host` / `port`)
+    Tcp,
+    /// 只有本用户能连的 Unix 套接字(MySQL 不加密时)
+    Socket(PathBuf),
+    /// 不开任何本地端口:每条连接直接用一条 SSH 通道(PG、Redis)
+    Stream(Arc<Shared>),
+}
+
+impl std::fmt::Debug for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let via = match &self.via {
+            None => "direct".to_string(),
+            Some(Via::Tcp) => "tcp".into(),
+            Some(Via::Socket(p)) => format!("socket {}", p.display()),
+            Some(Via::Stream(_)) => "ssh channel".into(),
+        };
+        write!(f, "Target({}:{} tls={} via {via})", self.host, self.port, self.tls_host)
+    }
+}
+
+/// 经 SSH 通道的连接流(实现 AsyncRead / AsyncWrite)。
+pub type SshStream = russh::ChannelStream<client::Msg>;
 
 impl Target {
     pub fn direct(host: &str, port: u16) -> Self {
-        Self {
-            host: host.to_string(),
-            port,
-            tls_host: host.to_string(),
-        }
+        Self { host: host.to_string(), port, tls_host: host.to_string(), via: None }
     }
 
-    /// 是否经由本地转发端口(需要把 TLS 主机名与连接地址分开)。
+    /// 经本地转发端口(127.0.0.1:`port`)。
+    pub fn forwarded(port: u16, tls_host: &str) -> Self {
+        Self { host: "127.0.0.1".into(), port, tls_host: tls_host.to_string(), via: Some(Via::Tcp) }
+    }
+
+    /// 是否经由 SSH 隧道(连接地址与 TLS 主机名分开)。
     pub fn tunneled(&self) -> bool {
-        self.host != self.tls_host
+        self.via.is_some()
+    }
+
+    /// 经 SSH 通道直连时,开一条新的连接流;其余方式为 None。
+    pub async fn open_stream(&self) -> Option<AppResult<SshStream>> {
+        match &self.via {
+            Some(Via::Stream(shared)) => Some(shared.route.open_channel(&shared.session, 0).await.map(|c| c.into_stream())),
+            _ => None,
+        }
     }
 }
 
@@ -64,17 +101,26 @@ pub struct SshContext {
     pub known_hosts: PathBuf,
 }
 
+/// 按库类型选经隧道的走法:PG / Redis 的驱动能直接用 SSH 通道,不开本地端口;MySQL 驱动只认
+/// TCP 或 Unix 套接字——不加密时(Unix)用只有本用户能连的套接字,要 TLS 时(mysql_async 在套接字上
+/// 不做 TLS)只能用本地端口。
+pub fn listen_for(conn: &Connection) -> Listen {
+    use crate::core::connection::{DbKind, SslMode};
+    match conn.kind {
+        DbKind::Pg | DbKind::Redis => Listen::Stream,
+        #[cfg(unix)]
+        DbKind::Mysql if matches!(conn.ssl_mode, SslMode::Disable | SslMode::Prefer) => Listen::Socket,
+        _ => Listen::Tcp,
+    }
+}
+
 /// 按连接配置得到驱动要连的地址;走 SSH 时先建好隧道,隧道随返回值存活。
 pub async fn resolve(conn: &Connection, ctx: &SshContext) -> AppResult<(Target, Option<Tunnel>)> {
     match conn.tunnel() {
         None => Ok((Target::direct(&conn.host, conn.port), None)),
         Some(ssh) => {
-            let tunnel = Tunnel::open(ssh, &ctx.secret, &conn.host, conn.port, &ctx.known_hosts).await?;
-            let target = Target {
-                host: "127.0.0.1".into(),
-                port: tunnel.local_port,
-                tls_host: conn.host.clone(),
-            };
+            let tunnel = Tunnel::open(ssh, &ctx.secret, &conn.host, conn.port, &ctx.known_hosts, listen_for(conn)).await?;
+            let target = tunnel.target(&conn.host);
             Ok((target, Some(tunnel)))
         }
     }
@@ -508,69 +554,185 @@ impl Route {
     }
 }
 
-/// 一条在用的隧道:丢弃即关闭(本地端口、SSH 会话与其上所有转发一并结束)。
+/// 隧道在本机怎么接驱动的连接。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Listen {
+    /// 不开本地端口,驱动直接用 SSH 通道
+    Stream,
+    /// 127.0.0.1 上的随机端口(驱动只认 TCP 时)
+    Tcp,
+    /// 私有目录(0700)里的 Unix 套接字,只接受本用户的连接
+    #[cfg(unix)]
+    Socket,
+}
+
+/// 隧道的路线与会话链,供开新通道用。
+pub struct Shared {
+    route: Route,
+    session: Mutex<Chain>,
+}
+
+/// 一条在用的隧道:丢弃即关闭(本地端口 / 套接字、SSH 会话与其上所有转发一并结束)。
 ///
-/// 已知暴露面:转发端口只监听 127.0.0.1,但不鉴别来访者,同一台机器上的其他进程
-/// (含其他用户)在隧道存活期间也能经它连到数据库,与 `ssh -L` 的默认行为相同;
-/// 数据库自身的认证仍然生效。PG / Redis 可改为把 SSH 通道直接交给驱动(不开端口),
-/// MySQL 驱动只接受 TCP,见 TODO。
+/// 暴露面:PG 与 Redis 不开任何本地端口;MySQL 不加密时用只有本用户能连的 Unix 套接字;
+/// MySQL 要 TLS 时只能开 127.0.0.1 端口(与 `ssh -L` 相同),Linux 上只接受本用户进程的连接,
+/// macOS / Windows 上同一台机器的其他用户在隧道存活期间也能连到这个端口(数据库自身的认证仍然生效)。
 pub struct Tunnel {
+    /// 本地转发端口(Listen::Tcp);其余为 0
     pub local_port: u16,
-    task: JoinHandle<()>,
+    /// Unix 套接字路径(Listen::Socket)
+    pub socket: Option<PathBuf>,
+    shared: Arc<Shared>,
+    task: Option<JoinHandle<()>>,
 }
 
 impl Drop for Tunnel {
     fn drop(&mut self) {
-        self.task.abort();
+        if let Some(t) = &self.task {
+            t.abort();
+        }
+        if let Some(path) = &self.socket {
+            let _ = std::fs::remove_file(path);
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::remove_dir(dir);
+            }
+        }
+    }
+}
+
+/// Linux:127.0.0.1 上连进来的这个 TCP 连接属于哪个用户(查 /proc/net/tcp);查不到为 None。
+#[cfg(target_os = "linux")]
+fn tcp_peer_uid(peer: std::net::SocketAddr, local_port: u16) -> Option<u32> {
+    let hex_port = |p: u16| format!("{p:04X}");
+    for file in ["/proc/net/tcp", "/proc/net/tcp6"] {
+        let Ok(text) = std::fs::read_to_string(file) else { continue };
+        for line in text.lines().skip(1) {
+            let f: Vec<&str> = line.split_whitespace().collect();
+            // local_address rem_address … uid(第 8 列)
+            let (Some(local), Some(remote), Some(uid)) = (f.get(1), f.get(2), f.get(7)) else { continue };
+            let port_of = |a: &str| a.rsplit(':').next().map(str::to_string);
+            if port_of(local) == Some(hex_port(peer.port())) && port_of(remote) == Some(hex_port(local_port)) {
+                return uid.parse().ok();
+            }
+        }
+    }
+    None
+}
+
+/// 这个连接是不是本用户的(只在 Linux 上查得到;其余平台放行)。
+fn tcp_peer_allowed(peer: std::net::SocketAddr, local_port: u16) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let me = std::fs::metadata("/proc/self").map(|m| m.uid()).ok();
+        match (me, tcp_peer_uid(peer, local_port)) {
+            (Some(me), Some(uid)) => me == uid,
+            // /proc 读不了:没法判断,放行(与没有这项检查时一样)
+            _ => true,
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (peer, local_port);
+        true
     }
 }
 
 impl Tunnel {
-    /// 连上跳板机,确认它能连到目标,再在本机开转发端口。
+    /// 连上跳板机,确认它能连到目标,再按 `listen` 在本机接驱动的连接。
     pub async fn open(
         ssh: &SshTunnel,
         secret: &str,
         target_host: &str,
         target_port: u16,
         known_hosts: &Path,
+        listen: Listen,
     ) -> AppResult<Self> {
-        let route = Arc::new(Route {
+        let route = Route {
             ssh: ssh.clone(),
             secret: secret.to_string(),
             known_hosts: known_hosts.to_path_buf(),
             target_host: target_host.to_string(),
             target_port,
-        });
+        };
         let session = Mutex::new(open_session(ssh, secret, known_hosts).await?);
         // 先试开一条通道:目标不可达时在这里给出明确报错,而不是让驱动报一个「连接被重置」
         drop(route.open_channel(&session, 0).await?);
-        let listener = TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .map_err(|e| ssh_err("core.err.ssh_forward_failed").with_detail(e.to_string()))?;
-        let local_port = listener
-            .local_addr()
-            .map_err(|e| ssh_err("core.err.ssh_forward_failed").with_detail(e.to_string()))?
-            .port();
-        let session = Arc::new(session);
-        let task = tokio::spawn(async move {
-            // 转发任务都挂在这里:隧道关闭(本任务被 abort)时一起结束
-            let mut forwards = JoinSet::new();
-            loop {
-                tokio::select! {
-                    accepted = listener.accept() => {
-                        let Ok((mut socket, peer)) = accepted else { continue };
-                        let (route, session) = (route.clone(), session.clone());
-                        forwards.spawn(async move {
-                            let Ok(channel) = route.open_channel(&session, peer.port()).await else { return };
-                            let mut stream = channel.into_stream();
-                            let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
-                        });
+        let shared = Arc::new(Shared { route, session });
+        let failed = |e: std::io::Error| ssh_err("core.err.ssh_forward_failed").with_detail(e.to_string());
+        let mut tunnel = Self { local_port: 0, socket: None, shared: shared.clone(), task: None };
+        match listen {
+            Listen::Stream => {}
+            Listen::Tcp => {
+                let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(failed)?;
+                let port = listener.local_addr().map_err(failed)?.port();
+                tunnel.local_port = port;
+                tunnel.task = Some(tokio::spawn(async move {
+                    // 转发任务都挂在这里:隧道关闭(本任务被 abort)时一起结束
+                    let mut forwards = JoinSet::new();
+                    loop {
+                        tokio::select! {
+                            accepted = listener.accept() => {
+                                let Ok((mut socket, peer)) = accepted else { continue };
+                                if !tcp_peer_allowed(peer, port) {
+                                    continue; // 别的用户的进程:直接断开
+                                }
+                                let shared = shared.clone();
+                                forwards.spawn(async move {
+                                    let Ok(channel) = shared.route.open_channel(&shared.session, peer.port()).await else { return };
+                                    let mut stream = channel.into_stream();
+                                    let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
+                                });
+                            }
+                            Some(_) = forwards.join_next(), if !forwards.is_empty() => {}
+                        }
                     }
-                    Some(_) = forwards.join_next(), if !forwards.is_empty() => {}
-                }
+                }));
             }
-        });
-        Ok(Self { local_port, task })
+            #[cfg(unix)]
+            Listen::Socket => {
+                use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+                // 目录 0700:别的用户连目录都进不去;套接字路径要短(macOS 上限 104 字节)
+                let dir = std::env::temp_dir().join(format!("datum-{}", &uuid::Uuid::new_v4().simple().to_string()[..12]));
+                std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(failed)?;
+                let me = std::fs::metadata(&dir).map_err(failed)?.uid();
+                let path = dir.join("db.sock");
+                let listener = tokio::net::UnixListener::bind(&path).map_err(failed)?;
+                tunnel.socket = Some(path);
+                tunnel.task = Some(tokio::spawn(async move {
+                    let mut forwards = JoinSet::new();
+                    loop {
+                        tokio::select! {
+                            accepted = listener.accept() => {
+                                let Ok((mut socket, _)) = accepted else { continue };
+                                // 再核对一次对端用户(目录权限之外的第二道)
+                                if socket.peer_cred().map(|c| c.uid()).ok() != Some(me) {
+                                    continue;
+                                }
+                                let shared = shared.clone();
+                                forwards.spawn(async move {
+                                    let Ok(channel) = shared.route.open_channel(&shared.session, 0).await else { return };
+                                    let mut stream = channel.into_stream();
+                                    let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
+                                });
+                            }
+                            Some(_) = forwards.join_next(), if !forwards.is_empty() => {}
+                        }
+                    }
+                }));
+            }
+        }
+        Ok(tunnel)
+    }
+
+    /// 驱动该怎么连(`tls_host` 为数据库原主机名)。
+    pub fn target(&self, tls_host: &str) -> Target {
+        let via = match (&self.socket, self.local_port) {
+            (Some(p), _) => Via::Socket(p.clone()),
+            (None, 0) => Via::Stream(self.shared.clone()),
+            (None, _) => Via::Tcp,
+        };
+        Target { host: "127.0.0.1".into(), port: self.local_port, tls_host: tls_host.to_string(), via: Some(via) }
     }
 }
 
@@ -634,11 +796,7 @@ mod tests {
     fn target_direct_is_not_tunneled() {
         let t = Target::direct("db.example.com", 5432);
         assert!(!t.tunneled());
-        let t = Target {
-            host: "127.0.0.1".into(),
-            port: 50000,
-            tls_host: "db.example.com".into(),
-        };
+        let t = Target::forwarded(50000, "db.example.com");
         assert!(t.tunneled());
     }
 
