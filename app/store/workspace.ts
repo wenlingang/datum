@@ -19,7 +19,9 @@ export type TabKind =
   /** Redis 分析:概览、整库扫描(大 key / 前缀 / TTL / 热 key)、慢日志 */
   | "redis"
   /** 关系库诊断(PG / MySQL / SQLite):会话、锁等待、长事务、慢 SQL、索引与空间 */
-  | "diag";
+  | "diag"
+  /** 表结构对比:本连接(源)对比另一个同类型的库(目标),生成迁移脚本 */
+  | "diff";
 
 export interface WorkTab {
   /** 稳定 id(标签条 key、记忆激活 tab) */

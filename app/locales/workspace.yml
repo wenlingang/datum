@@ -209,6 +209,10 @@ sidebar:
     en: Export Database
     zh-CN: 导出数据库
     zh-TW: 匯出資料庫
+  schema_diff:
+    en: Compare Schema…
+    zh-CN: 结构对比…
+    zh-TW: 結構比對…
   delete:
     en: Delete
     zh-CN: 删除

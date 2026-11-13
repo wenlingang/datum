@@ -103,6 +103,24 @@ test("AI 对话工作台:对话铺满主区域、侧栏保留;再按一次或 �
   await app.waitFor("id:ai-workbench", { state: "gone" });
 });
 
+test("结构对比:roastery 对比 shop,列出差异并生成迁移脚本", async () => {
+  const app = await open("../App.tsx", desktop);
+  await app.press("id:rail-c-roastery");
+  await app.waitFor("label:products");
+  await app.press("label:Connection Actions");
+  await app.press("label:Compare Schema…");
+  await app.waitFor("id:schema-diff");
+  expect(app.enabled("id:sdiff-run")).toBe(false);
+  await app.press("id:sdiff-target:shop");
+  await app.press("id:sdiff-run");
+  await app.waitFor("id:sdiff-summary", { timeout: 10_000 });
+  // roastery 的表在 shop 里都没有;shop 独有的 items 只会生成注释掉的 DROP
+  expect(app.shows("id:sdiff-table:products")).toBe(true);
+  expect(app.shows("id:sdiff-table:items")).toBe(true);
+  expect(app.texts().some((s) => s.startsWith("9 new"))).toBe(true);
+  app.dispose();
+});
+
 // 放在最后:它会留下会话文件,之后打开的应用都会恢复这些标签
 test("重启后恢复上次打开的标签与内容(不自动执行)", async () => {
   const first = await open("../App.tsx", desktop);

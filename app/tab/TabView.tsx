@@ -13,6 +13,7 @@ import { conns } from "../store/conns";
 import { modelOf, refresh, type TabModel } from "./model";
 import { Results, StatusLine } from "./Results";
 import { Diagnostics } from "./Diagnostics";
+import { SchemaDiff } from "./SchemaDiff";
 import { RedisInsight } from "./RedisInsight";
 import { RiskDialog } from "./RiskDialog";
 import { UndoDialog } from "./UndoDialog";
@@ -79,6 +80,7 @@ export function TabBody(props: { tab: WorkTab }) {
   const m = modelOf(props.tab);
   if (props.tab.kind === "redis") return <RedisInsight connId={props.tab.connId} />;
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
+  if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
   if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;
   if (m.dbKind === "mongo") return <Placeholder icon="db-mongo" text={t("tab.mongo_unsupported")} />;
   return <ModelView m={m} />;

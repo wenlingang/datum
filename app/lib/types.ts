@@ -478,3 +478,17 @@ export interface Plan {
   analyzed: boolean;
   totalMs: number | null;
 }
+
+/** 表结构对比的一张表。 */
+export interface TableDiff {
+  name: string;
+  status: "added" | "removed" | "changed";
+  changes: string[];
+}
+
+/** 表结构对比报告:差异与迁移脚本(在目标库上执行)。 */
+export interface DiffReport {
+  tables: TableDiff[];
+  same: number;
+  sql: string;
+}

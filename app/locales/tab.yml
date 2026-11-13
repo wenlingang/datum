@@ -1631,3 +1631,80 @@ plan:
     en: "Executed in %{ms} ms"
     zh-CN: "实际执行耗时 %{ms} ms"
     zh-TW: "實際執行耗時 %{ms} ms"
+sdiff:
+  title:
+    en: Compare Schema
+    zh-CN: 结构对比
+    zh-TW: 結構比對
+  subtitle:
+    en: Generates a script that makes the target match the source
+    zh-CN: 生成让目标库与源库一致的迁移脚本
+    zh-TW: 產生讓目標庫與來源庫一致的遷移腳本
+  source:
+    en: Source
+    zh-CN: 源库
+    zh-TW: 來源庫
+  target:
+    en: Target
+    zh-CN: 目标库
+    zh-TW: 目標庫
+  no_candidates:
+    en: Add another connection of the same database type to compare with
+    zh-CN: 先添加另一个同类型数据库的连接,才能对比
+    zh-TW: 先新增另一個同類型資料庫的連線,才能比對
+  run:
+    en: Compare
+    zh-CN: 开始对比
+    zh-TW: 開始比對
+  rerun:
+    en: Compare Again
+    zh-CN: 重新对比
+    zh-TW: 重新比對
+  running:
+    en: Reading both schemas…
+    zh-CN: 正在读取两边的表结构…
+    zh-TW: 正在讀取兩邊的表結構…
+  empty:
+    en: Pick a target database, then Compare
+    zh-CN: 选一个目标库,再点「开始对比」
+    zh-TW: 選一個目標庫,再點「開始比對」
+  identical:
+    en: "No differences: %{n} tables match"
+    zh-CN: "没有差异:%{n} 张表结构一致"
+    zh-TW: "沒有差異:%{n} 張表結構一致"
+  summary:
+    en: "%{added} new · %{changed} changed · %{removed} only in target · %{same} identical"
+    zh-CN: "新增 %{added} · 变更 %{changed} · 仅目标库有 %{removed} · 一致 %{same}"
+    zh-TW: "新增 %{added} · 變更 %{changed} · 僅目標庫有 %{removed} · 一致 %{same}"
+  status_added:
+    en: New
+    zh-CN: 新增
+    zh-TW: 新增
+  status_changed:
+    en: Changed
+    zh-CN: 变更
+    zh-TW: 變更
+  status_removed:
+    en: Only in target
+    zh-CN: 仅目标库
+    zh-TW: 僅目標庫
+  script:
+    en: Migration script (run on the target; drops are commented out)
+    zh-CN: 迁移脚本(在目标库执行;删除类语句已注释)
+    zh-TW: 遷移腳本(在目標庫執行;刪除類語句已註解)
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Script copied
+    zh-CN: 脚本已复制
+    zh-TW: 腳本已複製
+  open_in_editor:
+    en: Open in Target's Editor
+    zh-CN: 在目标库编辑器中打开
+    zh-TW: 在目標庫編輯器中開啟
+  open_tooltip:
+    en: Opens a query tab on the target with the script; nothing runs until you run it (with the usual review)
+    zh-CN: 在目标库新开查询标签并放入脚本;要你自己执行(照常经过危险语句审查)
+    zh-TW: 在目標庫新開查詢標籤並放入腳本;要你自己執行(照常經過危險語句審查)

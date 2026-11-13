@@ -178,6 +178,33 @@ export function openDiagnostics(connId: string) {
   });
 }
 
+/** 打开表结构对比 tab:本连接为源库,在 tab 里选目标库(每个源库一个,已开则切过去)。 */
+export function openSchemaDiff(connId: string) {
+  const conn = conns.get(connId);
+  if (!conn || !supportsSql(conn.kind)) return;
+  const existing = workspace.tabs().find((x) => x.kind === "diff" && x.connId === connId);
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "diff",
+    connId,
+    dbKind: conn.kind,
+    table: null,
+    title: signal(t("sdiff.title")),
+    state: null,
+  });
+}
+
+/** 在指定连接上新开查询 tab 并放入 SQL(不执行)。 */
+export function openQueryOn(connId: string, sql: string) {
+  activate(connId);
+  if (!conns.tables(connId) && !conns.isLoading(connId)) void loadTables(connId);
+  newQueryTab(sql);
+}
+
 /** AI 生成的 SQL「编辑器运行」:只在 connId 上执行;`confirmed` 为卡片已做过破坏性确认。
  *  当前查询 tab 属于该连接则复用,否则切到该连接并新开查询 tab,绝不打到别的库。 */
 export function insertAndRun(sql: string, connId: string, confirmed: boolean) {

@@ -31,6 +31,7 @@ import type {
   ForeignKey,
   ValueContext,
   Plan,
+  DiffReport,
 } from "./types";
 
 export const store = {
@@ -84,6 +85,9 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  /** 表结构对比:脚本让目标库与源库一致(删除类语句已注释)。 */
+  schemaDiff: async (kind: DbKind, sourceId: string, targetId: string) =>
+    (await Db.schemaDiff(kind, sourceId, targetId)) as DiffReport,
   /** 执行计划(树 + 原始输出);`analyze` 会真正执行,只接受只读语句。 */
   explainPlan: async (kind: DbKind, id: string, sql: string, analyze: boolean) =>
     (await Db.explainPlan(kind, id, sql, analyze)) as Plan,

@@ -291,6 +291,75 @@ core:
       en: Or
       zh-CN: 或
       zh-TW: 或
+  diff:
+    table_added:
+      en: "Only in the source: created by the script"
+      zh-CN: "只在源库:脚本会建表"
+      zh-TW: "只在來源庫:腳本會建表"
+    table_removed:
+      en: "Only in the target (drop is commented out)"
+      zh-CN: "只在目标库(删表语句已注释)"
+      zh-TW: "只在目標庫(刪表語句已註解)"
+    col_added:
+      en: "Column %{col} added: %{def}"
+      zh-CN: "新增列 %{col}:%{def}"
+      zh-TW: "新增欄位 %{col}:%{def}"
+    col_removed:
+      en: "Column %{col} only in the target (drop is commented out)"
+      zh-CN: "列 %{col} 只在目标库(删列语句已注释)"
+      zh-TW: "欄位 %{col} 只在目標庫(刪欄語句已註解)"
+    col_type:
+      en: "Column %{col} type: %{from} → %{to}"
+      zh-CN: "列 %{col} 类型:%{from} → %{to}"
+      zh-TW: "欄位 %{col} 類型:%{from} → %{to}"
+    col_null:
+      en: "Column %{col} becomes %{to}"
+      zh-CN: "列 %{col} 改为 %{to}"
+      zh-TW: "欄位 %{col} 改為 %{to}"
+    col_default:
+      en: "Column %{col} default: %{from} → %{to}"
+      zh-CN: "列 %{col} 默认值:%{from} → %{to}"
+      zh-TW: "欄位 %{col} 預設值:%{from} → %{to}"
+    pk_changed:
+      en: "Primary key: (%{from}) → (%{to})"
+      zh-CN: "主键:(%{from}) → (%{to})"
+      zh-TW: "主鍵:(%{from}) → (%{to})"
+    pk_manual:
+      en: "%{table}: the primary key differs; change it by hand"
+      zh-CN: "%{table}:主键不同,请手工调整"
+      zh-TW: "%{table}:主鍵不同,請手動調整"
+    idx_added:
+      en: "Index %{name} added (%{cols})"
+      zh-CN: "新增索引 %{name}(%{cols})"
+      zh-TW: "新增索引 %{name}(%{cols})"
+    idx_removed:
+      en: "Index %{name} only in the target (drop is commented out)"
+      zh-CN: "索引 %{name} 只在目标库(删索引语句已注释)"
+      zh-TW: "索引 %{name} 只在目標庫(刪索引語句已註解)"
+    idx_changed:
+      en: "Index %{name} differs: recreated"
+      zh-CN: "索引 %{name} 定义不同:重建"
+      zh-TW: "索引 %{name} 定義不同:重建"
+    sqlite_rebuild:
+      en: "SQLite cannot change a column definition: rebuild %{table} by hand to change %{col}"
+      zh-CN: "SQLite 不支持修改列定义:要改 %{col},需手工重建表 %{table}"
+      zh-TW: "SQLite 不支援修改欄位定義:要改 %{col},需手動重建表 %{table}"
+    sqlite_not_null:
+      en: "SQLite cannot add a NOT NULL column without a default to %{table} (%{col})"
+      zh-CN: "SQLite 不能给 %{table} 添加没有默认值的 NOT NULL 列(%{col})"
+      zh-TW: "SQLite 不能為 %{table} 新增沒有預設值的 NOT NULL 欄位(%{col})"
+    no_ddl:
+      en: "Could not read the CREATE statement of %{table}"
+      zh-CN: "读不到 %{table} 的建表语句"
+      zh-TW: "讀不到 %{table} 的建表語句"
+    identical:
+      en: "The two schemas are identical"
+      zh-CN: "两个库的结构一致"
+      zh-TW: "兩個庫的結構一致"
+    header:
+      en: "Migration: makes the target match the source. Statements that drop anything are commented out; uncomment them after checking."
+      zh-CN: "迁移脚本:让目标库与源库一致。删除类语句已注释,确认后再取消注释。"
+      zh-TW: "遷移腳本:讓目標庫與來源庫一致。刪除類語句已註解,確認後再取消註解。"
   completion:
     table:
       en: Table

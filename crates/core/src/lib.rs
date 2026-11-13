@@ -20,6 +20,7 @@ pub mod my;
 pub mod pg;
 pub mod rds;
 pub mod schema;
+pub mod schema_diff;
 pub mod service;
 pub mod sql;
 pub mod sqlite;

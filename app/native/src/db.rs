@@ -255,4 +255,13 @@ impl Db {
             .map_err(err)
             .and_then(json)
     }
+
+    /// 表结构对比:`{ tables: [{ name, status, changes }], same, sql }`;脚本让目标库与源库一致。
+    pub async fn schema_diff(kind: String, source_id: String, target_id: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { datum_core::schema_diff::compare(&state(), &k, &source_id, &target_id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
 }
