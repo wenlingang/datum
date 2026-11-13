@@ -35,6 +35,8 @@ pub enum Action {
     Kill,
     /// PG:对一张表 VACUUM (ANALYZE)
     VacuumTable,
+    /// MySQL:整理一张表(OPTIMIZE TABLE,回收空闲空间;InnoDB 上会重建表)
+    OptimizeTable,
     /// SQLite:整库 VACUUM
     Vacuum,
     /// SQLite:整库 ANALYZE
@@ -108,7 +110,7 @@ pub fn sections(kind: &DbKind) -> Vec<SectionInfo> {
             SectionInfo::table("long_tx").rows(&[KillQuery, Kill], &["id"]),
             SectionInfo::table("slow"),
             SectionInfo::table("unused_indexes"),
-            SectionInfo::table("tables"),
+            SectionInfo::table("tables").rows(&[OptimizeTable], &["table"]),
         ],
         DbKind::Sqlite => vec![
             SectionInfo::cards("overview").db(&[Vacuum, Analyze]),
@@ -336,16 +338,22 @@ LEFT JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id
 WHERE t.trx_mysql_thread_id <> CONNECTION_ID()
 ORDER BY t.trx_started";
 
-const MY_SLOW: &str = "\
-SELECT COUNT_STAR AS `calls`, ROUND(SUM_TIMER_WAIT / 1e9, 1) AS `total_ms`,
-  ROUND(AVG_TIMER_WAIT / 1e9, 2) AS `mean_ms`, ROUND(MAX_TIMER_WAIT / 1e9, 1) AS `max_ms`,
-  SUM_ROWS_EXAMINED AS `rows_examined`, SUM_ROWS_SENT AS `rows_sent`,
-  SCHEMA_NAME AS `database`, DIGEST_TEXT AS `query`
-FROM performance_schema.events_statements_summary_by_digest
-WHERE DIGEST_TEXT IS NOT NULL
-ORDER BY SUM_TIMER_WAIT DESC
-LIMIT 50";
-
+/// 慢 SQL 排行。8.0 起有 QUERY_SAMPLE_TEXT(带真实值的样例语句,「在编辑器打开 / Explain」优先用它;
+/// 界面不显示这一列);5.7 / MariaDB 没有这一列,退回只有摘要文本的写法。
+const MY_SLOW: &[&str] = &[
+    "SELECT COUNT_STAR AS `calls`, ROUND(SUM_TIMER_WAIT / 1e9, 1) AS `total_ms`, \
+       ROUND(AVG_TIMER_WAIT / 1e9, 2) AS `mean_ms`, ROUND(MAX_TIMER_WAIT / 1e9, 1) AS `max_ms`, \
+       SUM_ROWS_EXAMINED AS `rows_examined`, SUM_ROWS_SENT AS `rows_sent`, \
+       SCHEMA_NAME AS `database`, DIGEST_TEXT AS `query`, QUERY_SAMPLE_TEXT AS `sample` \
+     FROM performance_schema.events_statements_summary_by_digest \
+     WHERE DIGEST_TEXT IS NOT NULL ORDER BY SUM_TIMER_WAIT DESC LIMIT 50",
+    "SELECT COUNT_STAR AS `calls`, ROUND(SUM_TIMER_WAIT / 1e9, 1) AS `total_ms`, \
+       ROUND(AVG_TIMER_WAIT / 1e9, 2) AS `mean_ms`, ROUND(MAX_TIMER_WAIT / 1e9, 1) AS `max_ms`, \
+       SUM_ROWS_EXAMINED AS `rows_examined`, SUM_ROWS_SENT AS `rows_sent`, \
+       SCHEMA_NAME AS `database`, DIGEST_TEXT AS `query` \
+     FROM performance_schema.events_statements_summary_by_digest \
+     WHERE DIGEST_TEXT IS NOT NULL ORDER BY SUM_TIMER_WAIT DESC LIMIT 50",
+];
 const MY_UNUSED_INDEXES: &str = "\
 SELECT object_schema AS `schema`, object_name AS `table`, index_name AS `index`
 FROM sys.schema_unused_indexes
@@ -386,7 +394,7 @@ async fn my_run(state: &AppState, id: &str, key: &str) -> AppResult<DiagResult> 
             if on.rows.first().and_then(|r| r[0].as_deref()) != Some("1") {
                 return Ok(unavailable("performance_schema_off", None));
             }
-            ro(state, &kind, id, MY_SLOW).await
+            first_ok(state, &kind, id, MY_SLOW).await
         }
         "unused_indexes" => {
             let on = ro(state, &kind, id, "SELECT @@performance_schema").await?;
@@ -538,6 +546,10 @@ pub fn action_sql(kind: &DbKind, action: Action, args: &[String]) -> AppResult<S
         },
         (DbKind::Mysql, KillQuery) => Ok(format!("KILL QUERY {}", session_id(args)?)),
         (DbKind::Mysql, Kill) => Ok(format!("KILL {}", session_id(args)?)),
+        (DbKind::Mysql, OptimizeTable) => match args {
+            [table] if !table.is_empty() => Ok(format!("OPTIMIZE TABLE {}", crate::sql::build::ident(table, crate::sql::Dialect::Mysql))),
+            _ => Err(bad_arg()),
+        },
         (DbKind::Sqlite, Vacuum) => Ok("VACUUM".into()),
         (DbKind::Sqlite, Analyze) => Ok("ANALYZE".into()),
         _ => Err(bad_arg()),
@@ -547,7 +559,16 @@ pub fn action_sql(kind: &DbKind, action: Action, args: &[String]) -> AppResult<S
 /// 执行一个诊断操作。PG 的取消 / 终止返回 false(会话已结束或无权限)时报错。
 pub async fn act(state: &AppState, kind: &DbKind, id: &str, action: Action, args: &[String]) -> AppResult<()> {
     let sql = action_sql(kind, action, args)?;
-    let r = service::query(state, kind, id, &sql, Some(1)).await?;
+    let r = service::query(state, kind, id, &sql, Some(20)).await?;
+    // OPTIMIZE TABLE 出错不抛异常,而是在结果里给一行 Msg_type = error
+    if action == Action::OptimizeTable {
+        let col = |name: &str| r.columns.iter().position(|c| c.eq_ignore_ascii_case(name));
+        if let (Some(ty), Some(text)) = (col("Msg_type"), col("Msg_text")) {
+            if let Some(row) = r.rows.iter().find(|row| row.get(ty).cloned().flatten().as_deref() == Some("error")) {
+                return Err(AppError::new(ErrorKind::Query, row.get(text).cloned().flatten().unwrap_or_default()));
+            }
+        }
+    }
     if matches!(action, Action::Cancel | Action::Terminate)
         && r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_deref()) != Some("t")
     {
@@ -587,6 +608,9 @@ mod tests {
         let v = action_sql(&DbKind::Pg, Action::VacuumTable, &["public".into(), "a\"b".into()]).unwrap();
         assert_eq!(v, "VACUUM (ANALYZE) \"public\".\"a\"\"b\"");
         assert!(action_sql(&DbKind::Pg, Action::VacuumTable, &a("public")).is_err());
+        assert_eq!(action_sql(&DbKind::Mysql, Action::OptimizeTable, &a("a`b")).unwrap(), "OPTIMIZE TABLE `a``b`");
+        assert!(action_sql(&DbKind::Mysql, Action::OptimizeTable, &a("")).is_err());
+        assert!(action_sql(&DbKind::Pg, Action::OptimizeTable, &a("t")).is_err());
     }
 
     #[test]

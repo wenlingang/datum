@@ -205,6 +205,15 @@ export function openQueryOn(connId: string, sql: string) {
   newQueryTab(sql);
 }
 
+/** 在指定连接上新开查询 tab 放入 SQL 并 Explain(有命名参数时先弹框填值)。 */
+export function explainOn(connId: string, sql: string) {
+  activate(connId);
+  if (!conns.tables(connId) && !conns.isLoading(connId)) void loadTables(connId);
+  const tab = newQueryTab(sql);
+  const m = modelOf(tab);
+  if (m) explain(m);
+}
+
 /** AI 生成的 SQL「编辑器运行」:只在 connId 上执行;`confirmed` 为卡片已做过破坏性确认。
  *  当前查询 tab 属于该连接则复用,否则切到该连接并新开查询 tab,绝不打到别的库。 */
 export function insertAndRun(sql: string, connId: string, confirmed: boolean) {

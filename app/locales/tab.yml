@@ -1208,6 +1208,10 @@ diag:
       en: "VACUUM"
       zh-CN: "VACUUM"
       zh-TW: "VACUUM"
+    optimize_table:
+      en: "OPTIMIZE"
+      zh-CN: "OPTIMIZE"
+      zh-TW: "OPTIMIZE"
     vacuum:
       en: "VACUUM"
       zh-CN: "VACUUM"
@@ -1216,7 +1220,44 @@ diag:
       en: "ANALYZE"
       zh-CN: "ANALYZE"
       zh-TW: "ANALYZE"
+  sql_menu:
+    en: "SQL"
+    zh-CN: "SQL"
+    zh-TW: "SQL"
+  open_in_editor:
+    en: "Open in Editor"
+    zh-CN: "在编辑器中打开"
+    zh-TW: "在編輯器中開啟"
+  ask_ai:
+    en: "Ask AI to Explain"
+    zh-CN: "交给 AI 解读"
+    zh-TW: "交給 AI 解讀"
+  explain:
+    en: "Explain"
+    zh-CN: "Explain"
+    zh-TW: "Explain"
+  drop_index:
+    en: "Draft DROP INDEX"
+    zh-CN: "生成 DROP INDEX"
+    zh-TW: "產生 DROP INDEX"
+  drop_index_note:
+    en: "Unused since statistics were last reset. Make sure no query, constraint or rarely-run job needs it before dropping."
+    zh-CN: "自统计上次重置以来没被用过。删除前确认没有查询、约束或低频任务依赖它。"
+    zh-TW: "自統計上次重置以來沒被用過。刪除前確認沒有查詢、約束或低頻任務依賴它。"
+  placeholders_note:
+    en: "The statement is normalized: placeholders became :p1, :p2 … — fill in real values when asked"
+    zh-CN: "语句是归一化后的:占位符已换成 :p1、:p2 …,执行时按提示填入实际值"
+    zh-TW: "語句是正規化後的:佔位符已換成 :p1、:p2 …,執行時依提示填入實際值"
   confirm:
+    optimize_table:
+      title:
+        en: "Optimize table %{target}?"
+        zh-CN: "整理表 %{target}?"
+        zh-TW: "整理資料表 %{target}?"
+      body:
+        en: "Runs OPTIMIZE TABLE to reclaim free space. On InnoDB this rebuilds the table: it can take a while on large tables and needs free disk space about the size of the table."
+        zh-CN: "执行 OPTIMIZE TABLE 回收空闲空间。InnoDB 上会重建整张表:大表耗时较长,并需要约等于表大小的空闲磁盘。"
+        zh-TW: "執行 OPTIMIZE TABLE 回收閒置空間。InnoDB 上會重建整張表:大表耗時較長,並需要約等於表大小的閒置磁碟。"
     cancel:
       title:
         en: "Cancel the query of session %{target}?"
@@ -1281,6 +1322,10 @@ diag:
         zh-CN: "收集查询规划用的统计信息,不改动数据。"
         zh-TW: "收集查詢規劃用的統計資訊,不改動資料。"
   done:
+    optimize_table:
+      en: "Table optimized"
+      zh-CN: "表已整理"
+      zh-TW: "資料表已整理"
     cancel:
       en: "Cancel signal sent"
       zh-CN: "已发送取消信号"

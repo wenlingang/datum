@@ -281,6 +281,11 @@ function askAiAbout(sql: string, prompt: string) {
   if (!sendText(prompt)) toast.info(t("chat.ask_not_sent"));
 }
 
+/** 诊断里看到的语句(会话当前 SQL、慢 SQL):请 AI 说明它在做什么、为什么可能慢 / 阻塞,给出优化建议。 */
+export function askAiReviewSql(sql: string, context: string) {
+  askAiAbout(sql, `${t("chat.review_sql_prompt")}\n\n${context}`);
+}
+
 /** 编辑器执行报错:请 AI 说明原因并给出修正后的 SQL。 */
 export function askAiFixError(sql: string, error: string) {
   askAiAbout(sql, `${t("chat.fix_error_prompt")}\n\n${t("chat.error_label")}\n\`\`\`\n${error}\n\`\`\``);

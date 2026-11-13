@@ -5,20 +5,26 @@
 import { cleanup, Clipboard, effect, Scroll, signal, Text, untracked, View } from "nsh";
 import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
-import { db, errorText } from "../lib/native";
-import type { DiagAction, DiagResult, DiagSection } from "../lib/types";
+import { askAiReviewSql } from "../chat/index";
+import { db, errorText, sql as sqlNative } from "../lib/native";
+import type { DbKind, DiagAction, DiagResult, DiagSection } from "../lib/types";
 import { conns, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { Btn, EnvBadge, Hint, Icon } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { formatBytes } from "./RedisInsight";
 import { ErrorText } from "../ui/error";
+import { DropMenu, MItem } from "../ui/menu";
+import { explainOn, openQueryOn } from "./index";
+import { namedPlaceholders } from "./placeholders";
 
 /** 自动刷新间隔。 */
 const AUTO_MS = 5000;
 
 /** 长文本列(SQL、定义、检查结果):更宽、最多三行。 */
 const WIDE = new Set(["query", "blocked_query", "blocking_query", "definition", "message"]);
+/** 只给操作用、不显示的列(MySQL 慢 SQL 的样例语句)。 */
+const HIDDEN = new Set(["sample"]);
 /** 中等宽度的文本列。 */
 const MEDIUM = new Set(["app", "client", "host", "wait", "table", "index", "name", "state", "blocking_state"]);
 
@@ -65,6 +71,7 @@ const ACTION_ICON: Record<DiagAction, "circle-x" | "x" | "eraser" | "scan-search
   kill_query: "circle-x",
   kill: "x",
   vacuum_table: "eraser",
+  optimize_table: "eraser",
   vacuum: "eraser",
   analyze: "scan-search",
 };
@@ -93,19 +100,71 @@ function Cards(props: { r: DiagResult }) {
   );
 }
 
-function Table(props: { r: DiagResult; section: DiagSection; onAction: (p: Pending) => void }) {
-  const hasActions = () => props.section.rowActions.length > 0;
+/** 一行里的 SQL 能做的事:在编辑器打开、交给 AI 解读;慢 SQL 还能直接 Explain;
+ *  未使用的索引生成 DROP INDEX(放进编辑器,执行时照常过危险语句审查)。 */
+function SqlMenu(props: {
+  connId: string;
+  kind: DbKind;
+  section: string;
+  sql: string | null;
+  /** 带真实值的样例语句(MySQL 8.0 的慢 SQL):有就用它,不用填参数 */
+  sample?: string | null;
+  index: string[] | null;
+}) {
+  const prepared = () => {
+    if (props.sample?.trim()) return props.sample;
+    const raw = props.sql ?? "";
+    // 慢 SQL 是归一化过的语句:占位符换成命名参数,执行前弹框填值
+    const r = props.section === "slow" ? namedPlaceholders(raw, props.kind) : { sql: raw, count: 0 };
+    if (r.count > 0) toast.info(t("diag.placeholders_note"));
+    return r.sql;
+  };
+  const dropIndex = () => {
+    const [schema, table, index] = props.index ?? [];
+    const stmt =
+      props.kind === "mysql"
+        ? `ALTER TABLE ${sqlNative.ident(table, "mysql")} DROP INDEX ${sqlNative.ident(index, "mysql")};`
+        : `DROP INDEX CONCURRENTLY ${sqlNative.ident(schema, "pg")}.${sqlNative.ident(index, "pg")};`;
+    openQueryOn(props.connId, `-- ${t("diag.drop_index_note")}\n${stmt}`);
+  };
+  return (
+    <DropMenu trigger={<Btn testID="diag-sql-menu" small variant="ghost" icon="code-xml" label={t("diag.sql_menu")} />}>
+      <If when={props.sql}>
+        <MItem label={t("diag.open_in_editor")} onSelect={() => openQueryOn(props.connId, prepared())} />
+        <If when={props.section === "slow"}>
+          <MItem label={t("diag.explain")} onSelect={() => explainOn(props.connId, prepared())} />
+        </If>
+        <MItem
+          label={t("diag.ask_ai")}
+          onSelect={() => askAiReviewSql(props.sql ?? "", t(`diag.section.${props.section}`))}
+        />
+      </If>
+      <If when={props.index}>
+        <MItem label={t("diag.drop_index")} onSelect={dropIndex} />
+      </If>
+    </DropMenu>
+  );
+}
+
+function Table(props: { r: DiagResult; section: DiagSection; connId: string; kind: DbKind; onAction: (p: Pending) => void }) {
   const idx = (col: string) => props.r.columns.indexOf(col);
+  const shown = () => props.r.columns.filter((c) => !HIDDEN.has(c));
   const contextCol = () => ["blocking_query", "query"].map(idx).find((i) => i >= 0) ?? -1;
+  /** 行里的 SQL 列(会话、锁等待、长事务、慢 SQL) */
+  const sqlCol = () => ["query", "blocked_query"].map(idx).find((i) => i >= 0) ?? -1;
+  const isUnusedIdx = () => props.section.key === "unused_indexes" && idx("index") >= 0 && idx("table") >= 0;
+  const hasMenu = () => sqlCol() >= 0 || isUnusedIdx();
+  const hasActions = () => props.section.rowActions.length > 0 || hasMenu();
+  const actionsWidth = () => (props.section.rowActions.length > 0 && hasMenu() ? "w-[230px]" : "w-[150px]");
   return (
     <If when={props.r.rows.length > 0} else={<Hint>{t("diag.empty")}</Hint>}>
       <Scroll horizontal class="min-h-0">
         <View testID="diag-table" class="rounded-(--radius) border border-border">
           <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
             <If when={hasActions()}>
-              <View class="w-[150px]" />
+              <View class={actionsWidth()} />
             </If>
-            <Each of={props.r.columns}>
+            <Each of={shown()}>
               {(c) => (
                 <Text
                   class={`${FS.xs} ${colWidth(c())} font-bold text-muted-foreground line-clamp-1`}
@@ -120,7 +179,7 @@ function Table(props: { r: DiagResult; section: DiagSection; onAction: (p: Pendi
             {(row) => (
               <View class="flex-row items-start gap-3 border-b border-hairline px-3 py-1 hover:bg-list-hover">
                 <If when={hasActions()}>
-                  <View class="w-[150px] flex-row gap-1">
+                  <View class={`${actionsWidth()} flex-row gap-1`}>
                     <Each of={props.section.rowActions}>
                       {(a) => (
                         <Btn
@@ -139,16 +198,30 @@ function Table(props: { r: DiagResult; section: DiagSection; onAction: (p: Pendi
                         />
                       )}
                     </Each>
+                    <If when={hasMenu()}>
+                      <SqlMenu
+                        connId={props.connId}
+                        kind={props.kind}
+                        section={props.section.key}
+                        sql={sqlCol() >= 0 ? (row()[sqlCol()] ?? null) : null}
+                        sample={idx("sample") >= 0 ? (row()[idx("sample")] ?? null) : null}
+                        index={
+                          isUnusedIdx()
+                            ? [row()[idx("schema")] ?? "", row()[idx("table")] ?? "", row()[idx("index")] ?? ""]
+                            : null
+                        }
+                      />
+                    </If>
                   </View>
                 </If>
-                <Each of={props.r.columns}>
-                  {(c, ci) => (
+                <Each of={shown()}>
+                  {(c) => (
                     <Text
                       class={`${FS.xs} ${colWidth(c())} ${WIDE.has(c()) ? `${MONO} line-clamp-3` : "line-clamp-1"} text-foreground`}
-                      classList={{ "text-right": isNumeric(c()), [MONO]: isNumeric(c()), "text-warning": warn(c(), row()[ci()] ?? null) }}
-                      onPress={WIDE.has(c()) && row()[ci()] ? () => void copy(row()[ci()] ?? "") : undefined}
+                      classList={{ "text-right": isNumeric(c()), [MONO]: isNumeric(c()), "text-warning": warn(c(), row()[idx(c())] ?? null) }}
+                      onPress={WIDE.has(c()) && row()[idx(c())] ? () => void copy(row()[idx(c())] ?? "") : undefined}
                     >
-                      {cellText(c(), row()[ci()] ?? null)}
+                      {cellText(c(), row()[idx(c())] ?? null)}
                     </Text>
                   )}
                 </Each>
@@ -398,7 +471,7 @@ export function Diagnostics(props: { connId: string }) {
                     <If
                       when={r().unavailable}
                       else={
-                        <If when={s().layout === "cards"} else={<Table r={r()} section={s()} onAction={(p) => pending.set(p)} />}>
+                        <If when={s().layout === "cards"} else={<Table r={r()} section={s()} connId={id} kind={kind} onAction={(p) => pending.set(p)} />}>
                           <Cards r={r()} />
                         </If>
                       }

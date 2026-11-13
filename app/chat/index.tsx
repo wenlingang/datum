@@ -3,7 +3,7 @@
 import { sendToAiPanel } from "./actions";
 import { ChatPanel as Panel } from "./ChatPanel";
 
-export { askAiExplainPlan, askAiFixError, planText } from "./actions";
+export { askAiExplainPlan, askAiFixError, askAiReviewSql, planText } from "./actions";
 
 /** 右侧 AI 助手面板。 */
 export function ChatPanel(props: { wide?: boolean } = {}) {

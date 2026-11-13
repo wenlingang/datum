@@ -405,7 +405,15 @@ export interface UndoPrep {
 // ---------------------------------------------------------------- 关系库诊断
 
 /** 诊断里能触发的写操作。 */
-export type DiagAction = "cancel" | "terminate" | "kill_query" | "kill" | "vacuum_table" | "vacuum" | "analyze";
+export type DiagAction =
+  | "cancel"
+  | "terminate"
+  | "kill_query"
+  | "kill"
+  | "vacuum_table"
+  | "optimize_table"
+  | "vacuum"
+  | "analyze";
 
 /** 诊断分区说明(PG / MySQL / SQLite 各自一组)。 */
 export interface DiagSection {

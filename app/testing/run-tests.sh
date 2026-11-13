@@ -48,6 +48,7 @@ if want tab; then
   printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
+  run tab-unit "$D" tab/placeholders.test.ts
   # 自然语言筛选:本地起一个 OpenAI 兼容的假服务,固定回一段筛选 JSON
   D="$ROOT/tab-nl"; mkdir -p "$D"
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
@@ -77,6 +78,44 @@ if [ "$ONLY" = native ]; then
   D="$ROOT/native-chat"; mkdir -p "$D"
   echo "==> native-chat"
   DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" chat/typing.native.test.tsx || FAILED=1
+fi
+
+# 真实 MySQL 上的诊断操作:需要本机 MySQL(root 无密码),设 DATUM_TEST_MYSQL=端口 才跑
+if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
+  D="$ROOT/mysql"; mkdir -p "$D"
+  M="mysql -h127.0.0.1 -P$DATUM_TEST_MYSQL -uroot"
+  $M -e "SET SESSION cte_max_recursion_depth = 5000; DROP DATABASE IF EXISTS datum_ui_test; CREATE DATABASE datum_ui_test; USE datum_ui_test;
+    CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(40), price INT, INDEX idx_unused_name (name));
+    INSERT INTO products VALUES (1,'a',1),(2,'b',2),(3,'c',3);
+    CREATE TABLE big (id INT PRIMARY KEY, v INT);
+    INSERT INTO big WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 3000) SELECT n, n % 997 FROM s;
+    TRUNCATE performance_schema.events_statements_summary_by_digest;
+    SELECT COUNT(*) FROM big a JOIN big b ON a.v < b.v WHERE a.id > 10;" >/dev/null
+  # 一个占着的会话:诊断「会话」里能看到它的 SQL
+  $M -e "SELECT SLEEP(40) AS datum_sleeper" >/dev/null 2>&1 & SLEEPER=$!
+  printf '[{"id":"my","name":"mysql","kind":"mysql","env":"local","host":"127.0.0.1","port":%s,"user":"root","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_MYSQL" > "$D/connections.json"
+  run mysql "$D" tab/diag-mysql.test.tsx
+  kill $SLEEPER 2>/dev/null; wait $SLEEPER 2>/dev/null || true
+  $M -e "DROP DATABASE IF EXISTS datum_ui_test" >/dev/null
+fi
+
+# 真实 PostgreSQL 上的诊断操作:需要开了 pg_stat_statements 的 PG(postgres 用户免密),设 DATUM_TEST_PG=端口 才跑;
+# 本机没有 psql 时用 DATUM_TEST_PSQL 指定,如 "docker exec -i 容器名 psql -U postgres"
+if [ -n "${DATUM_TEST_PG:-}" ] && want pg; then
+  D="$ROOT/pg"; mkdir -p "$D"
+  P="${DATUM_TEST_PSQL:-psql -h 127.0.0.1 -p $DATUM_TEST_PG -U postgres} -v ON_ERROR_STOP=1 -q"
+  $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test" -c "CREATE DATABASE datum_ui_test" >/dev/null
+  $P -d datum_ui_test >/dev/null <<'SQL'
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE TABLE products (id int PRIMARY KEY, name text, price int);
+CREATE INDEX idx_unused_name ON products (name);
+CREATE TABLE big AS SELECT g AS id, g % 997 AS v FROM generate_series(1, 3000) g;
+SELECT pg_stat_statements_reset();
+SELECT count(*) FROM big a JOIN big b ON a.v < b.v WHERE a.id > 10;
+SQL
+  printf '[{"id":"pg","name":"pg","kind":"pg","env":"local","host":"127.0.0.1","port":%s,"user":"postgres","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_PG" > "$D/connections.json"
+  run pg "$D" tab/diag-pg.test.tsx
+  $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 
 if want chat; then

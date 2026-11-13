@@ -165,6 +165,10 @@ chat:
     zh-CN: "报错:"
     zh-TW: "錯誤:"
   # 编辑器里「让 AI 解读执行计划」发给 AI 的消息(后面附执行计划与 SQL)
+  review_sql_prompt:
+    en: This statement comes from database diagnostics. Explain briefly what it does and why it may be slow or block others, then suggest concrete improvements (an index with its CREATE INDEX statement, or a rewritten query). Check table and column names against the schema.
+    zh-CN: 这条语句来自数据库诊断。请简要说明它在做什么、为什么可能慢或阻塞别人,再给出具体的改进建议(需要索引就给出 CREATE INDEX,需要改写就给出改写后的 SQL);表名、列名请对照表结构核实。
+    zh-TW: 這段語句來自資料庫診斷。請簡要說明它在做什麼、為什麼可能慢或阻塞別人,再提供具體的改進建議(需要索引就提供 CREATE INDEX,需要改寫就提供改寫後的 SQL);資料表與欄位名稱請對照結構核實。
   explain_plan_prompt:
     en: Here is the execution plan of the SQL below. Point out the main bottlenecks (full table scans, unused or missing indexes, costly sorts or temporary tables, poor join order) and suggest concrete improvements. If an index would help, give the CREATE INDEX statement; if the query should be rewritten, give the rewritten SQL.
     zh-CN: 下面是这条 SQL 的执行计划。请指出主要瓶颈(全表扫描、没用上或缺少的索引、代价高的排序或临时表、连接顺序不佳等),并给出具体的改进建议:需要加索引就给出 CREATE INDEX 语句,需要改写就给出改写后的 SQL。
