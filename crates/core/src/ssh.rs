@@ -102,14 +102,15 @@ pub struct SshContext {
 }
 
 /// 按库类型选经隧道的走法:PG / Redis 的驱动能直接用 SSH 通道,不开本地端口;MySQL 驱动只认
-/// TCP 或 Unix 套接字——不加密时(Unix)用只有本用户能连的套接字,要 TLS 时(mysql_async 在套接字上
-/// 不做 TLS)只能用本地端口。
+/// TCP 或 Unix 套接字——明确不加密时(Unix)用只有本用户能连的套接字;「优先」「必须」「校验证书」
+/// 都要尝试端到端 TLS(SSH 只加密到跳板机这一段,跳板机到数据库还要靠 TLS),而 mysql_async 在
+/// 套接字上不做 TLS,所以只能用本地端口。
 pub fn listen_for(conn: &Connection) -> Listen {
     use crate::core::connection::{DbKind, SslMode};
     match conn.kind {
         DbKind::Pg | DbKind::Redis => Listen::Stream,
         #[cfg(unix)]
-        DbKind::Mysql if matches!(conn.ssl_mode, SslMode::Disable | SslMode::Prefer) => Listen::Socket,
+        DbKind::Mysql if conn.ssl_mode == SslMode::Disable => Listen::Socket,
         _ => Listen::Tcp,
     }
 }
@@ -575,7 +576,7 @@ pub struct Shared {
 /// 一条在用的隧道:丢弃即关闭(本地端口 / 套接字、SSH 会话与其上所有转发一并结束)。
 ///
 /// 暴露面:PG 与 Redis 不开任何本地端口;MySQL 不加密时用只有本用户能连的 Unix 套接字;
-/// MySQL 要 TLS 时只能开 127.0.0.1 端口(与 `ssh -L` 相同),Linux 上只接受本用户进程的连接,
+/// MySQL 要(或优先)TLS 时只能开 127.0.0.1 端口(与 `ssh -L` 相同),Linux 上只接受本用户进程的连接,
 /// macOS / Windows 上同一台机器的其他用户在隧道存活期间也能连到这个端口(数据库自身的认证仍然生效)。
 pub struct Tunnel {
     /// 本地转发端口(Listen::Tcp);其余为 0

@@ -128,7 +128,7 @@ async fn open_pool(
 ) -> AppResult<Pool> {
     crate::tls::install_default_provider();
     let mut last_err = None;
-    // Unix 套接字上驱动不做 TLS:只走明文(SSH 这一段本来就是加密的;要 TLS 的模式不会走套接字)
+    // Unix 套接字上驱动不做 TLS:只有「不加密」模式才会走套接字(见 ssh::listen_for)
     let attempts = match target.via {
         Some(crate::ssh::Via::Socket(_)) => vec![None],
         _ => ssl_attempts(mode),

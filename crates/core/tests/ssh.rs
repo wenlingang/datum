@@ -420,6 +420,7 @@ async fn tunnels_open_no_port_unless_needed() {
         assert!(matches!(target.via, Some(datum_core::ssh::Via::Stream(_))));
     }
     let mut m = conn(DbKind::Mysql, my, tunnel(&j, SshAuth::Key, &key));
+    m.ssl_mode = SslMode::Disable;
     let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
     let t = t.unwrap();
     #[cfg(unix)]
@@ -432,7 +433,10 @@ async fn tunnels_open_no_port_unless_needed() {
         drop(t);
         assert!(!sock.exists(), "隧道关闭后套接字清理掉");
     }
-    m.ssl_mode = SslMode::Require;
-    let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
-    assert!(t.unwrap().local_port > 0, "要 TLS 时只能走本地端口");
+    // 优先 / 必须加密:要尝试到数据库的端到端 TLS,只能走本地端口
+    for mode in [SslMode::Prefer, SslMode::Require] {
+        m.ssl_mode = mode;
+        let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
+        assert!(t.unwrap().local_port > 0, "{mode:?}");
+    }
 }
