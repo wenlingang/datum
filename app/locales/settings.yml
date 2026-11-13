@@ -1008,3 +1008,476 @@ risk:
     en: Confirm & Run
     zh-CN: 确认执行
     zh-TW: 確認執行
+  alter_loading:
+    en: "Assessing the schema change…"
+    zh-CN: "正在评估改表结构的风险…"
+    zh-TW: "正在評估變更資料表結構的風險…"
+  alter_failed:
+    en: "Couldn't assess the schema change: %{error}"
+    zh-CN: "评估改表结构风险失败:%{error}"
+    zh-TW: "評估變更資料表結構風險失敗:%{error}"
+  alter_none:
+    en: "This schema change can't be assessed"
+    zh-CN: "此改表结构语句无法评估"
+    zh-TW: "此變更資料表結構的陳述式無法評估"
+  alter_summary_fails:
+    en: "The explicit %{requested} can't be satisfied: the server will reject the statement without changing anything"
+    zh-CN: "显式指定的 %{requested} 满足不了:服务器会直接报错,不会改表"
+    zh-TW: "明確指定的 %{requested} 無法滿足:伺服器會直接報錯,不會變更資料表"
+  alter_summary_unknown:
+    en: "Can't tell how the server will run this; treat it as a possible table copy with writes blocked"
+    zh-CN: "无法判定服务器会怎么执行,请按可能整表复制、阻塞写入来对待"
+    zh-TW: "無法判定伺服器會如何執行,請以可能整表複製、阻擋寫入來看待"
+  alter_rebuild:
+    en: "rebuilds the table"
+    zh-CN: "重建表"
+    zh-TW: "重建資料表"
+  alter_no_rebuild:
+    en: "no table rebuild"
+    zh-CN: "不重建表"
+    zh-TW: "不重建資料表"
+  alter_blocks_writes:
+    en: "blocks writes while running"
+    zh-CN: "执行期间阻塞写入"
+    zh-TW: "執行期間阻擋寫入"
+  alter_online:
+    en: "reads and writes keep working"
+    zh-CN: "执行期间可正常读写"
+    zh-TW: "執行期間可正常讀寫"
+  alter_rows:
+    en: "~%{count} rows"
+    zh-CN: "约 %{count} 行"
+    zh-TW: "約 %{count} 列"
+  alter_duration:
+    metadata:
+      en: "Metadata only: finishes almost instantly regardless of table size"
+      zh-CN: "只改元数据:与表大小无关,几乎瞬间完成"
+      zh-TW: "只改中繼資料:與資料表大小無關,幾乎瞬間完成"
+    seconds:
+      en: "%{algorithm} likely takes seconds (rough estimate from table size)"
+      zh-CN: "%{algorithm} 预计秒级(按表大小粗估)"
+      zh-TW: "%{algorithm} 預計秒級(依資料表大小粗估)"
+    minutes:
+      en: "%{algorithm} likely takes minutes (rough estimate from table size)"
+      zh-CN: "%{algorithm} 预计分钟级(按表大小粗估)"
+      zh-TW: "%{algorithm} 預計分鐘級(依資料表大小粗估)"
+    hours:
+      en: "%{algorithm} likely takes hours (rough estimate from table size)"
+      zh-CN: "%{algorithm} 预计小时级(按表大小粗估)"
+      zh-TW: "%{algorithm} 預計小時級(依資料表大小粗估)"
+    days:
+      en: "%{algorithm} may take days (rough estimate from table size)"
+      zh-CN: "%{algorithm} 可能要以天计(按表大小粗估)"
+      zh-TW: "%{algorithm} 可能要以天計(依資料表大小粗估)"
+  alter_risk:
+    low:
+      en: "Low risk"
+      zh-CN: "低风险"
+      zh-TW: "低風險"
+    medium:
+      en: "Medium risk"
+      zh-CN: "中风险"
+      zh-TW: "中風險"
+    high:
+      en: "High risk"
+      zh-CN: "高风险"
+      zh-TW: "高風險"
+    unknown:
+      en: "Unknown"
+      zh-CN: "无法判定"
+      zh-TW: "無法判定"
+  alter_op:
+    add_column:
+      en: "Add column"
+      zh-CN: "加列"
+      zh-TW: "新增欄位"
+    drop_column:
+      en: "Drop column"
+      zh-CN: "删列"
+      zh-TW: "刪除欄位"
+    modify_column:
+      en: "Modify column"
+      zh-CN: "改列定义"
+      zh-TW: "修改欄位定義"
+    change_column:
+      en: "Rename and modify column"
+      zh-CN: "改列名与定义"
+      zh-TW: "修改欄位名稱與定義"
+    rename_column:
+      en: "Rename column"
+      zh-CN: "改列名"
+      zh-TW: "修改欄位名稱"
+    set_default:
+      en: "Change default"
+      zh-CN: "改默认值"
+      zh-TW: "修改預設值"
+    column_visibility:
+      en: "Change column visibility"
+      zh-CN: "改列可见性"
+      zh-TW: "修改欄位可見性"
+    add_index:
+      en: "Add index"
+      zh-CN: "加索引"
+      zh-TW: "新增索引"
+    add_fulltext:
+      en: "Add full-text index"
+      zh-CN: "加全文索引"
+      zh-TW: "新增全文索引"
+    add_spatial:
+      en: "Add spatial index"
+      zh-CN: "加空间索引"
+      zh-TW: "新增空間索引"
+    drop_index:
+      en: "Drop index"
+      zh-CN: "删索引"
+      zh-TW: "刪除索引"
+    rename_index:
+      en: "Rename index"
+      zh-CN: "改索引名"
+      zh-TW: "修改索引名稱"
+    index_visibility:
+      en: "Change index visibility"
+      zh-CN: "改索引可见性"
+      zh-TW: "修改索引可見性"
+    add_primary_key:
+      en: "Add primary key"
+      zh-CN: "加主键"
+      zh-TW: "新增主鍵"
+    drop_primary_key:
+      en: "Drop primary key"
+      zh-CN: "删主键"
+      zh-TW: "刪除主鍵"
+    add_foreign_key:
+      en: "Add foreign key"
+      zh-CN: "加外键"
+      zh-TW: "新增外鍵"
+    drop_foreign_key:
+      en: "Drop foreign key"
+      zh-CN: "删外键"
+      zh-TW: "刪除外鍵"
+    add_check:
+      en: "Add CHECK constraint"
+      zh-CN: "加 CHECK 约束"
+      zh-TW: "新增 CHECK 約束"
+    convert_charset:
+      en: "Convert character set"
+      zh-CN: "转换字符集"
+      zh-TW: "轉換字元集"
+    table_charset:
+      en: "Change table default charset"
+      zh-CN: "改表默认字符集"
+      zh-TW: "修改資料表預設字元集"
+    engine:
+      en: "Set engine"
+      zh-CN: "设置引擎"
+      zh-TW: "設定引擎"
+    rebuild:
+      en: "Rebuild table"
+      zh-CN: "重建表"
+      zh-TW: "重建資料表"
+    row_format:
+      en: "Change row format"
+      zh-CN: "改行格式"
+      zh-TW: "修改列格式"
+    auto_increment:
+      en: "Change AUTO_INCREMENT value"
+      zh-CN: "改自增起始值"
+      zh-TW: "修改自動遞增起始值"
+    stats:
+      en: "Change statistics options"
+      zh-CN: "改统计信息选项"
+      zh-TW: "修改統計資訊選項"
+    table_comment:
+      en: "Change table comment"
+      zh-CN: "改表注释"
+      zh-TW: "修改資料表註解"
+    rename_table:
+      en: "Rename table"
+      zh-CN: "改表名"
+      zh-TW: "修改資料表名稱"
+    partition:
+      en: "Partition operation"
+      zh-CN: "分区操作"
+      zh-TW: "分割區操作"
+    unknown:
+      en: "Other"
+      zh-CN: "其他"
+      zh-TW: "其他"
+  alter_note:
+    instant_add:
+      en: "only metadata changes, no rebuild"
+      zh-CN: "只改元数据,不重建"
+      zh-TW: "只改中繼資料,不重建"
+    instant_drop:
+      en: "only metadata changes, no rebuild"
+      zh-CN: "只改元数据,不重建"
+      zh-TW: "只改中繼資料,不重建"
+    instant_add_8012:
+      en: "INSTANT add column needs MySQL 8.0.12+; rebuilds in place"
+      zh-CN: "INSTANT 加列需 MySQL 8.0.12+,这里原地重建"
+      zh-TW: "INSTANT 新增欄位需 MySQL 8.0.12+,此處原地重建"
+    instant_position_8029:
+      en: "INSTANT add column with FIRST / AFTER needs 8.0.29+; rebuilds in place"
+      zh-CN: "带 FIRST / AFTER 的 INSTANT 加列需 8.0.29+,这里原地重建"
+      zh-TW: "帶 FIRST / AFTER 的 INSTANT 新增欄位需 8.0.29+,此處原地重建"
+    instant_drop_8029:
+      en: "INSTANT drop column needs MySQL 8.0.29+; rebuilds in place"
+      zh-CN: "INSTANT 删列需 MySQL 8.0.29+,这里原地重建"
+      zh-TW: "INSTANT 刪除欄位需 MySQL 8.0.29+,此處原地重建"
+    instant_mariadb_version:
+      en: "this MariaDB version can't do it instantly; rebuilds in place"
+      zh-CN: "此 MariaDB 版本不能 INSTANT,原地重建"
+      zh-TW: "此 MariaDB 版本無法 INSTANT,原地重建"
+    instant_compressed:
+      en: "ROW_FORMAT=COMPRESSED tables can't use INSTANT; rebuilds in place"
+      zh-CN: "压缩行格式的表不能 INSTANT,原地重建"
+      zh-TW: "壓縮列格式的資料表無法 INSTANT,原地重建"
+    instant_fulltext:
+      en: "tables with a FULLTEXT index can't use INSTANT"
+      zh-CN: "有全文索引的表不能 INSTANT"
+      zh-TW: "有全文索引的資料表無法 INSTANT"
+    instant_row_versions:
+      en: "the table hit the 64 INSTANT row-version limit; rebuilds in place"
+      zh-CN: "表的 INSTANT 行版本已达 64 上限,原地重建"
+      zh-TW: "資料表的 INSTANT 列版本已達 64 上限,原地重建"
+    drop_indexed_column:
+      en: "the column is part of an index, so it can't be dropped instantly; rebuilds in place"
+      zh-CN: "列在索引里,不能 INSTANT 删除,原地重建"
+      zh-TW: "欄位在索引中,無法 INSTANT 刪除,原地重建"
+    add_auto_increment:
+      en: "adding an AUTO_INCREMENT column rebuilds the table and blocks writes"
+      zh-CN: "加自增列要重建表并阻塞写入"
+      zh-TW: "新增自動遞增欄位要重建資料表並阻擋寫入"
+    add_stored_generated:
+      en: "a STORED generated column needs a full table copy"
+      zh-CN: "STORED 生成列只能整表复制"
+      zh-TW: "STORED 產生欄位只能整表複製"
+    add_virtual_generated:
+      en: "a VIRTUAL generated column only changes metadata"
+      zh-CN: "VIRTUAL 生成列只改元数据"
+      zh-TW: "VIRTUAL 產生欄位只改中繼資料"
+    drop_virtual_generated:
+      en: "a VIRTUAL generated column only changes metadata"
+      zh-CN: "VIRTUAL 生成列只改元数据"
+      zh-TW: "VIRTUAL 產生欄位只改中繼資料"
+    metadata_only:
+      en: "only metadata changes"
+      zh-CN: "只改元数据"
+      zh-TW: "只改中繼資料"
+    rename_column:
+      en: "renaming keeps the data as is"
+      zh-CN: "改名不动数据"
+      zh-TW: "改名不動資料"
+    type_change:
+      en: "changing the data type needs a full table copy"
+      zh-CN: "改数据类型只能整表复制"
+      zh-TW: "修改資料型別只能整表複製"
+    charset_change:
+      en: "changing the column character set needs a full table copy"
+      zh-CN: "改列字符集只能整表复制"
+      zh-TW: "修改欄位字元集只能整表複製"
+    collation_change:
+      en: "collation change: rules not covered, can't tell"
+      zh-CN: "改排序规则:规则表未覆盖,无法判定"
+      zh-TW: "修改定序:規則表未涵蓋,無法判定"
+    varchar_same_tier:
+      en: "VARCHAR stays within the same length-byte tier (≤255 or >255 bytes): metadata only"
+      zh-CN: "VARCHAR 扩展未跨 255 字节的长度档:只改元数据"
+      zh-TW: "VARCHAR 擴充未跨 255 位元組的長度檔:只改中繼資料"
+    varchar_cross_255:
+      en: "VARCHAR crosses the 255-byte boundary: needs a full table copy"
+      zh-CN: "VARCHAR 扩展跨过 255 字节边界:只能整表复制"
+      zh-TW: "VARCHAR 擴充跨過 255 位元組邊界:只能整表複製"
+    varchar_cross_mariadb:
+      en: "crossing 255 bytes on MariaDB 10.4+ depends on row format: can't tell"
+      zh-CN: "MariaDB 10.4+ 跨 255 字节与行格式有关:无法判定"
+      zh-TW: "MariaDB 10.4+ 跨 255 位元組與列格式有關:無法判定"
+    varchar_shrink:
+      en: "shrinking VARCHAR needs a full table copy"
+      zh-CN: "缩短 VARCHAR 只能整表复制"
+      zh-TW: "縮短 VARCHAR 只能整表複製"
+    enum_append:
+      en: "appending ENUM / SET members only changes metadata"
+      zh-CN: "ENUM / SET 末尾追加取值只改元数据"
+      zh-TW: "ENUM / SET 末尾追加值只改中繼資料"
+    enum_reorder:
+      en: "reordering / removing ENUM / SET members (or growing its storage) needs a full table copy"
+      zh-CN: "ENUM / SET 改顺序、删取值或存储变大:只能整表复制"
+      zh-TW: "ENUM / SET 改順序、刪值或儲存變大:只能整表複製"
+    nullability:
+      en: "NULL ↔ NOT NULL rebuilds the table in place"
+      zh-CN: "NULL ↔ NOT NULL 要原地重建表"
+      zh-TW: "NULL ↔ NOT NULL 要原地重建資料表"
+    nullability_mariadb:
+      en: "NULL ↔ NOT NULL on MariaDB 10.4+: can't tell"
+      zh-CN: "MariaDB 10.4+ 的 NULL ↔ NOT NULL:无法判定"
+      zh-TW: "MariaDB 10.4+ 的 NULL ↔ NOT NULL:無法判定"
+    reorder:
+      en: "moving a column rebuilds the table in place"
+      zh-CN: "调整列位置要原地重建表"
+      zh-TW: "調整欄位位置要原地重建資料表"
+    generated_change:
+      en: "changing a generated column: can't tell"
+      zh-CN: "改生成列:无法判定"
+      zh-TW: "修改產生欄位:無法判定"
+    generated_mariadb:
+      en: "generated columns on MariaDB: can't tell"
+      zh-CN: "MariaDB 的生成列:无法判定"
+      zh-TW: "MariaDB 的產生欄位:無法判定"
+    auto_increment_change:
+      en: "adding / removing AUTO_INCREMENT on an existing column: can't tell"
+      zh-CN: "给已有列加 / 去自增:无法判定"
+      zh-TW: "替既有欄位加上 / 移除自動遞增:無法判定"
+    unknown_attr:
+      en: "column attributes outside the rules table: can't tell"
+      zh-CN: "列属性不在规则表内:无法判定"
+      zh-TW: "欄位屬性不在規則表內:無法判定"
+    column_not_found:
+      en: "column not found in the table: can't tell"
+      zh-CN: "表里没有这一列:无法判定"
+      zh-TW: "資料表中沒有此欄位:無法判定"
+    add_index:
+      en: "builds the index in place; reads and writes keep working"
+      zh-CN: "原地建索引,期间可读写"
+      zh-TW: "原地建立索引,期間可讀寫"
+    add_fulltext:
+      en: "builds a full-text index; writes are blocked meanwhile"
+      zh-CN: "建全文索引,期间阻塞写入"
+      zh-TW: "建立全文索引,期間阻擋寫入"
+    first_fulltext:
+      en: "the first FULLTEXT index adds a hidden FTS_DOC_ID column: rebuilds the table and blocks writes"
+      zh-CN: "首个全文索引要加隐藏的 FTS_DOC_ID 列:重建表且阻塞写入"
+      zh-TW: "首個全文索引要加隱藏的 FTS_DOC_ID 欄位:重建資料表且阻擋寫入"
+    add_spatial:
+      en: "builds a spatial index; writes are blocked meanwhile"
+      zh-CN: "建空间索引,期间阻塞写入"
+      zh-TW: "建立空間索引,期間阻擋寫入"
+    add_primary_key:
+      en: "rebuilds the clustered index (the whole table) in place"
+      zh-CN: "原地重建聚簇索引(整张表)"
+      zh-TW: "原地重建叢集索引(整張資料表)"
+    drop_primary_key:
+      en: "dropping the primary key without adding one needs a full table copy"
+      zh-CN: "只删主键不加新主键:只能整表复制"
+      zh-TW: "只刪主鍵不加新主鍵:只能整表複製"
+    replace_primary_key:
+      en: "drop + add primary key in one statement rebuilds in place"
+      zh-CN: "同一条语句里删主键再加主键:原地重建"
+      zh-TW: "同一陳述式中刪主鍵再加主鍵:原地重建"
+    fk_checks_on:
+      en: "foreign_key_checks=1 (this session): adding a foreign key copies the table"
+      zh-CN: "foreign_key_checks=1(当前会话):加外键要整表复制"
+      zh-TW: "foreign_key_checks=1(目前工作階段):新增外鍵要整表複製"
+    fk_checks_off:
+      en: "foreign_key_checks=0 (this session): metadata only, existing rows are not checked"
+      zh-CN: "foreign_key_checks=0(当前会话):只改元数据,不校验已有数据"
+      zh-TW: "foreign_key_checks=0(目前工作階段):只改中繼資料,不檢查既有資料"
+    fk_checks_unknown:
+      en: "couldn't read foreign_key_checks: can't tell"
+      zh-CN: "取不到 foreign_key_checks:无法判定"
+      zh-TW: "取不到 foreign_key_checks:無法判定"
+    add_check:
+      en: "adding a CHECK constraint validates every row with a full table copy"
+      zh-CN: "加 CHECK 约束要逐行校验,整表复制"
+      zh-TW: "新增 CHECK 約束要逐列檢查,整表複製"
+    convert_charset:
+      en: "converting the character set needs a full table copy"
+      zh-CN: "转换字符集只能整表复制"
+      zh-TW: "轉換字元集只能整表複製"
+    table_charset:
+      en: "only changes the default for new columns"
+      zh-CN: "只改新列的默认字符集"
+      zh-TW: "只改新欄位的預設字元集"
+    table_charset_57:
+      en: "on 5.7 a different default charset rebuilds the table"
+      zh-CN: "5.7 上默认字符集不同时会重建表"
+      zh-TW: "5.7 上預設字元集不同時會重建資料表"
+    engine_change:
+      en: "switching storage engine copies the whole table"
+      zh-CN: "换存储引擎要整表复制"
+      zh-TW: "更換儲存引擎要整表複製"
+    null_rebuild:
+      en: "rebuilds the whole table in place"
+      zh-CN: "原地重建整张表"
+      zh-TW: "原地重建整張資料表"
+    fulltext_rebuild_copy:
+      en: "the table has a FULLTEXT index, so a rebuild can't run in place: full table copy"
+      zh-CN: "表上有全文索引,重建不能原地进行:只能整表复制"
+      zh-TW: "資料表有全文索引,重建無法原地進行:只能整表複製"
+    fulltext_rebuild_mariadb:
+      en: "rebuilding a table with a FULLTEXT index on MariaDB: can't tell"
+      zh-CN: "MariaDB 上重建带全文索引的表:无法判定"
+      zh-TW: "MariaDB 上重建帶全文索引的資料表:無法判定"
+    row_format:
+      en: "changing row format rebuilds the table in place"
+      zh-CN: "改行格式要原地重建表"
+      zh-TW: "修改列格式要原地重建資料表"
+    auto_increment_value:
+      en: "only changes the counter"
+      zh-CN: "只改自增计数器"
+      zh-TW: "只改自動遞增計數器"
+    partition:
+      en: "partition operations aren't covered: can't tell"
+      zh-CN: "分区操作未覆盖:无法判定"
+      zh-TW: "分割區操作未涵蓋:無法判定"
+    unknown_op:
+      en: "not in the rules table: can't tell"
+      zh-CN: "不在规则表内:无法判定"
+      zh-TW: "不在規則表內:無法判定"
+    unsupported_syntax:
+      en: "not supported by this server version"
+      zh-CN: "此服务器版本不支持该写法"
+      zh-TW: "此伺服器版本不支援此寫法"
+    unsupported_version:
+      en: "rules cover MySQL 5.7+ and MariaDB 10.2+ only: can't tell"
+      zh-CN: "规则只覆盖 MySQL 5.7+ 与 MariaDB 10.2+:无法判定"
+      zh-TW: "規則只涵蓋 MySQL 5.7+ 與 MariaDB 10.2+:無法判定"
+    table_not_found:
+      en: "table not found (or no database selected): can't assess"
+      zh-CN: "找不到这张表(或没选库):无法评估"
+      zh-TW: "找不到此資料表(或未選資料庫):無法評估"
+    non_innodb:
+      en: "not an InnoDB table: online DDL rules don't apply; usually copies the table and blocks writes"
+      zh-CN: "不是 InnoDB 表:Online DDL 规则不适用,通常整表复制并阻塞写入"
+      zh-TW: "不是 InnoDB 資料表:Online DDL 規則不適用,通常整表複製並阻擋寫入"
+  alter_fails:
+    instant_unsupported:
+      en: "Some operations can't be done INSTANT; the server will refuse ALGORITHM=INSTANT."
+      zh-CN: "有操作做不到 INSTANT,服务器会拒绝 ALGORITHM=INSTANT。"
+      zh-TW: "有操作做不到 INSTANT,伺服器會拒絕 ALGORITHM=INSTANT。"
+    inplace_unsupported:
+      en: "Some operations need a table copy; the server will refuse ALGORITHM=INPLACE."
+      zh-CN: "有操作只能整表复制,服务器会拒绝 ALGORITHM=INPLACE。"
+      zh-TW: "有操作只能整表複製,伺服器會拒絕 ALGORITHM=INPLACE。"
+    nocopy_unsupported:
+      en: "Some operations need a rebuild; the server will refuse ALGORITHM=NOCOPY."
+      zh-CN: "有操作要重建表,服务器会拒绝 ALGORITHM=NOCOPY。"
+      zh-TW: "有操作要重建資料表,伺服器會拒絕 ALGORITHM=NOCOPY。"
+    lock_none_unsupported:
+      en: "Some operations block writes; the server will refuse LOCK=NONE."
+      zh-CN: "有操作会阻塞写入,服务器会拒绝 LOCK=NONE。"
+      zh-TW: "有操作會阻擋寫入,伺服器會拒絕 LOCK=NONE。"
+    instant_with_lock:
+      en: "MySQL doesn't accept a LOCK clause together with ALGORITHM=INSTANT."
+      zh-CN: "MySQL 不接受 ALGORITHM=INSTANT 再带 LOCK 子句。"
+      zh-TW: "MySQL 不接受 ALGORITHM=INSTANT 再帶 LOCK 子句。"
+  alter_suggest_osc:
+    en: "High risk for a live table: consider gh-ost or pt-online-schema-change, or run it in a maintenance window."
+    zh-CN: "线上表高风险:建议用 gh-ost 或 pt-online-schema-change 在线变更,或放到维护窗口执行。"
+    zh-TW: "線上資料表高風險:建議用 gh-ost 或 pt-online-schema-change 線上變更,或排到維護時段執行。"
+  alter_guarded:
+    en: "With these clauses the server errors out instead of silently copying or locking the table:"
+    zh-CN: "加上下面的子句,条件不满足时服务器直接报错,而不是悄悄整表复制或锁表:"
+    zh-TW: "加上下列子句,條件不滿足時伺服器直接報錯,而不是悄悄整表複製或鎖表:"
+  alter_copy:
+    en: "Copy"
+    zh-CN: "复制"
+    zh-TW: "複製"
+  alter_copied:
+    en: "Copied"
+    zh-CN: "已复制"
+    zh-TW: "已複製"
+  alter_mdl:
+    en: "Even INSTANT needs a brief metadata lock: a long transaction on this table makes it wait and blocks the queries behind it."
+    zh-CN: "即使 INSTANT 也要短暂拿元数据锁:表上有长事务时它会排队,并挡住后面的读写。"
+    zh-TW: "即使 INSTANT 也要短暫取得中繼資料鎖:資料表上有長交易時它會排隊,並擋住後面的讀寫。"

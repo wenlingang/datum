@@ -80,7 +80,7 @@ if [ "$ONLY" = native ]; then
   DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" chat/typing.native.test.tsx || FAILED=1
 fi
 
-# 真实 MySQL 上的诊断操作:需要本机 MySQL(root 无密码),设 DATUM_TEST_MYSQL=端口 才跑
+# 真实 MySQL 上的诊断操作与改表结构评估:需要本机 MySQL(root 无密码),设 DATUM_TEST_MYSQL=端口 才跑
 if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
   D="$ROOT/mysql"; mkdir -p "$D"
   M="mysql -h127.0.0.1 -P$DATUM_TEST_MYSQL -uroot"
@@ -100,6 +100,9 @@ if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
   $M -e "SELECT SLEEP(40) AS datum_sleeper" >/dev/null 2>&1 & SLEEPER=$!
   printf '[{"id":"my","name":"mysql","kind":"mysql","env":"local","host":"127.0.0.1","port":%s,"user":"root","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_MYSQL" > "$D/connections.json"
   run mysql "$D" tab/diag-mysql.test.tsx
+  # 改表结构风险评估:表在诊断测试之后再建,不打乱诊断里按大小排的表清单
+  $M datum_ui_test -e "CREATE TABLE alter_demo (id INT PRIMARY KEY, v INT, note VARCHAR(20)); INSERT INTO alter_demo VALUES (1, 1, 'a'), (2, 2, 'b');" >/dev/null
+  run mysql-alter "$D" tab/alter-mysql.test.tsx
   kill $SLEEPER 2>/dev/null; wait $SLEEPER 2>/dev/null || true
   kill_sleepers
   $M -e "DROP DATABASE IF EXISTS datum_ui_test" >/dev/null

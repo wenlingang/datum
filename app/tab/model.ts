@@ -14,6 +14,7 @@ import { t } from "nsh/i18n";
 import { askAiExplainPlan, askAiFixError, planText, sendToAi } from "../chat/index";
 import { ai, db, errorText, grid, redisKey, sql as sqlText } from "../lib/native";
 import {
+  type AlterAssessment,
   type CellEdit,
   type Conj,
   type DbKind,
@@ -55,6 +56,8 @@ export interface RiskGate {
   relational: boolean;
   /** 每条命中的影响范围预估,与 findings 一一对应(Redis 不预估,为空) */
   impacts: Signal<ImpactState[]>;
+  /** 改表结构语句的风险评估,与 findings 一一对应(不是改表结构的为 none;非 MySQL 为空) */
+  alters: Signal<AlterState[]>;
   /** 「确认执行」 */
   onConfirm: () => void;
 }
@@ -67,9 +70,21 @@ export type ImpactState =
   | { state: "none" }
   | { state: "error"; error: string };
 
+/** 改表结构语句的风险评估状态。 */
+export type AlterState =
+  | { state: "loading" }
+  | { state: "ok"; assessment: AlterAssessment }
+  | { state: "none" }
+  | { state: "error"; error: string };
+
 /** 依次预估各条命中的影响范围(逐条跑,不挤占同一连接)。弹窗关掉后结果写进已丢弃的信号,无副作用。 */
 async function loadImpacts(m: TabModel, gate: RiskGate) {
   for (let i = 0; i < gate.findings.length; i++) {
+    // 改表结构的语句看锁表与重建评估,不数行
+    if (gate.findings[i].schemaChange) {
+      gate.impacts.update((list) => list.map((x, j) => (j === i ? { state: "none" } : x)));
+      continue;
+    }
     let next: ImpactState;
     try {
       const impact = await db.writeImpact(m.dbKind, m.connId, gate.findings[i].sql);
@@ -78,6 +93,21 @@ async function loadImpacts(m: TabModel, gate: RiskGate) {
       next = { state: "error", error: errorText(e) };
     }
     gate.impacts.update((list) => list.map((x, j) => (j === i ? next : x)));
+  }
+}
+
+/** 依次评估各条改表结构语句(只读版本与表信息,不执行 ALTER)。 */
+async function loadAlters(m: TabModel, gate: RiskGate) {
+  for (let i = 0; i < gate.findings.length; i++) {
+    if (!gate.findings[i].schemaChange) continue;
+    let next: AlterState;
+    try {
+      const assessment = await db.alterAssess(m.dbKind, m.connId, gate.findings[i].sql);
+      next = assessment ? { state: "ok", assessment } : { state: "none" };
+    } catch (e) {
+      next = { state: "error", error: errorText(e) };
+    }
+    gate.alters.update((list) => list.map((x, j) => (j === i ? next : x)));
   }
 }
 
@@ -508,9 +538,15 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
   }
   if (!skipRisk) {
     const conn = conns.get(m.connId);
-    // prod 连接从严:带 WHERE 的 UPDATE / DELETE 也先确认,并预估影响范围
+    // prod 连接从严:带 WHERE 的 UPDATE / DELETE 也先确认,并预估影响范围;
+    // MySQL 的改表结构语句也列出,评估能否 INSTANT / INPLACE、会不会锁表
+    const strict = conn?.env === "prod";
     const findings =
-      m.dbKind === "redis" ? sqlText.analyzeRedis(sql) : sqlText.analyze(sql, conn?.env === "prod");
+      m.dbKind === "redis"
+        ? sqlText.analyzeRedis(sql)
+        : m.dbKind === "mysql"
+          ? sqlText.analyzeMysql(sql, strict)
+          : sqlText.analyze(sql, strict);
     if (findings.length > 0) {
       // 转为由用户在确认框里明确决定:不再沿用免确认的只读标记,
       // 也避免取消后标记残留到下一次手动执行
@@ -523,10 +559,19 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
         database: database ? database : null,
         relational,
         impacts: signal<ImpactState[]>(relational ? findings.map(() => ({ state: "loading" as const })) : []),
+        alters: signal<AlterState[]>(
+          findings.map((f) => (f.schemaChange ? { state: "loading" as const } : { state: "none" as const })),
+        ),
         onConfirm: () => run(m, sql, skipHistory, true),
       };
+      // 非 prod 连接上只因改表结构才命中:先评估,高风险才弹确认框,否则直接执行
+      if (!strict && findings.every((f) => f.assessOnly)) {
+        void assessThenRun(m, gate);
+        return;
+      }
       m.risk.set(gate);
       if (relational) void loadImpacts(m, gate);
+      void loadAlters(m, gate);
       return;
     }
   }
@@ -569,6 +614,22 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   void go(null);
+}
+
+/** 非 prod 连接上的改表结构语句:评估完再决定——有一条高风险(COPY / 锁写 / 大表重建)就弹确认框,
+ *  否则直接执行。评估失败不拦着(表不存在之类的错误执行时自会报出)。 */
+async function assessThenRun(m: TabModel, gate: RiskGate) {
+  const token = m.token;
+  m.running.set(true);
+  await loadAlters(m, gate);
+  // 等待期间又执行了别的(或标签页被重用):放弃这次
+  if (m.token !== token) return;
+  m.running.set(false);
+  const high = gate.alters().some((a) => a.state === "ok" && a.assessment.risk === "high");
+  if (high) {
+    gate.impacts.set(gate.findings.map(() => ({ state: "none" as const })));
+    m.risk.set(gate);
+  } else gate.onConfirm();
 }
 
 /** 运行编辑器里的全部语句(⌘⇧↵)。 */

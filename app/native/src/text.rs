@@ -12,24 +12,26 @@ fn dialect(kind: &str) -> Result<Dialect, String> {
     Dialect::from_kind(&k).ok_or_else(|| format!("{kind} 没有 SQL 方言"))
 }
 
-/// 风险检查结果 → `[{ sql, level: "danger" | "warning", kind, object }]`。
+/// 一条风险命中 → `{ sql, level: "danger" | "warning", kind, object }`。
+fn finding_json(f: RiskFinding) -> serde_json::Map<String, JsonValue> {
+    let v = serde_json::json!({
+        "sql": f.sql,
+        "level": match f.level {
+            RiskLevel::Danger => "danger",
+            RiskLevel::Warning => "warning",
+        },
+        "kind": f.kind,
+        "object": f.object,
+    });
+    match v {
+        JsonValue::Object(m) => m,
+        _ => unreachable!(),
+    }
+}
+
+/// 风险检查结果 → `[{ sql, level, kind, object }]`。
 pub(crate) fn findings_json(findings: Vec<RiskFinding>) -> JsonValue {
-    JsonValue::Array(
-        findings
-            .into_iter()
-            .map(|f| {
-                serde_json::json!({
-                    "sql": f.sql,
-                    "level": match f.level {
-                        RiskLevel::Danger => "danger",
-                        RiskLevel::Warning => "warning",
-                    },
-                    "kind": f.kind,
-                    "object": f.object,
-                })
-            })
-            .collect(),
-    )
+    JsonValue::Array(findings.into_iter().map(|f| JsonValue::Object(finding_json(f))).collect())
 }
 
 /// SQL 文本工具。
@@ -72,6 +74,23 @@ impl Sql {
         } else {
             risk::analyze_sql(&doc)
         })
+    }
+
+    /// MySQL 连接的风险检查:同 `analyze`,另把改表结构的语句(ALTER TABLE、CREATE / DROP INDEX … ON、
+    /// OPTIMIZE TABLE)也列出,每条多带 `schemaChange`(要做锁表 / 重建评估)与 `assessOnly`
+    /// (只因改表结构才列出,非 prod 连接评估为高风险时才需要确认)。
+    pub fn analyze_mysql(doc: String, strict: bool) -> JsonValue {
+        JsonValue::Array(
+            risk::analyze_sql_mysql(&doc, strict)
+                .into_iter()
+                .map(|m| {
+                    let mut o = finding_json(m.finding);
+                    o.insert("schemaChange".into(), m.schema_change.into());
+                    o.insert("assessOnly".into(), m.assess_only.into());
+                    JsonValue::Object(o)
+                })
+                .collect(),
+        )
     }
 
     /// Redis 命令风险检查。

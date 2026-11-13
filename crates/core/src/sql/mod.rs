@@ -1,5 +1,6 @@
 //! SQL 文本处理:语句切分、破坏性识别、生成与格式化。纯函数,UI 无关。
 
+pub mod alter;
 pub mod build;
 pub mod format;
 pub mod impact;

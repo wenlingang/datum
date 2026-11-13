@@ -131,6 +131,53 @@ export interface RiskFinding {
   level: "danger" | "warning";
   kind: string;
   object?: string | null;
+  /** MySQL:改表结构的语句,执行前评估锁表与重建风险 */
+  schemaChange?: boolean;
+  /** MySQL:只因改表结构才列出(本身不算破坏性);非 prod 连接评估为高风险时才需要确认 */
+  assessOnly?: boolean;
+}
+
+export type AlterAlgorithm = "instant" | "inplace" | "copy";
+export type AlterRisk = "low" | "medium" | "high" | "unknown";
+
+/** 改表结构的一个子操作的判定(按服务器默认算法);null 为未知。 */
+export interface AlterOpVerdict {
+  clause: string;
+  /** 操作代码:add_column、modify_column… */
+  op: string;
+  target: string | null;
+  algorithm: AlterAlgorithm | null;
+  rebuild: boolean | null;
+  concurrentDml: boolean | null;
+  /** 依据说明代码 */
+  note: string | null;
+}
+
+/** MySQL / MariaDB 改表结构语句的风险评估(规则表 + 表元数据,不执行 ALTER)。 */
+export interface AlterAssessment {
+  statement: string;
+  table: string;
+  /** 「MySQL 8.4.9」 */
+  server: string;
+  ops: AlterOpVerdict[];
+  algorithm: AlterAlgorithm | null;
+  rebuild: boolean | null;
+  blocksWrites: boolean | null;
+  /** 语句里显式写的 ALGORITHM / LOCK */
+  requested: string | null;
+  /** 显式子句满足不了:服务器会直接报错、不执行(原因代码) */
+  fails: string | null;
+  risk: AlterRisk;
+  rows: number | null;
+  bytes: number | null;
+  /** 耗时量级:metadata | seconds | minutes | hours | days */
+  duration: string | null;
+  /** 加上保护子句的写法 */
+  guarded: string | null;
+  /** 建议改用 gh-ost / pt-online-schema-change */
+  suggestOsc: boolean;
+  /** 表级说明代码 */
+  notes: string[];
 }
 
 /** 写语句的影响范围预估(改写成只读查询得出):条件匹配的行数与前几行。 */

@@ -93,6 +93,17 @@ impl Db {
             .and_then(json)
     }
 
+    /// MySQL / MariaDB 改表结构语句的风险评估(只读版本与表信息,不执行 ALTER):
+    /// `{ ops, algorithm, rebuild, blocksWrites, risk, rows, bytes, duration, guarded, … }`;
+    /// 不是 MySQL 或不是改表结构的语句返回 null。
+    pub async fn alter_assess(kind: String, id: String, sql: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::alter_assess(&state(), &k, &id, &sql).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// 执行写语句前的撤销准备:抓取会被改动的原始行,生成反向语句
     /// `{ statements, rows, reason }`(不能撤销时 statements 为空、reason 说明原因)。
     pub async fn undo_prepare(kind: String, id: String, sql: String) -> Result<JsonValue, String> {

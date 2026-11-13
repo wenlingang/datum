@@ -369,7 +369,45 @@ pub fn analyze_sql_strict(doc: &str) -> Vec<RiskFinding> {
     analyze_with(doc, true)
 }
 
+/// MySQL 连接上的风险检查结果:命中 + 是否要做改表结构评估。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MysqlFinding {
+    pub finding: RiskFinding,
+    /// 改表结构的语句(ALTER TABLE、CREATE / DROP INDEX … ON、OPTIMIZE TABLE):执行前评估锁表与重建风险
+    pub schema_change: bool,
+    /// 只因改表结构才列出(本身不算破坏性):非 prod 连接评估为高风险时才需要确认
+    pub assess_only: bool,
+}
+
+/// 同 [`analyze_sql`] / [`analyze_sql_strict`],另把 MySQL 的改表结构语句也列出(做 Online DDL 风险评估)。
+pub fn analyze_sql_mysql(doc: &str, strict: bool) -> Vec<MysqlFinding> {
+    let mut found: Vec<(usize, MysqlFinding)> = analyze_positions(doc, strict)
+        .into_iter()
+        .map(|(at, f)| {
+            let schema_change = super::alter::schema_change(&f.sql).is_some();
+            (at, MysqlFinding { finding: f, schema_change, assess_only: false })
+        })
+        .collect();
+    for l in lex(doc, Rules::MySql) {
+        let raw = doc[l.range.clone()].trim();
+        if raw.is_empty() || found.iter().any(|(_, g)| g.finding.sql == raw) {
+            continue;
+        }
+        if let Some((kind, table)) = super::alter::schema_change(raw) {
+            let finding = RiskFinding { sql: raw.to_string(), level: RiskLevel::Warning, kind: kind.into(), object: Some(table) };
+            found.push((l.range.start, MysqlFinding { finding, schema_change: true, assess_only: true }));
+        }
+    }
+    found.sort_by_key(|(start, _)| *start);
+    found.into_iter().map(|(_, f)| f).collect()
+}
+
 fn analyze_with(doc: &str, strict: bool) -> Vec<RiskFinding> {
+    analyze_positions(doc, strict).into_iter().map(|(_, f)| f).collect()
+}
+
+/// 全部命中及其在原文中的起始位置(已按位置排好)。
+fn analyze_positions(doc: &str, strict: bool) -> Vec<(usize, RiskFinding)> {
     let mut found: Vec<(usize, RiskFinding)> = Vec::new();
     for rules in ALL_RULES {
         for l in lex(doc, rules) {
@@ -404,7 +442,7 @@ fn analyze_with(doc: &str, strict: bool) -> Vec<RiskFinding> {
         });
     }
     found.sort_by_key(|(start, _)| *start);
-    found.into_iter().map(|(_, f)| f).collect()
+    found
 }
 
 /// 是否能确定整段 SQL 都是只读语句。用于「免确认直接执行」的放行判断:
@@ -833,6 +871,32 @@ mod tests {
         let f = analyze_sql(sql);
         assert_eq!(f.len(), 1, "{sql}");
         f.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn mysql_schema_changes_are_listed_for_assessment() {
+        let f = analyze_sql_mysql(
+            "SELECT 1; ALTER TABLE t ADD COLUMN c INT; DELETE FROM t; ALTER TABLE t DROP COLUMN x; CREATE INDEX i ON t (a)",
+            false,
+        );
+        let got: Vec<(&str, bool, bool)> =
+            f.iter().map(|m| (m.finding.kind.as_str(), m.schema_change, m.assess_only)).collect();
+        let delete = t!("core.risk.delete_no_where").to_string();
+        assert_eq!(
+            got,
+            [
+                ("ALTER TABLE", true, true),
+                (delete.as_str(), false, false),
+                // 本来就算破坏性的 ALTER … DROP:照常列出,同时做评估
+                ("ALTER TABLE … DROP", true, false),
+                ("CREATE INDEX", true, true),
+            ]
+        );
+        assert_eq!(f[0].finding.object.as_deref(), Some("t"));
+        // 其他库的分析不受影响
+        assert!(analyze_sql("ALTER TABLE t ADD COLUMN c INT").is_empty());
+        assert!(analyze_sql_mysql("UPDATE t SET a = 1 WHERE id = 1", false).is_empty());
+        assert_eq!(analyze_sql_mysql("UPDATE t SET a = 1 WHERE id = 1", true).len(), 1);
     }
 
     #[test]

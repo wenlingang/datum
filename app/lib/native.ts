@@ -4,6 +4,7 @@
 import { Ai, Db, Prefs as NativePrefs, Sql, Store } from "datum/native";
 import type {
   AgentEvent,
+  AlterAssessment,
   AiSettings,
   AiStatus,
   CellEdit,
@@ -77,6 +78,9 @@ export const db = {
   /** 写语句的影响范围预估;改写不了的语句为 null */
   writeImpact: async (kind: DbKind, id: string, sql: string) =>
     (await Db.writeImpact(kind, id, sql)) as WriteImpact | null,
+  /** MySQL 改表结构的风险评估(只读版本与表信息,不执行 ALTER);不是 MySQL 或不是改表结构的语句为 null。 */
+  alterAssess: async (kind: DbKind, id: string, sql: string) =>
+    (await Db.alterAssess(kind, id, sql)) as AlterAssessment | null,
   tableDetail: async (kind: DbKind, id: string, table: string) =>
     (await Db.tableDetail(kind, id, table)) as TableDetail,
   commitEdits: (kind: DbKind, id: string, edits: CellEdit[], deletes: RowDelete[]) =>
@@ -128,6 +132,8 @@ export const sql = {
   isReadOnly: (doc: string) => Sql.isReadOnly(doc),
   /** `strict`(prod 连接):带 WHERE 的 UPDATE / DELETE 也列出,执行前确认并预估影响范围 */
   analyze: (doc: string, strict = false) => Sql.analyze(doc, strict) as RiskFinding[],
+  /** MySQL:另把改表结构的语句列出(带 schemaChange / assessOnly),执行前评估锁表与重建风险 */
+  analyzeMysql: (doc: string, strict = false) => Sql.analyzeMysql(doc, strict) as RiskFinding[],
   analyzeRedis: (cmd: string) => Sql.analyzeRedis(cmd) as RiskFinding[],
   ident: (name: string, kind: DbKind) => Sql.ident(name, kind),
   literal: (value: string, kind: DbKind) => Sql.literal(value, kind),

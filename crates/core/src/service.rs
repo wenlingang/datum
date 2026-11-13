@@ -199,6 +199,104 @@ pub async fn write_impact(state: &AppState, kind: &DbKind, id: &str, stmt: &str)
     }))
 }
 
+/// MySQL / MariaDB 改表结构语句的风险评估:只读取版本与 information_schema 里的表信息,
+/// 按 Online DDL 规则表判定(见 `sql::alter`)。**不向服务器发送 ALTER**:MySQL 没有 dry-run,
+/// 带 `ALGORITHM=INSTANT` 试探一旦支持就会真执行。非 MySQL 或不是改表结构的语句返回 None。
+pub async fn alter_assess(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    stmt: &str,
+) -> AppResult<Option<crate::sql::alter::AlterAssessment>> {
+    use crate::sql::alter::{self, ColumnMeta, Server, TableMeta};
+    if *kind != DbKind::Mysql {
+        return Ok(None);
+    }
+    let Some(parsed) = alter::parse(stmt) else {
+        return Ok(None);
+    };
+    let ro = |sql: String, max: u32| async move { read_only_bounded(state, kind, id, &sql, max).await };
+    let cell = |r: &QueryResult, row: usize, col: usize| r.rows.get(row).and_then(|x| x.get(col).cloned().flatten());
+    let base = ro("SELECT VERSION(), @@foreign_key_checks, DATABASE()".into(), 1).await?;
+    let version = cell(&base, 0, 0).unwrap_or_default();
+    let server = Server::parse(&version)
+        .ok_or_else(|| AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(version.clone()))?;
+    let fk_checks = cell(&base, 0, 1).map(|v| v.trim() != "0");
+    let Some(schema) = parsed.schema.clone().or_else(|| cell(&base, 0, 2)) else {
+        return Ok(Some(alter::assess(&parsed, &server, None)));
+    };
+    let lit = |v: &str| crate::sql::build::literal(v, Dialect::Mysql);
+    let filter = format!("TABLE_SCHEMA = {} AND TABLE_NAME = {}", lit(&schema), lit(&parsed.table));
+    let table = ro(
+        format!(
+            "SELECT ENGINE, ROW_FORMAT, TABLE_ROWS, DATA_LENGTH + INDEX_LENGTH, TABLE_COLLATION, CREATE_OPTIONS \
+             FROM information_schema.TABLES WHERE {filter}"
+        ),
+        1,
+    )
+    .await?;
+    if table.rows.is_empty() {
+        return Ok(Some(alter::assess(&parsed, &server, None)));
+    }
+    let num = |v: Option<String>| v.and_then(|x| x.trim().parse::<u64>().ok());
+    let columns = ro(
+        format!(
+            "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, CHARACTER_SET_NAME, COLLATION_NAME, \
+             CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, EXTRA, COLUMN_KEY \
+             FROM information_schema.COLUMNS WHERE {filter} ORDER BY ORDINAL_POSITION"
+        ),
+        5000,
+    )
+    .await?;
+    let indexes = ro(
+        format!("SELECT COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE {filter}"),
+        5000,
+    )
+    .await?;
+    let charsets = ro("SELECT CHARACTER_SET_NAME, DEFAULT_COLLATE_NAME FROM information_schema.CHARACTER_SETS".into(), 500).await?;
+    // INSTANT 加删列的行版本上限(64)只在 8.0.29+ 有;查不到不影响其余判定
+    let row_versions = if server.flavor == alter::Flavor::Mysql && server.version >= (8, 0, 29) {
+        let name = format!("{schema}/{}", parsed.table);
+        ro(format!("SELECT TOTAL_ROW_VERSIONS FROM information_schema.INNODB_TABLES WHERE NAME = {}", lit(&name)), 1)
+            .await
+            .ok()
+            .and_then(|r| num(cell(&r, 0, 0)))
+            .map(|v| v as u32)
+    } else {
+        None
+    };
+    let lower = |v: Option<String>| v.map(|x| x.to_ascii_lowercase());
+    let meta = TableMeta {
+        engine: cell(&table, 0, 0),
+        row_format: cell(&table, 0, 1),
+        rows: num(cell(&table, 0, 2)),
+        bytes: num(cell(&table, 0, 3)),
+        collation: lower(cell(&table, 0, 4)),
+        create_options: cell(&table, 0, 5).unwrap_or_default(),
+        columns: (0..columns.rows.len())
+            .map(|i| ColumnMeta {
+                name: cell(&columns, i, 0).unwrap_or_default(),
+                column_type: cell(&columns, i, 1).unwrap_or_default().to_ascii_lowercase(),
+                nullable: cell(&columns, i, 2).is_some_and(|v| v.eq_ignore_ascii_case("YES")),
+                charset: lower(cell(&columns, i, 3)),
+                collation: lower(cell(&columns, i, 4)),
+                max_chars: num(cell(&columns, i, 5)),
+                octets: num(cell(&columns, i, 6)),
+                extra: cell(&columns, i, 7).unwrap_or_default().to_ascii_lowercase(),
+                primary: cell(&columns, i, 8).is_some_and(|v| v.eq_ignore_ascii_case("PRI")),
+            })
+            .collect(),
+        indexed_columns: (0..indexes.rows.len()).filter_map(|i| cell(&indexes, i, 0)).collect(),
+        has_fulltext: (0..indexes.rows.len()).any(|i| cell(&indexes, i, 1).is_some_and(|t| t.eq_ignore_ascii_case("FULLTEXT"))),
+        foreign_key_checks: fk_checks,
+        row_versions,
+        default_collations: (0..charsets.rows.len())
+            .filter_map(|i| Some((lower(cell(&charsets, i, 0))?, lower(cell(&charsets, i, 1))?)))
+            .collect(),
+    };
+    Ok(Some(alter::assess(&parsed, &server, Some(&meta))))
+}
+
 /// 一段 SQL 的撤销准备:执行前抓快照、生成反向语句。
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
