@@ -2,7 +2,7 @@
 //!   DATUM_DIAG_PG=端口      PG(用户 postgres、库 postgres、免密;开 pg_stat_statements 才测慢 SQL 排行)
 //!     docker run --rm -p 55491:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16-alpine \
 //!       -c shared_preload_libraries=pg_stat_statements
-//!   DATUM_DIAG_MYSQL=端口   MySQL(用户 root、空密码,会建库 datum_diag_test)
+//!   DATUM_DIAG_MYSQL=端口   MySQL(用户 root、空密码,会建库 datum_diag_test、datum_charset_test,用完删掉)
 //!     docker run --rm -p 33391:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=yes mysql:8.0
 //!   cargo test -p datum-core --test diag -- --include-ignored --test-threads=1
 
@@ -228,4 +228,140 @@ async fn mysql_diag() {
     let ok = tokio::time::timeout(Duration::from_secs(5), waiting).await.expect("等待者没有放行").unwrap();
     assert!(ok);
     exec(&st, kind, &boot, "DROP DATABASE datum_diag_test").await;
+}
+
+/// 字符集体检:utf8mb3 的库 / 表 / 列、外键两侧与推断的 JOIN 列规则不同、COMPACT 行格式下转 utf8mb4 索引超长。
+/// 再验证生成的脚本:改表评估判为 COPY 高风险;不先改行格式时转换确实失败,按脚本改完后 utf8mb3 问题消失。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn mysql_charset() {
+    let Some(port) = std::env::var("DATUM_DIAG_MYSQL").ok().and_then(|p| p.parse::<u16>().ok()) else {
+        return;
+    };
+    use mysql_async::prelude::Queryable;
+    let mut admin = mysql_async::Conn::from_url(format!("mysql://root@127.0.0.1:{port}")).await.unwrap();
+    admin.query_drop("DROP DATABASE IF EXISTS datum_charset_test").await.unwrap();
+    // 5.7 / MariaDB 只认 utf8_general_ci 这类老名字(8.0 也接受,存成 utf8mb3_*);没有 0900 规则时用 unicode_ci
+    admin.query_drop("CREATE DATABASE datum_charset_test CHARACTER SET utf8 COLLATE utf8_general_ci").await.unwrap();
+    admin.query_drop("USE datum_charset_test").await.unwrap();
+    let has_0900: Option<String> = admin
+        .query_first("SELECT COLLATION_NAME FROM information_schema.COLLATIONS WHERE COLLATION_NAME = 'utf8mb4_0900_ai_ci'")
+        .await
+        .unwrap();
+    let new = if has_0900.is_some() { "utf8mb4_0900_ai_ci" } else { "utf8mb4_unicode_ci" };
+    for sql in [
+        format!(
+            "CREATE TABLE users (id INT PRIMARY KEY, code VARCHAR(32) NOT NULL, nick VARCHAR(40) COLLATE utf8mb4_bin, \
+             UNIQUE KEY uk_code (code)) CHARACTER SET utf8mb4 COLLATE {new}"
+        ),
+        format!(
+            "CREATE TABLE orders (id INT PRIMARY KEY, \
+             user_code VARCHAR(32) CHARACTER SET utf8mb4 COLLATE {new} NOT NULL DEFAULT '', email VARCHAR(255), \
+             note VARCHAR(20) CHARACTER SET latin1, KEY idx_email (email), \
+             CONSTRAINT fk_orders_user FOREIGN KEY (user_code) REFERENCES users (code)) \
+             CHARACTER SET utf8 COLLATE utf8_general_ci ROW_FORMAT=COMPACT"
+        ),
+        format!("CREATE TABLE accounts (id VARCHAR(36) PRIMARY KEY) CHARACTER SET utf8mb4 COLLATE {new}"),
+        format!(
+            "CREATE TABLE tags (id INT PRIMARY KEY, account_id VARCHAR(36) COLLATE utf8mb4_general_ci) \
+             CHARACTER SET utf8mb4 COLLATE {new}"
+        ),
+        "CREATE TABLE `odd``name` (id INT PRIMARY KEY, v VARCHAR(10)) CHARACTER SET latin1".to_string(),
+    ] {
+        admin.query_drop(sql).await.unwrap();
+    }
+    // 两侧字符集不同的外键建不出来,只能关掉 foreign_key_checks 后改一侧(老库升级、导入时常见的来历);
+    // MariaDB 连这样也拒绝(错误 1832),外键两侧不一致在那里造不出来,跳过相关断言
+    admin.query_drop("SET foreign_key_checks = 0").await.unwrap();
+    let fk_mismatch = admin
+        .query_drop("ALTER TABLE orders MODIFY user_code VARCHAR(32) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL DEFAULT ''")
+        .await
+        .is_ok();
+    admin.query_drop("SET foreign_key_checks = 1").await.unwrap();
+
+    let st = state();
+    let (kind, id) = connect(&st, conn(DbKind::Mysql, port, "root", "datum_charset_test", None)).await;
+    let r = service::diag_run(&st, &kind, &id, "charset").await.unwrap();
+    assert!(r.unavailable.is_none());
+    let (sev, issue, object, suggested, fix) =
+        (col(&r, "severity"), col(&r, "issue"), col(&r, "object"), col(&r, "suggested"), col(&r, "fix"));
+    let find = |i: &str, o: &str| {
+        r.rows
+            .iter()
+            .find(|row| row[issue].as_deref() == Some(i) && row[object].as_deref() == Some(o))
+            .unwrap_or_else(|| panic!("缺 {i} {o}: {:?}", r.rows.iter().map(|x| (&x[issue], &x[object])).collect::<Vec<_>>()))
+    };
+    assert_eq!(r.rows[0][sev].as_deref(), Some("high"));
+    if fk_mismatch {
+        find("fk_mismatch", "orders.user_code → users.code");
+    }
+    assert_eq!(find("join_mismatch", "tags.account_id → accounts.id")[suggested].as_deref(), Some(new));
+    find("index_too_long", "orders.idx_email");
+    assert_eq!(find("utf8mb3_schema", "datum_charset_test")[suggested].as_deref(), Some("utf8mb4_general_ci"));
+    assert_eq!(find("utf8mb3_table", "orders")[suggested].as_deref(), Some("utf8mb4_general_ci"));
+    find("utf8mb3_column", "orders.email");
+    find("column_collation", "users.nick");
+    find("table_collation", "odd`name");
+    // 8.0+ 提示 0900 规则,8.0 以前没有
+    let note = find("utf8mb3_table", "orders")[col(&r, "note")].clone().unwrap();
+    assert_eq!(note.contains("utf8mb4_0900_ai_ci"), has_0900.is_some(), "{note}");
+
+    let script = r.script.clone().expect("有转换脚本");
+    let convert = script.lines().find(|l| l.contains("`orders` CONVERT TO CHARACTER SET")).unwrap();
+    assert_eq!(convert, "ALTER TABLE `datum_charset_test`.`orders` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;");
+    // 执行时经过改表结构风险评估:CONVERT 是 COPY、高风险
+    let a = service::alter_assess(&st, &kind, &id, convert).await.unwrap().expect("有评估");
+    assert_eq!(a.algorithm, Some(datum_core::sql::alter::Algorithm::Copy));
+    assert_eq!(a.risk, datum_core::sql::alter::Risk::High);
+
+    // COMPACT 行格式下真的转不过去(索引 1020 字节 > 767),证明检测不是误报
+    admin.query_drop("SET foreign_key_checks = 0").await.unwrap();
+    // MariaDB 关了 foreign_key_checks 也不让改外键里的列(错误 1832,脚本注释里有说明):先删外键,改完再加回
+    if !fk_mismatch {
+        admin.query_drop("ALTER TABLE orders DROP FOREIGN KEY fk_orders_user").await.unwrap();
+    }
+    let e = admin.query_drop(convert).await.unwrap_err().to_string();
+    assert!(e.contains("767"), "{e}");
+    // 按建议先改行格式,再把脚本里的语句全部执行一遍(外键两侧在同一会话里关掉检查后一起改)
+    let row_fix = find("index_too_long", "orders.idx_email")[fix].clone().unwrap();
+    admin.query_drop(row_fix.trim()).await.unwrap();
+    for stmt in script.lines().filter(|l| !l.starts_with("--") && !l.trim().is_empty()) {
+        admin.query_drop(stmt).await.unwrap_or_else(|e| panic!("{stmt}: {e}"));
+    }
+    if !fk_mismatch {
+        // CONVERT 把外键列也统一成了表的规则,加回前要和被引用列一致(脚本注释列出了会被改掉的列)
+        admin
+            .query_drop(format!("ALTER TABLE orders MODIFY user_code VARCHAR(32) CHARACTER SET utf8mb4 COLLATE {new} NOT NULL DEFAULT ''"))
+            .await
+            .unwrap();
+        admin
+            .query_drop("ALTER TABLE orders ADD CONSTRAINT fk_orders_user FOREIGN KEY (user_code) REFERENCES users (code)")
+            .await
+            .unwrap();
+    }
+    if fk_mismatch {
+        let fk_fix = find("fk_mismatch", "orders.user_code → users.code")[fix].clone().unwrap();
+        for stmt in fk_fix.lines().filter(|l| !l.starts_with("--") && !l.trim().is_empty()) {
+            admin.query_drop(stmt).await.unwrap_or_else(|e| panic!("{stmt}: {e}"));
+        }
+        // MODIFY 保留了 NOT NULL 与默认值
+        let def: Option<(String, Option<String>)> = admin
+            .query_first(
+                "SELECT IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS \
+                 WHERE TABLE_SCHEMA = 'datum_charset_test' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'user_code'",
+            )
+            .await
+            .unwrap();
+        assert_eq!(def, Some(("NO".into(), Some(String::new()))));
+    }
+    admin.query_drop("SET foreign_key_checks = 1").await.unwrap();
+
+    let r = service::diag_run(&st, &kind, &id, "charset").await.unwrap();
+    let issues: Vec<(Option<String>, Option<String>)> =
+        r.rows.iter().map(|row| (row[col(&r, "issue")].clone(), row[col(&r, "object")].clone())).collect();
+    assert!(!issues.iter().any(|(i, _)| i.as_deref().is_some_and(|i| i.starts_with("utf8mb3_"))), "{issues:?}");
+    assert!(!issues.iter().any(|(i, _)| i.as_deref() == Some("fk_mismatch")), "{issues:?}");
+    assert!(r.script.is_none());
+
+    admin.query_drop("DROP DATABASE datum_charset_test").await.unwrap();
 }

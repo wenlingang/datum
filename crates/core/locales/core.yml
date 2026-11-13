@@ -876,3 +876,96 @@ core:
       en: "Couldn't tell which columns the UPDATE changes, so it can't be undone"
       zh-CN: 看不出这条 UPDATE 改了哪些列,不能撤销
       zh-TW: 看不出這條 UPDATE 改了哪些欄,無法復原
+  charset:
+    warning:
+      en: "WARNING:"
+      zh-CN: "警告:"
+      zh-TW: "警告:"
+    index_too_long:
+      en: "Index %{index} needs %{bytes} bytes after converting to utf8mb4, over the %{limit}-byte limit (%{format}), so the conversion would fail. Switch to ROW_FORMAT=DYNAMIC, or shorten the column / index a prefix of at most %{chars} characters."
+      zh-CN: "索引 %{index} 转成 utf8mb4 后要 %{bytes} 字节,超过 %{limit} 字节的上限(%{format}),转换会失败。改用 ROW_FORMAT=DYNAMIC,或把列缩短 / 改成不超过 %{chars} 个字符的前缀索引。"
+      zh-TW: "索引 %{index} 轉成 utf8mb4 後要 %{bytes} 位元組,超過 %{limit} 位元組的上限(%{format}),轉換會失敗。改用 ROW_FORMAT=DYNAMIC,或把欄位縮短 / 改成不超過 %{chars} 個字元的前綴索引。"
+    script_header:
+      en: "Convert utf8 / utf8mb3 to utf8mb4 (Datum diagnostics, %{server}). Review before running; take a backup first."
+      zh-CN: "把 utf8 / utf8mb3 转成 utf8mb4(Datum 诊断生成,%{server})。执行前请逐条核对,并先备份。"
+      zh-TW: "把 utf8 / utf8mb3 轉成 utf8mb4(Datum 診斷產生,%{server})。執行前請逐條核對,並先備份。"
+    script_copy:
+      en: "Each ALTER TABLE … CONVERT rebuilds the table (COPY) and blocks writes while it runs: do large tables off-peak, or with gh-ost / pt-online-schema-change."
+      zh-CN: "每条 ALTER TABLE … CONVERT 都会重建表(COPY),执行期间阻塞写入:大表放在低峰期,或改用 gh-ost / pt-online-schema-change。"
+      zh-TW: "每條 ALTER TABLE … CONVERT 都會重建資料表(COPY),執行期間阻擋寫入:大表放在離峰時段,或改用 gh-ost / pt-online-schema-change。"
+    script_schema:
+      en: "Changes the default for tables created later; existing tables keep their charset."
+      zh-CN: "只改以后新建表的默认字符集,已有的表不变。"
+      zh-TW: "只改之後新建資料表的預設字元集,既有的表不變。"
+    script_other_columns:
+      en: "CONVERT also changes these columns (not utf8mb3) to %{coll}: %{cols}. Check unique keys on case- or accent-sensitive columns first."
+      zh-CN: "CONVERT 也会把这些列(不是 utf8mb3)改成 %{coll}:%{cols}。区分大小写 / 重音的列上有唯一键的,先确认不会冲突。"
+      zh-TW: "CONVERT 也會把這些欄位(不是 utf8mb3)改成 %{coll}:%{cols}。區分大小寫 / 重音的欄位上有唯一鍵的,先確認不會衝突。"
+    script_fk:
+      en: "Foreign key involved: MySQL 8.0+ rejects changing the charset of one side while foreign_key_checks = 1 (error 3780). Change both sides in one session after SET foreign_key_checks = 0, and set it back to 1 afterwards. MariaDB refuses to change a column used in a foreign key even then (error 1832): drop the foreign key first and add it back after both sides are converted."
+      zh-CN: "涉及外键:MySQL 8.0+ 在 foreign_key_checks = 1 时不允许只改一侧的字符集(错误 3780)。在同一个会话里先 SET foreign_key_checks = 0,两侧一起改完再设回 1。MariaDB 即使这样也不让改外键里的列(错误 1832):先删掉外键,两侧都转换完再加回。"
+      zh-TW: "涉及外鍵:MySQL 8.0+ 在 foreign_key_checks = 1 時不允許只改一側的字元集(錯誤 3780)。在同一個工作階段裡先 SET foreign_key_checks = 0,兩側一起改完再設回 1。MariaDB 即使這樣也不讓改外鍵裡的欄位(錯誤 1832):先刪掉外鍵,兩側都轉換完再加回。"
+    fix_check:
+      en: "Type, NULL, default and comment come from information_schema: compare with SHOW CREATE TABLE before running."
+      zh-CN: "类型、NULL、默认值与注释取自 information_schema,执行前请与 SHOW CREATE TABLE 对照。"
+      zh-TW: "型別、NULL、預設值與註解取自 information_schema,執行前請與 SHOW CREATE TABLE 對照。"
+    fix_manual:
+      en: "%{col} is a generated column or has a default expression / ON UPDATE, so its definition can't be rebuilt here: write ALTER TABLE … MODIFY from SHOW CREATE TABLE with CHARACTER SET %{cs} COLLATE %{coll}."
+      zh-CN: "%{col} 是生成列或带表达式默认值 / ON UPDATE,这里拼不全定义:请照 SHOW CREATE TABLE 手写 ALTER TABLE … MODIFY,加上 CHARACTER SET %{cs} COLLATE %{coll}。"
+      zh-TW: "%{col} 是產生欄位或帶運算式預設值 / ON UPDATE,這裡拼不全定義:請照 SHOW CREATE TABLE 手寫 ALTER TABLE … MODIFY,加上 CHARACTER SET %{cs} COLLATE %{coll}。"
+    what_charset:
+      en: "character sets"
+      zh-CN: "字符集"
+      zh-TW: "字元集"
+    what_collation:
+      en: "collations"
+      zh-CN: "排序规则"
+      zh-TW: "定序"
+    pair_note:
+      en: "The two sides use different %{what}: comparing them converts one side implicitly, so its index can't be used (or the query fails with “Illegal mix of collations”). Make both sides the same."
+      zh-CN: "两侧%{what}不同:比较时要隐式转换其中一侧,那一侧的索引用不上(或报 “Illegal mix of collations”)。把两侧改成一致。"
+      zh-TW: "兩側%{what}不同:比較時要隱式轉換其中一側,那一側的索引用不上(或報 “Illegal mix of collations”)。把兩側改成一致。"
+    why_fk:
+      en: "Foreign key %{name}."
+      zh-CN: "外键 %{name}。"
+      zh-TW: "外鍵 %{name}。"
+    why_naming:
+      en: "Likely join: %{col} → %{table}.id (by naming)."
+      zh-CN: "常见 JOIN:%{col} → %{table}.id(按命名推断)。"
+      zh-TW: "常見 JOIN:%{col} → %{table}.id(依命名推斷)。"
+    why_same_name:
+      en: "Likely join: same column name as the key %{table}.%{col}."
+      zh-CN: "常见 JOIN:与 %{table}.%{col}(主键 / 唯一键)同名。"
+      zh-TW: "常見 JOIN:與 %{table}.%{col}(主鍵 / 唯一鍵)同名。"
+    modern:
+      en: "%{alt} is also available (newer Unicode rules, faster), but it sorts and compares differently from %{from} and counts trailing spaces: check unique keys before choosing it."
+      zh-CN: "也可选 %{alt}(Unicode 规则更新、更快),但排序和比较结果与 %{from} 不同,且尾部空格参与比较:选用前先确认唯一键不会冲突。"
+      zh-TW: "也可選 %{alt}(Unicode 規則較新、較快),但排序和比較結果與 %{from} 不同,且尾端空白參與比較:選用前先確認唯一鍵不會衝突。"
+    note_schema:
+      en: "Database default is utf8mb3: tables created without an explicit charset can't store 4-byte characters such as emoji."
+      zh-CN: "库默认字符集是 utf8mb3:没写字符集的新表存不了 emoji 等 4 字节字符。"
+      zh-TW: "資料庫預設字元集是 utf8mb3:沒寫字元集的新表存不了 emoji 等 4 位元組字元。"
+    note_table:
+      en: "Table default is utf8mb3 (at most 3 bytes per character): emoji and some rare CJK characters fail to save or get cut off."
+      zh-CN: "表默认字符集是 utf8mb3(每字符最多 3 字节):emoji 和部分生僻汉字存不进去或被截断。"
+      zh-TW: "資料表預設字元集是 utf8mb3(每字元最多 3 位元組):emoji 與部分罕用漢字存不進去或被截斷。"
+    note_column:
+      en: "%{ty} in utf8mb3 can't store 4-byte characters. Converted together with its table (ALTER TABLE … CONVERT TO CHARACTER SET utf8mb4)."
+      zh-CN: "utf8mb3 的 %{ty} 存不了 4 字节字符。随所在表一起转换(ALTER TABLE … CONVERT TO CHARACTER SET utf8mb4)。"
+      zh-TW: "utf8mb3 的 %{ty} 存不了 4 位元組字元。隨所在資料表一起轉換(ALTER TABLE … CONVERT TO CHARACTER SET utf8mb4)。"
+    note_column_collation:
+      en: "Differs from the table default %{coll}. Fine if intentional (e.g. a _bin column for case-sensitive matching); otherwise joins and comparisons with other columns may need COLLATE and miss the index."
+      zh-CN: "与表默认规则 %{coll} 不同。刻意为之(如区分大小写的 _bin 列)可以忽略;否则与其他列比较 / JOIN 时可能要 COLLATE、用不上索引。"
+      zh-TW: "與資料表預設定序 %{coll} 不同。刻意為之(如區分大小寫的 _bin 欄位)可以忽略;否則與其他欄位比較 / JOIN 時可能要 COLLATE、用不上索引。"
+    note_table_collation:
+      en: "Differs from the database default %{coll}. Harmless by itself, but tables created later use the database default, and joins across the two may mix collations."
+      zh-CN: "与库默认规则 %{coll} 不同。本身无害,但之后新建的表会用库默认规则,两边的表 JOIN 时可能混用排序规则。"
+      zh-TW: "與資料庫預設定序 %{coll} 不同。本身無害,但之後新建的表會用資料庫預設定序,兩邊的表 JOIN 時可能混用定序。"
+    columns_truncated:
+      en: "Too many columns: only the first %{n} were checked."
+      zh-CN: "列太多:只检查了前 %{n} 列。"
+      zh-TW: "欄位太多:只檢查了前 %{n} 欄。"
+    findings_truncated:
+      en: "Not shown: %{n} more findings (the full script still covers every table)."
+      zh-CN: "还有 %{n} 条未显示(完整脚本里仍包含全部表)。"
+      zh-TW: "還有 %{n} 條未顯示(完整腳本裡仍包含全部資料表)。"

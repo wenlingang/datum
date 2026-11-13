@@ -1154,6 +1154,10 @@ diag:
       en: "Integrity Check"
       zh-CN: "完整性检查"
       zh-TW: "完整性檢查"
+    charset:
+      en: "Charset Check"
+      zh-CN: "字符集体检"
+      zh-TW: "字元集體檢"
   hint:
     pg:
       overview:
@@ -1213,6 +1217,10 @@ diag:
         en: "Tables in this schema by size; a large free space means OPTIMIZE TABLE could reclaim it."
         zh-CN: "本库各表按大小排序;空闲空间大说明 OPTIMIZE TABLE 可回收。"
         zh-TW: "本資料庫各表依大小排序;閒置空間大表示 OPTIMIZE TABLE 可回收。"
+      charset:
+        en: "Databases, tables and columns still on utf8 / utf8mb3, foreign keys and likely join columns whose two sides differ in charset or collation, and indexes too long for utf8mb4. Checks the current database (all user databases if none is selected); only objects you can see are checked. Generated statements go to the editor and are reviewed before running."
+        zh-CN: "仍用 utf8 / utf8mb3 的库、表、列,外键与常见 JOIN 列两侧字符集或排序规则不同,以及转 utf8mb4 后超长的索引。检查当前库(没选库时检查全部用户库),只含当前用户看得到的对象。生成的语句放进编辑器,执行前照常审查。"
+        zh-TW: "仍用 utf8 / utf8mb3 的資料庫、表、欄位,外鍵與常見 JOIN 欄位兩側字元集或定序不同,以及轉 utf8mb4 後超長的索引。檢查目前的資料庫(沒選資料庫時檢查全部使用者資料庫),只含目前使用者看得到的物件。產生的語句放進編輯器,執行前照常審查。"
     sqlite:
       overview:
         en: "File size, free pages and settings. VACUUM rewrites the file to reclaim free pages; ANALYZE refreshes planner statistics."
@@ -1308,6 +1316,65 @@ diag:
     en: "Unused since statistics were last reset. Make sure no query, constraint or rarely-run job needs it before dropping."
     zh-CN: "自统计上次重置以来没被用过。删除前确认没有查询、约束或低频任务依赖它。"
     zh-TW: "自統計上次重置以來沒被用過。刪除前確認沒有查詢、約束或低頻任務依賴它。"
+  draft_fix:
+    en: "Draft Fix"
+    zh-CN: "生成修复语句"
+    zh-TW: "產生修復語句"
+  script:
+    charset:
+      en: "Draft utf8mb4 Script"
+      zh-CN: "生成 utf8mb4 转换脚本"
+      zh-TW: "產生 utf8mb4 轉換腳本"
+  severity:
+    high:
+      en: "High"
+      zh-CN: "高"
+      zh-TW: "高"
+    medium:
+      en: "Medium"
+      zh-CN: "中"
+      zh-TW: "中"
+    low:
+      en: "Low"
+      zh-CN: "低"
+      zh-TW: "低"
+  issue:
+    fk_mismatch:
+      en: "Foreign key mismatch"
+      zh-CN: "外键两侧不一致"
+      zh-TW: "外鍵兩側不一致"
+    join_mismatch:
+      en: "Join column mismatch"
+      zh-CN: "JOIN 列两侧不一致"
+      zh-TW: "JOIN 欄位兩側不一致"
+    index_too_long:
+      en: "Index too long for utf8mb4"
+      zh-CN: "转 utf8mb4 后索引超长"
+      zh-TW: "轉 utf8mb4 後索引超長"
+    utf8mb3_schema:
+      en: "Database uses utf8mb3"
+      zh-CN: "库仍用 utf8mb3"
+      zh-TW: "資料庫仍用 utf8mb3"
+    utf8mb3_table:
+      en: "Table uses utf8mb3"
+      zh-CN: "表仍用 utf8mb3"
+      zh-TW: "資料表仍用 utf8mb3"
+    utf8mb3_column:
+      en: "Column uses utf8mb3"
+      zh-CN: "列仍用 utf8mb3"
+      zh-TW: "欄位仍用 utf8mb3"
+    column_collation:
+      en: "Column differs from table"
+      zh-CN: "列与表规则不同"
+      zh-TW: "欄位與資料表定序不同"
+    table_collation:
+      en: "Table differs from database"
+      zh-CN: "表与库规则不同"
+      zh-TW: "資料表與資料庫定序不同"
+    truncated:
+      en: "Partial results"
+      zh-CN: "结果不完整"
+      zh-TW: "結果不完整"
   placeholders_note:
     en: "The statement is normalized: placeholders became :p1, :p2 … — fill in real values when asked"
     zh-CN: "语句是归一化后的:占位符已换成 :p1、:p2 …,执行时按提示填入实际值"
@@ -1743,6 +1810,30 @@ diag:
       en: "Result"
       zh-CN: "结果"
       zh-TW: "結果"
+    severity:
+      en: "Severity"
+      zh-CN: "严重程度"
+      zh-TW: "嚴重程度"
+    issue:
+      en: "Issue"
+      zh-CN: "问题"
+      zh-TW: "問題"
+    object:
+      en: "Object"
+      zh-CN: "对象"
+      zh-TW: "物件"
+    current:
+      en: "Current"
+      zh-CN: "当前"
+      zh-TW: "目前"
+    suggested:
+      en: "Suggested"
+      zh-CN: "建议"
+      zh-TW: "建議"
+    note:
+      en: "Details"
+      zh-CN: "说明"
+      zh-TW: "說明"
 params:
   title:
     en: Query Parameters

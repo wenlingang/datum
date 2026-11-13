@@ -9,8 +9,10 @@
 
 use crate::core::connection::DbKind;
 use crate::error::{AppError, AppResult, ErrorKind};
+use crate::my::charset;
 use crate::pg::client::QueryResult;
 use crate::service;
+use crate::sql::alter::Server;
 use crate::AppState;
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
@@ -111,6 +113,8 @@ pub fn sections(kind: &DbKind) -> Vec<SectionInfo> {
             SectionInfo::table("slow"),
             SectionInfo::table("unused_indexes"),
             SectionInfo::table("tables").rows(&[OptimizeTable], &["table"]),
+            // 要扫 information_schema 的全部字符串列与索引,大库上不便宜:点「运行」才查
+            SectionInfo::table("charset").manual(),
         ],
         DbKind::Sqlite => vec![
             SectionInfo::cards("overview").db(&[Vacuum, Analyze]),
@@ -135,11 +139,13 @@ pub struct DiagResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Option<String>>>,
     pub unavailable: Option<Unavailable>,
+    /// 整个分区的修复脚本(MySQL 字符集体检:转 utf8mb4),界面放进编辑器、不直接执行
+    pub script: Option<String>,
 }
 
 impl From<QueryResult> for DiagResult {
     fn from(r: QueryResult) -> Self {
-        Self { columns: r.columns, rows: r.rows, unavailable: None }
+        Self { columns: r.columns, rows: r.rows, unavailable: None, script: None }
     }
 }
 
@@ -425,6 +431,12 @@ async fn my_run(state: &AppState, id: &str, key: &str) -> AppResult<DiagResult> 
             ro(state, &kind, id, MY_UNUSED_INDEXES).await
         }
         "tables" => ro(state, &kind, id, MY_TABLES).await,
+        "charset" => {
+            return match my_charset(state, id).await {
+                Ok(r) => Ok(r),
+                Err(e) => my_unavailable(&e).ok_or(e),
+            }
+        }
         _ => return Err(unknown_section(key)),
     };
     match r {
@@ -479,6 +491,7 @@ fn my_overview_row(status: &HashMap<String, String>, version: &str, max_conn: &s
         columns: pairs.iter().map(|(k, _)| k.to_string()).collect(),
         rows: vec![pairs.into_iter().map(|(_, v)| v).collect()],
         unavailable: None,
+        script: None,
     }
 }
 
@@ -509,6 +522,148 @@ async fn my_overview(state: &AppState, id: &str) -> AppResult<DiagResult> {
 }
 
 // ---------- SQLite ----------
+
+/// 字符集体检读元数据时每条查询的行数上限(列、索引可能远多于界面的 500 行)。
+const CHARSET_SCAN_ROWS: u32 = 20_000;
+
+/// 体检范围:连接选了库就只看这个库,没选库时看全部用户库(排除系统库)。
+fn charset_scope(db: Option<&str>) -> String {
+    use crate::sql::build::literal;
+    match db {
+        Some(db) => format!("= {}", literal(db, crate::sql::Dialect::Mysql)),
+        None => format!(
+            "NOT IN ({})",
+            charset::SYSTEM_SCHEMAS.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(", ")
+        ),
+    }
+}
+
+/// MySQL 字符集 / 排序规则体检:从 information_schema 取库、表、字符串列、索引、外键与可用的 utf8mb4 规则,
+/// 检查逻辑在 [`charset::check`]。information_schema 只返回有权限的对象,权限不够时结果会不全但不报错。
+async fn my_charset(state: &AppState, id: &str) -> AppResult<DiagResult> {
+    let kind = DbKind::Mysql;
+    let scan = |sql: String| async move {
+        service::query_read_only_timeout(state, &kind, id, &sql, CHARSET_SCAN_ROWS, DIAG_TIMEOUT_MS).await
+    };
+    let base = ro(state, &kind, id, "SELECT VERSION(), DATABASE()").await?;
+    let row = base.rows.first().cloned().unwrap_or_default();
+    let version = row.first().cloned().flatten().unwrap_or_default();
+    let server = Server::parse(&version).unwrap_or(Server::mysql(8, 0, 0));
+    let db = row.get(1).cloned().flatten().filter(|d| !d.is_empty());
+    let scope = charset_scope(db.as_deref());
+
+    let schemas = charset::schemas_from(
+        &scan(format!(
+            "SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME {scope}"
+        ))
+        .await?,
+    );
+    let tables = charset::tables_from(
+        &scan(format!(
+            "SELECT TABLE_SCHEMA, TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION FROM information_schema.TABLES \
+             WHERE TABLE_SCHEMA {scope} AND TABLE_TYPE = 'BASE TABLE'"
+        ))
+        .await?,
+    );
+    let col_rows = scan(format!(
+        "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, \
+           COLLATION_NAME, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT \
+         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA {scope} AND CHARACTER_SET_NAME IS NOT NULL \
+         ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
+    ))
+    .await?;
+    let truncated_columns = (col_rows.rows.len() >= CHARSET_SCAN_ROWS as usize).then_some(CHARSET_SCAN_ROWS as usize);
+    // 视图的列也在 COLUMNS 里:只留基表的
+    let base_tables: std::collections::HashSet<(String, String)> =
+        tables.iter().map(|t| (t.schema.clone(), t.name.clone())).collect();
+    let columns: Vec<charset::Column> = charset::columns_from(&col_rows)
+        .into_iter()
+        .filter(|c| base_tables.contains(&(c.schema.clone(), c.table.clone())))
+        .collect();
+    let indexes = charset::indexes_from(
+        &scan(format!(
+            "SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, COLUMN_NAME, SUB_PART, NON_UNIQUE, INDEX_TYPE \
+             FROM information_schema.STATISTICS WHERE TABLE_SCHEMA {scope} \
+             ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX"
+        ))
+        .await?,
+    );
+    let fks = charset::fks_from(
+        &scan(format!(
+            "SELECT CONSTRAINT_NAME, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_SCHEMA, \
+               REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME \
+             FROM information_schema.KEY_COLUMN_USAGE \
+             WHERE TABLE_SCHEMA {scope} AND REFERENCED_TABLE_NAME IS NOT NULL"
+        ))
+        .await?,
+    );
+    let colls = scan(
+        "SELECT COLLATION_NAME, IS_DEFAULT FROM information_schema.COLLATIONS WHERE CHARACTER_SET_NAME = 'utf8mb4'".into(),
+    )
+    .await?;
+    let mut utf8mb4_collations: Vec<String> =
+        colls.rows.iter().filter_map(|r| r.first().cloned().flatten()).map(|c| c.to_ascii_lowercase()).collect();
+    let utf8mb4_default = colls
+        .rows
+        .iter()
+        .find(|r| r.get(1).cloned().flatten().is_some_and(|d| d.eq_ignore_ascii_case("yes")))
+        .and_then(|r| r.first().cloned().flatten())
+        .map(|c| c.to_ascii_lowercase());
+    // MariaDB 10.10+ 的 uca1400 等规则按「完整名」登记在这里;别的版本没有这一列,查不到就算了
+    if let Ok(full) = ro(
+        state,
+        &kind,
+        id,
+        "SELECT FULL_COLLATION_NAME FROM information_schema.COLLATION_CHARACTER_SET_APPLICABILITY \
+         WHERE CHARACTER_SET_NAME = 'utf8mb4'",
+    )
+    .await
+    {
+        utf8mb4_collations.extend(full.rows.iter().filter_map(|r| r.first().cloned().flatten()).map(|c| c.to_ascii_lowercase()));
+    }
+    // 5.7 的 innodb_large_prefix(8.0 / MariaDB 10.3+ 已移除,查询报错即视为没有这个限制)
+    let large_prefix = ro(state, &kind, id, "SELECT @@innodb_large_prefix")
+        .await
+        .ok()
+        .and_then(|r| r.rows.first().and_then(|r| r.first().cloned().flatten()))
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("on"));
+
+    let report = charset::check(&charset::Snapshot {
+        server,
+        multi_schema: db.is_none(),
+        schemas,
+        tables,
+        columns,
+        indexes,
+        fks,
+        utf8mb4_collations,
+        utf8mb4_default,
+        large_prefix,
+        truncated_columns,
+    });
+    Ok(charset_result(report))
+}
+
+fn charset_result(r: charset::Report) -> DiagResult {
+    let columns = ["severity", "issue", "object", "current", "suggested", "note", "fix"];
+    let rows = r
+        .findings
+        .into_iter()
+        .map(|f| {
+            let s = |v: String| (!v.is_empty()).then_some(v);
+            vec![
+                Some(f.severity.code().to_string()),
+                Some(f.issue.to_string()),
+                s(f.object),
+                s(f.current),
+                s(f.suggested),
+                s(f.note),
+                f.fix,
+            ]
+        })
+        .collect();
+    DiagResult { columns: columns.map(String::from).to_vec(), rows, unavailable: None, script: r.script }
+}
 
 const SQLITE_OVERVIEW: &str = "\
 SELECT p.page_count * s.page_size AS file_size_bytes, p.page_count AS pages, s.page_size AS page_size_bytes,

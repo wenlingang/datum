@@ -103,6 +103,13 @@ if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
   # 改表结构风险评估:表在诊断测试之后再建,不打乱诊断里按大小排的表清单
   $M datum_ui_test -e "CREATE TABLE alter_demo (id INT PRIMARY KEY, v INT, note VARCHAR(20)); INSERT INTO alter_demo VALUES (1, 1, 'a'), (2, 2, 'b');" >/dev/null
   run mysql-alter "$D" tab/alter-mysql.test.tsx
+  # 字符集体检:utf8mb3 的表,外键两侧字符集不同(只能先建一致的外键,再关掉 foreign_key_checks 改一侧)
+  $M datum_ui_test -e "CREATE TABLE members (id INT PRIMARY KEY, user_name VARCHAR(40) NOT NULL, UNIQUE KEY uk_user_name (user_name)) CHARACTER SET utf8mb4;
+    CREATE TABLE legacy_users (id INT PRIMARY KEY, user_name VARCHAR(40) CHARACTER SET utf8mb4 NOT NULL, name VARCHAR(40),
+      CONSTRAINT fk_legacy_member FOREIGN KEY (user_name) REFERENCES members (user_name)) CHARACTER SET utf8mb3;
+    SET foreign_key_checks = 0;
+    ALTER TABLE legacy_users MODIFY user_name VARCHAR(40) CHARACTER SET utf8mb3 NOT NULL;" >/dev/null
+  run mysql-charset "$D" tab/charset-mysql.test.tsx
   kill $SLEEPER 2>/dev/null; wait $SLEEPER 2>/dev/null || true
   kill_sleepers
   $M -e "DROP DATABASE IF EXISTS datum_ui_test" >/dev/null

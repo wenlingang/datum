@@ -609,6 +609,8 @@ export interface DiagResult {
   columns: string[];
   rows: (string | null)[][];
   unavailable: { reason: string; detail: string | null } | null;
+  /** 整个分区的修复脚本(MySQL 字符集体检:转 utf8mb4),放进编辑器、不直接执行 */
+  script: string | null;
 }
 
 /** 自然语言筛选的转换结果(条件已在原生侧校验过列名与操作符)。 */

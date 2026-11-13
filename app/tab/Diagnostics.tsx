@@ -23,10 +23,18 @@ const AUTO_MS = 5000;
 
 /** 长文本列(SQL、定义、检查结果):更宽、最多三行。 */
 const WIDE = new Set(["query", "blocked_query", "blocking_query", "definition", "message"]);
-/** 只给操作用、不显示的列(MySQL 慢 SQL 的样例语句)。 */
-const HIDDEN = new Set(["sample"]);
+/** 只给操作用、不显示的列(MySQL 慢 SQL 的样例语句、字符集体检的修复语句)。 */
+const HIDDEN = new Set(["sample", "fix"]);
 /** 中等宽度的文本列。 */
 const MEDIUM = new Set(["app", "client", "host", "wait", "table", "index", "name", "state", "blocking_state"]);
+/** 较宽的标识列(字符集体检的对象、两侧排序规则「a ↔ b」)。 */
+const LONG = new Set(["object", "current"]);
+/** 略宽于默认的列(问题类型、建议的排序规则)。 */
+const LABEL = new Set(["issue", "suggested"]);
+/** 说明文字:和 WIDE 一样宽,但用正文字体。 */
+const PROSE = new Set(["note"]);
+/** 值是文案键的列:显示时翻译(core 只给代码,便于排序与着色)。 */
+const CODED = new Set(["severity", "issue"]);
 
 function isNumeric(col: string): boolean {
   return /(_bytes|_pct|_ms|_rows|_seconds|^seconds|^calls|^rows|^scans|^pages|^rows_\w+)$/.test(col) || col.endsWith("_pid") || col === "pid" || col === "id" || col.endsWith("_id");
@@ -42,6 +50,7 @@ function colLabel(col: string): string {
 /** 单元格显示值:字节换算、百分号、毫秒。 */
 export function cellText(col: string, v: string | null): string {
   if (v === null || v === "") return "—";
+  if (CODED.has(col)) return t(`diag.${col}.${v}`);
   const n = Number(v);
   if (col.endsWith("_bytes") && Number.isFinite(n)) return formatBytes(n);
   if (col.endsWith("_pct")) return `${v}%`;
@@ -51,7 +60,9 @@ export function cellText(col: string, v: string | null): string {
 }
 
 function colWidth(col: string): string {
-  if (WIDE.has(col)) return "w-[380px]";
+  if (WIDE.has(col) || PROSE.has(col)) return "w-[380px]";
+  if (LONG.has(col)) return "w-[270px]";
+  if (LABEL.has(col)) return "w-[180px]";
   if (MEDIUM.has(col)) return "w-[150px]";
   return "w-[100px]";
 }
@@ -62,6 +73,7 @@ function warn(col: string, v: string | null): boolean {
   if (col === "state" || col === "blocking_state") return v.startsWith("idle in transaction");
   if (col === "dead_pct") return Number(v) >= 20;
   if (col === "message") return v !== "ok";
+  if (col === "severity") return v === "high";
   return false;
 }
 
@@ -101,7 +113,7 @@ function Cards(props: { r: DiagResult }) {
 }
 
 /** 一行里的 SQL 能做的事:在编辑器打开、交给 AI 解读;慢 SQL 还能直接 Explain;
- *  未使用的索引生成 DROP INDEX(放进编辑器,执行时照常过危险语句审查)。 */
+ *  未使用的索引生成 DROP INDEX、字符集体检生成修复语句(都放进编辑器,执行时照常过危险语句审查与改表风险评估)。 */
 function SqlMenu(props: {
   connId: string;
   kind: DbKind;
@@ -110,6 +122,8 @@ function SqlMenu(props: {
   /** 带真实值的样例语句(MySQL 8.0 的慢 SQL):有就用它,不用填参数 */
   sample?: string | null;
   index: string[] | null;
+  /** 字符集体检的修复语句(放进编辑器时去掉末尾换行:光标落在文末,「运行」取到的是最后一条语句而不是空白) */
+  fix?: string | null;
 }) {
   const prepared = () => {
     if (props.sample?.trim()) return props.sample;
@@ -142,6 +156,9 @@ function SqlMenu(props: {
       <If when={props.index}>
         <MItem label={t("diag.drop_index")} onSelect={dropIndex} />
       </If>
+      <If when={props.fix}>
+        {(fix) => <MItem label={t("diag.draft_fix")} onSelect={() => openQueryOn(props.connId, fix().trimEnd())} />}
+      </If>
     </DropMenu>
   );
 }
@@ -153,7 +170,10 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
   /** 行里的 SQL 列(会话、锁等待、长事务、慢 SQL) */
   const sqlCol = () => ["query", "blocked_query"].map(idx).find((i) => i >= 0) ?? -1;
   const isUnusedIdx = () => props.section.key === "unused_indexes" && idx("index") >= 0 && idx("table") >= 0;
-  const hasMenu = () => sqlCol() >= 0 || isUnusedIdx();
+  const fixCol = () => idx("fix");
+  const hasMenu = () => sqlCol() >= 0 || isUnusedIdx() || fixCol() >= 0;
+  /** 这一行有没有菜单项(字符集体检里有的行没有自动修复) */
+  const rowHasMenu = (row: (string | null)[]) => sqlCol() >= 0 || isUnusedIdx() || !!(fixCol() >= 0 && row[fixCol()]);
   const hasActions = () => props.section.rowActions.length > 0 || hasMenu();
   const actionsWidth = () => (props.section.rowActions.length > 0 && hasMenu() ? "w-[230px]" : "w-[150px]");
   return (
@@ -198,7 +218,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
                         />
                       )}
                     </Each>
-                    <If when={hasMenu()}>
+                    <If when={rowHasMenu(row())}>
                       <SqlMenu
                         connId={props.connId}
                         kind={props.kind}
@@ -210,6 +230,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
                             ? [row()[idx("schema")] ?? "", row()[idx("table")] ?? "", row()[idx("index")] ?? ""]
                             : null
                         }
+                        fix={fixCol() >= 0 ? (row()[fixCol()] ?? null) : null}
                       />
                     </If>
                   </View>
@@ -217,9 +238,13 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
                 <Each of={shown()}>
                   {(c) => (
                     <Text
-                      class={`${FS.xs} ${colWidth(c())} ${WIDE.has(c()) ? `${MONO} line-clamp-3` : "line-clamp-1"} text-foreground`}
-                      classList={{ "text-right": isNumeric(c()), [MONO]: isNumeric(c()), "text-warning": warn(c(), row()[idx(c())] ?? null) }}
-                      onPress={WIDE.has(c()) && row()[idx(c())] ? () => void copy(row()[idx(c())] ?? "") : undefined}
+                      class={`${FS.xs} ${colWidth(c())} ${WIDE.has(c()) ? `${MONO} line-clamp-3` : PROSE.has(c()) ? "line-clamp-3" : "line-clamp-1"} text-foreground`}
+                      classList={{
+                        "text-right": isNumeric(c()),
+                        [MONO]: isNumeric(c()),
+                        "text-warning": warn(c(), row()[idx(c())] ?? null),
+                      }}
+                      onPress={(WIDE.has(c()) || PROSE.has(c())) && row()[idx(c())] ? () => void copy(row()[idx(c())] ?? "") : undefined}
                     >
                       {cellText(c(), row()[idx(c())] ?? null)}
                     </Text>
@@ -433,6 +458,18 @@ export function Diagnostics(props: { connId: string }) {
             <View class="gap-3">
               <View class="flex-row items-center gap-2">
                 <Hint class={`${FS.xs} flex-1`}>{t(`diag.hint.${kind}.${s().key}`)}</Hint>
+                <If when={results()[s().key]?.script}>
+                  {(script) => (
+                    <Btn
+                      testID="diag-script"
+                      small
+                      variant="outline"
+                      icon="code-xml"
+                      label={t(`diag.script.${s().key}`)}
+                      onPress={() => openQueryOn(id, script().trimEnd())}
+                    />
+                  )}
+                </If>
                 <Each of={s().dbActions}>
                   {(a) => (
                     <Btn
