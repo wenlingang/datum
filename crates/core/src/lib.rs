@@ -13,6 +13,7 @@ pub mod diag;
 pub mod core;
 pub mod erd;
 pub mod error;
+pub mod explain;
 pub mod grid;
 pub mod mongo;
 pub mod my;

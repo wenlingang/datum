@@ -1586,3 +1586,48 @@ params:
     en: Run
     zh-CN: 运行
     zh-TW: 執行
+plan:
+  title_analyzed:
+    en: Execution plan · actual run (EXPLAIN ANALYZE)
+    zh-CN: 执行计划 · 实际执行(EXPLAIN ANALYZE)
+    zh-TW: 執行計畫 · 實際執行(EXPLAIN ANALYZE)
+  view_tree:
+    en: Tree
+    zh-CN: 树形
+    zh-TW: 樹狀
+  view_raw:
+    en: Raw output
+    zh-CN: 原始输出
+    zh-TW: 原始輸出
+  analyze:
+    en: Run it once (ANALYZE)
+    zh-CN: 实际执行一次(ANALYZE)
+    zh-TW: 實際執行一次(ANALYZE)
+  analyze_tooltip:
+    en: Runs the statement in a read-only session to get real timings; only for read-only statements
+    zh-CN: 在只读会话里真正执行一次,拿到实际耗时与行数;只对只读语句开放
+    zh-TW: 在唯讀工作階段裡真正執行一次,取得實際耗時與列數;只對唯讀語句開放
+  hottest:
+    en: Most expensive
+    zh-CN: 最耗时
+    zh-TW: 最耗時
+  full_scan:
+    en: Full scan
+    zh-CN: 全表扫描
+    zh-TW: 全表掃描
+  cost:
+    en: Cost
+    zh-CN: 成本
+    zh-TW: 成本
+  rows:
+    en: Rows (est.)
+    zh-CN: 预估行数
+    zh-TW: 預估列數
+  actual:
+    en: Actual
+    zh-CN: 实际耗时
+    zh-TW: 實際耗時
+  total_ms:
+    en: "Executed in %{ms} ms"
+    zh-CN: "实际执行耗时 %{ms} ms"
+    zh-TW: "實際執行耗時 %{ms} ms"

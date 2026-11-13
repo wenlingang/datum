@@ -9,7 +9,8 @@ import { supportsSql } from "../lib/types";
 import { Btn, Dot, Hint, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
-import { aiExplainPlan, aiFixError, selectResult, type StmtResult, viewIndices, type TabModel } from "./model";
+import { PlanView } from "./PlanView";
+import { aiExplainPlan, aiFixError, canAnalyze, explainAnalyze, selectResult, type StmtResult, viewIndices, type TabModel } from "./model";
 import { ErrorText } from "../ui/error";
 
 function okSummary(m: TabModel): string {
@@ -162,8 +163,39 @@ export function Results(props: { m: TabModel }) {
       <If when={body() === "grid"}>
         <View class="min-h-0 flex-1">
           <If when={explained()}>
-            <View class="flex-row items-center gap-2 border-b border-border px-3 py-1.5">
-              <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("tab.plan_title")}</Text>
+            <View class="flex-row flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
+              <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>
+                {m.plan()?.analyzed ? t("plan.title_analyzed") : t("tab.plan_title")}
+              </Text>
+              <If when={m.plan()?.tree}>
+                <View class="flex-row gap-px rounded-(--radius) border border-border p-px">
+                  <Btn
+                    testID="plan-view-tree"
+                    small
+                    variant={m.planView() === "tree" ? "secondary" : "ghost"}
+                    label={t("plan.view_tree")}
+                    onPress={() => m.planView.set("tree")}
+                  />
+                  <Btn
+                    testID="plan-view-raw"
+                    small
+                    variant={m.planView() === "raw" ? "secondary" : "ghost"}
+                    label={t("plan.view_raw")}
+                    onPress={() => m.planView.set("raw")}
+                  />
+                </View>
+              </If>
+              <If when={canAnalyze(m)}>
+                <Btn
+                  testID="plan-analyze"
+                  small
+                  variant="outline"
+                  icon="play"
+                  label={t("plan.analyze")}
+                  tooltip={t("plan.analyze_tooltip")}
+                  onPress={() => explainAnalyze(m)}
+                />
+              </If>
               <Btn
                 testID="ai-explain-plan"
                 small
@@ -178,7 +210,12 @@ export function Results(props: { m: TabModel }) {
               {t("tab.row_limit_reached", { n: maxRows() })}
             </Text>
           </If>
-          <ResultGrid m={m} />
+          <If
+            when={explained() && m.planView() === "tree" && m.plan()?.tree ? m.plan() : null}
+            else={<ResultGrid m={m} />}
+          >
+            {(plan) => <PlanView plan={plan()} />}
+          </If>
         </View>
       </If>
     </View>

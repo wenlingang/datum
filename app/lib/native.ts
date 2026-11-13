@@ -30,6 +30,7 @@ import type {
   NlFilter,
   ForeignKey,
   ValueContext,
+  Plan,
 } from "./types";
 
 export const store = {
@@ -83,6 +84,9 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  /** 执行计划(树 + 原始输出);`analyze` 会真正执行,只接受只读语句。 */
+  explainPlan: async (kind: DbKind, id: string, sql: string, analyze: boolean) =>
+    (await Db.explainPlan(kind, id, sql, analyze)) as Plan,
   /** 补全用的外键(物理 + 按命名推断)。 */
   foreignKeys: async (kind: DbKind, id: string) => (await Db.foreignKeys(kind, id)) as ForeignKey[],
   /** 低基数列的实际取值(最多 30 个);不是枚举类的列为 null。 */

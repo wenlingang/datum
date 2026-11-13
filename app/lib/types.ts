@@ -457,3 +457,24 @@ export interface ValueContext {
   prefix: string;
   quoted: boolean;
 }
+
+/** 执行计划树的一个节点(三种库统一的形状)。 */
+export interface PlanNode {
+  label: string;
+  detail: string;
+  cost: number | null;
+  selfCost: number | null;
+  rows: number | null;
+  actualMs: number | null;
+  actualRows: number | null;
+  fullScan: boolean;
+  children: PlanNode[];
+}
+
+/** 一次 Explain 的结果:计划树(解析不了为 null)与原始输出。 */
+export interface Plan {
+  tree: PlanNode | null;
+  raw: QueryResult;
+  analyzed: boolean;
+  totalMs: number | null;
+}

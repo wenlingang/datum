@@ -109,6 +109,14 @@ test("报错可交给 AI 修复;Explain 显示执行计划并可交给 AI 解读
   expect(app.shows("id:ai-explain-plan")).toBe(true);
   expect(app.texts().some((x) => x.startsWith("SCAN") || x.startsWith("SEARCH"))).toBe(true);
   expect(app.shows("id:ai-fix-error")).toBe(false);
+  // 默认画成树:没有索引的 origin 条件是全表扫描;可切回原始输出;SQLite 没有 ANALYZE
+  expect(app.shows("id:plan-tree")).toBe(true);
+  expect(app.texts()).toContain("Full scan");
+  expect(app.shows("id:plan-analyze")).toBe(false);
+  await app.press("id:plan-view-raw");
+  await app.waitUntil(() => !app.shows("id:plan-tree") && app.shows("id:result-grid"), { timeout: 5000 });
+  await app.press("id:plan-view-tree");
+  await app.waitFor("id:plan-tree", { timeout: 5000 });
   // 普通查询的结果不显示执行计划栏
   await app.press("id:run");
   await app.waitFor("text:Execution Plan", { state: "gone", timeout: 15000 });

@@ -19,6 +19,7 @@ import {
   type DbKind,
   type FilterRow,
   type KeyDetail,
+  type Plan,
   type QueryResult,
   type RiskFinding,
   type RowDelete,
@@ -149,6 +150,9 @@ export interface TabModel {
   /** 撤销确认框是否打开 */
   readonly undoOpen: Signal<boolean>;
 
+  /** 最近一次 Explain 的执行计划(其他执行会清掉);planView 选树形或原始输出 */
+  readonly plan: Signal<Plan | null>;
+  readonly planView: Signal<"tree" | "raw">;
   /** 查询参数(`:name`)待填写:执行前弹框 */
   readonly params: Signal<ParamsGate | null>;
   /** 本标签上次填过的参数值(下次弹框预填) */
@@ -247,6 +251,8 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     lastRun: signal<{ sql: string; explain: boolean } | null>(null),
     undo: signal<UndoPrep | null>(null),
     undoOpen: signal(false),
+    plan: signal<Plan | null>(null),
+    planView: signal<"tree" | "raw">("tree"),
     params: signal<ParamsGate | null>(null),
     paramValues: {},
     multi: signal<StmtResult[] | null>(null),
@@ -413,6 +419,7 @@ function record(m: TabModel, sql: string, elapsed: number, rowCount: number | nu
 async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elapsed: number) => void) {
   const token = ++m.token;
   m.multi.set(null);
+  m.plan.set(null);
   // 一次性标记:只作用于紧接着的这一次执行
   const readOnly = m.readOnlyNext;
   m.readOnlyNext = false;
@@ -545,6 +552,7 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   batch(() => {
     m.running.set(true);
     m.undo.set(null);
+    m.plan.set(null);
     m.lastRun.set({ sql: statements.join(";\n"), explain: false });
   });
   const out: StmtResult[] = [];
@@ -659,18 +667,56 @@ export function explain(m: TabModel, override?: string) {
     return;
   }
   if (askParams(m, sql, (bound) => explain(m, bound))) return;
-  m.lastRun.set({ sql, explain: true });
-  // SQLite 的 EXPLAIN 输出虚拟机字节码,看不出查询计划;要用 EXPLAIN QUERY PLAN
-  const prefix = m.dbKind === "sqlite" ? "EXPLAIN QUERY PLAN" : "EXPLAIN";
-  void spawnQuery(m, `${prefix} ${sql}`, (r, elapsed) => {
-    m.browseTable.set(null);
-    m.page.set(0);
-    m.resultIsQuery.set(true);
-    m.sort.set(null);
-    resetFilter(m);
-    m.elapsedMs.set(elapsed);
-    setResult(m, r);
+  void runExplain(m, sql, false);
+}
+
+/** 对当前执行计划的语句真正执行一次(EXPLAIN ANALYZE),拿到实际耗时与行数;只对只读语句开放。 */
+export function explainAnalyze(m: TabModel) {
+  const last = m.lastRun();
+  if (!last?.explain || !sqlText.isReadOnly(last.sql)) return;
+  void runExplain(m, last.sql, true);
+}
+
+/** 能否对当前计划做 EXPLAIN ANALYZE:PG / MySQL 的只读语句,且这份计划还没跑过 ANALYZE。 */
+export function canAnalyze(m: TabModel): boolean {
+  const last = m.lastRun();
+  const plan = m.plan();
+  return (m.dbKind === "pg" || m.dbKind === "mysql") && !!last?.explain && !!plan && !plan.analyzed && sqlText.isReadOnly(last.sql);
+}
+
+async function runExplain(m: TabModel, sql: string, analyze: boolean) {
+  const token = ++m.token;
+  batch(() => {
+    m.multi.set(null);
+    m.plan.set(null);
+    m.running.set(true);
+    m.lastRun.set({ sql, explain: true });
   });
+  const started = Date.now();
+  try {
+    const plan = await db.explainPlan(m.dbKind, m.connId, sql, analyze);
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(null);
+      m.browseTable.set(null);
+      m.page.set(0);
+      m.resultIsQuery.set(true);
+      m.sort.set(null);
+      resetFilter(m);
+      m.elapsedMs.set(Date.now() - started);
+      setResult(m, plan.raw);
+      m.plan.set(plan);
+      m.planView.set(plan.tree ? "tree" : "raw");
+    });
+  } catch (e) {
+    if (token !== m.token) return;
+    batch(() => {
+      m.running.set(false);
+      m.err.set(errorText(e));
+      m.result.set(null);
+    });
+  }
 }
 
 /** 格式化整篇 SQL。 */

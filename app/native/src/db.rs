@@ -246,4 +246,13 @@ impl Db {
             .map_err(err)
             .and_then(json)
     }
+
+    /// 执行计划:`{ tree, raw, analyzed, totalMs }`;`analyze` 会真正执行(只接受只读语句,只读会话里限时)。
+    pub async fn explain_plan(kind: String, id: String, sql: String, analyze: bool) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { datum_core::explain::explain(&state(), &k, &id, &sql, analyze).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
 }

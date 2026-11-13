@@ -145,6 +145,14 @@ core:
       en: The session has already ended, or you lack permission to signal it
       zh-CN: 会话已结束,或没有权限操作该会话
       zh-TW: 工作階段已結束,或沒有權限操作該工作階段
+    analyze_read_only:
+      en: EXPLAIN ANALYZE runs the statement, so it is only offered for read-only statements
+      zh-CN: EXPLAIN ANALYZE 会真正执行语句,只对只读语句开放
+      zh-TW: EXPLAIN ANALYZE 會真正執行語句,只對唯讀語句開放
+    analyze_unsupported:
+      en: This database does not support EXPLAIN ANALYZE
+      zh-CN: 这个数据库不支持 EXPLAIN ANALYZE
+      zh-TW: 這個資料庫不支援 EXPLAIN ANALYZE
     invalid_redis_url:
       en: Invalid Redis connection string
       zh-CN: 无效的 Redis 连接串
