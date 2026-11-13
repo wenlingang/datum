@@ -144,6 +144,143 @@ pub fn page_sql(
     )
 }
 
+/// 列类型大类:决定条件怎么比较。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ColClass {
+    Number,
+    Temporal,
+    Other,
+}
+
+fn col_class(data_type: Option<&str>) -> ColClass {
+    let t = data_type.unwrap_or("").to_ascii_lowercase();
+    if t.contains("time") || t.contains("date") {
+        return ColClass::Temporal;
+    }
+    let numeric = ["int", "serial", "numeric", "decimal", "real", "double", "float", "money"];
+    if numeric.iter().any(|k| t.contains(k)) && !t.contains("interval") && !t.contains("point") {
+        ColClass::Number
+    } else {
+        ColClass::Other
+    }
+}
+
+fn is_number(v: &str) -> bool {
+    let v = v.trim();
+    !v.is_empty() && v.parse::<f64>().is_ok() && !v.contains(['e', 'E', 'n', 'N', 'i', 'I'])
+}
+
+/// 列转成文本(各方言写法不同),用于文本比较与 LIKE。
+fn as_text(col: &str, d: Dialect) -> String {
+    match d {
+        Dialect::Pg => format!("CAST({col} AS TEXT)"),
+        Dialect::Mysql => format!("CAST({col} AS CHAR)"),
+        Dialect::Sqlite => format!("CAST({col} AS TEXT)"),
+    }
+}
+
+/// LIKE 模式:转义 `\ % _`,统一用 `ESCAPE '\'`。
+fn like_pattern(v: &str, prefix: bool, suffix: bool) -> String {
+    let escaped = v.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    format!("{}{escaped}{}", if prefix { "%" } else { "" }, if suffix { "%" } else { "" })
+}
+
+fn like(col: &str, v: &str, prefix: bool, suffix: bool, d: Dialect) -> String {
+    let pat = literal(&like_pattern(v, prefix, suffix), d);
+    let esc = match d {
+        Dialect::Mysql => "'\\\\'",
+        _ => "'\\'",
+    };
+    match d {
+        // ILIKE:与界面上的筛选一样忽略大小写
+        Dialect::Pg => format!("{} ILIKE {pat} ESCAPE {esc}", as_text(col, d)),
+        _ => format!("LOWER({}) LIKE LOWER({pat}) ESCAPE {esc}", as_text(col, d)),
+    }
+}
+
+/// 一条筛选条件 → SQL 谓词。数值列配数值时按数值比较;日期时间列用字面量比较(可走索引);
+/// 其余按文本比较,等于 / 不等于忽略大小写(与界面上的客户端筛选一致)。
+fn predicate(f: &crate::grid::FilterRow, d: Dialect, data_type: Option<&str>) -> String {
+    use crate::grid::FilterOp::*;
+    let col = ident(&f.col, d);
+    let v = f.value.trim();
+    let class = col_class(data_type);
+    let numeric = class == ColClass::Number && is_number(v);
+    let cmp = |op: &str| -> String {
+        if numeric {
+            format!("{col} {op} {v}")
+        } else if class == ColClass::Temporal {
+            format!("{col} {op} {}", literal(v, d))
+        } else {
+            format!("{} {op} {}", as_text(&col, d), literal(v, d))
+        }
+    };
+    let eq = |negate: bool| -> String {
+        if numeric {
+            format!("{col} {} {v}", if negate { "<>" } else { "=" })
+        } else {
+            let e = format!("LOWER({}) {} LOWER({})", as_text(&col, d), if negate { "<>" } else { "=" }, literal(v, d));
+            // 与客户端一致:NULL 不等于任何具体值
+            if negate { format!("({col} IS NULL OR {e})") } else { e }
+        }
+    };
+    match f.op {
+        Contains => like(&col, v, true, true, d),
+        Starts => like(&col, v, false, true, d),
+        Ends => like(&col, v, true, false, d),
+        Eq => eq(false),
+        Ne => eq(true),
+        Gt => cmp(">"),
+        Lt => cmp("<"),
+        Gte => cmp(">="),
+        Lte => cmp("<="),
+        Empty => format!("({col} IS NULL OR {} = '')", as_text(&col, d)),
+        NotEmpty => format!("({col} IS NOT NULL AND {} <> '')", as_text(&col, d)),
+    }
+}
+
+/// 把筛选条件拼成 WHERE 子句的内容(不含 `WHERE`);没有有效条件为 None。
+/// `types` 给出列的类型(列名 → 类型名),决定数值 / 日期 / 文本的比较方式。
+pub fn where_clause(
+    filters: &[crate::grid::FilterRow],
+    conj: crate::grid::Conj,
+    d: Dialect,
+    types: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    let parts: Vec<String> = filters
+        .iter()
+        .filter(|f| f.is_active())
+        .map(|f| predicate(f, d, types.get(&f.col).map(String::as_str)))
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let joiner = match conj {
+        crate::grid::Conj::And => " AND ",
+        crate::grid::Conj::Or => " OR ",
+    };
+    Some(parts.iter().map(|p| format!("({p})")).collect::<Vec<_>>().join(joiner))
+}
+
+/// 带筛选的分页 SQL。
+pub fn page_sql_where(
+    table: &str,
+    page: usize,
+    page_size: usize,
+    d: Dialect,
+    sort: Option<(&str, bool)>,
+    where_sql: Option<&str>,
+) -> String {
+    let base = page_sql(table, page, page_size, d, sort);
+    match where_sql {
+        None => base,
+        Some(w) => {
+            let from = format!("SELECT * FROM {}", ident(table, d));
+            base.replacen(&from, &format!("{from} WHERE {w}"), 1)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,5 +369,53 @@ mod tests {
             page_sql("t", 2, 100, Dialect::Pg, Some(("name", true))),
             "SELECT * FROM \"t\" ORDER BY \"name\" DESC LIMIT 100 OFFSET 200"
         );
+    }
+
+    fn f(col: &str, op: crate::grid::FilterOp, value: &str) -> crate::grid::FilterRow {
+        crate::grid::FilterRow { id: 1, col: col.into(), op, value: value.into() }
+    }
+
+    fn types() -> std::collections::HashMap<String, String> {
+        [("amount", "numeric(10,2)"), ("id", "integer"), ("created_at", "timestamp with time zone"), ("status", "text")]
+            .into_iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn where_clause_per_type_and_dialect() {
+        use crate::grid::{Conj, FilterOp::*};
+        let w = where_clause(
+            &[f("amount", Gt, "100"), f("created_at", Gte, "2026-11-05"), f("status", Eq, "Failed")],
+            Conj::And,
+            Dialect::Pg,
+            &types(),
+        )
+        .unwrap();
+        assert_eq!(
+            w,
+            "(\"amount\" > 100) AND (\"created_at\" >= '2026-11-05') AND (LOWER(CAST(\"status\" AS TEXT)) = LOWER('Failed'))"
+        );
+        // 数值列配非数值:退回文本比较,不会生成 `amount > abc` 这种非法 SQL
+        let w = where_clause(&[f("amount", Gt, "abc")], Conj::And, Dialect::Pg, &types()).unwrap();
+        assert_eq!(w, "(CAST(\"amount\" AS TEXT) > 'abc')");
+        // LIKE 转义 % _,MySQL 用反引号与 CHAR
+        let w = where_clause(&[f("status", Contains, "50%_off")], Conj::Or, Dialect::Mysql, &types()).unwrap();
+        assert_eq!(w, "(LOWER(CAST(`status` AS CHAR)) LIKE LOWER('%50\\\\%\\\\_off%') ESCAPE '\\\\')");
+        let w = where_clause(&[f("status", Starts, "pa"), f("id", Ne, "3")], Conj::Or, Dialect::Pg, &types()).unwrap();
+        assert_eq!(w, "(CAST(\"status\" AS TEXT) ILIKE 'pa%' ESCAPE '\\') OR (\"id\" <> 3)");
+        // 引号注入被转义
+        let w = where_clause(&[f("status", Eq, "x' OR '1'='1")], Conj::And, Dialect::Sqlite, &types()).unwrap();
+        assert!(w.contains("'x'' OR ''1''=''1'"));
+        // 空 / 非空、无有效条件
+        let w = where_clause(&[f("status", Empty, "")], Conj::And, Dialect::Sqlite, &types()).unwrap();
+        assert_eq!(w, "((\"status\" IS NULL OR CAST(\"status\" AS TEXT) = ''))");
+        assert!(where_clause(&[f("", Eq, "x"), f("status", Eq, "")], Conj::And, Dialect::Pg, &types()).is_none());
+    }
+
+    #[test]
+    fn page_sql_with_where_keeps_order_and_paging() {
+        let s = page_sql_where("orders", 2, 100, Dialect::Pg, Some(("id", true)), Some("(\"id\" > 3)"));
+        assert_eq!(s, "SELECT * FROM \"orders\" WHERE (\"id\" > 3) ORDER BY \"id\" DESC LIMIT 100 OFFSET 200");
     }
 }

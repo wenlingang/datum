@@ -233,6 +233,27 @@ export function modelOf(tab: WorkTab | undefined | null): TabModel | undefined {
 // ------------------------------------------------------------ 视图与派生
 
 /** 当前视图行(按已应用的筛选)在 result.rows 中的下标。 */
+/** 表浏览(关系库):筛选条件下推到服务端,对整张表生效;查询结果仍在本地筛选。 */
+export function filterOnServer(m: TabModel): boolean {
+  return m.browseTable() !== null && supportsSql(m.dbKind);
+}
+
+/** 表浏览某一页的 SQL:带上已应用的筛选条件与排序。 */
+function browsePageSql(m: TabModel, table: string, page: number): string {
+  const sort = m.sort();
+  return grid.filteredPageSql(
+    table,
+    page,
+    PAGE_SIZE,
+    m.dbKind,
+    sort?.col ?? null,
+    sort?.desc ?? null,
+    m.applied(),
+    m.appliedConj(),
+    columnTypes(m),
+  );
+}
+
 export function viewIndices(m: TabModel): number[] {
   const result = m.result();
   const applied = m.applied();
@@ -241,7 +262,8 @@ export function viewIndices(m: TabModel): number[] {
   if (c && c.result === result && c.applied === applied && c.conj === conj) return c.out;
   let out: number[];
   if (!result) out = [];
-  else if (!applied.some(isActive)) out = result.rows.map((_, i) => i);
+  // 表浏览的条件已经拼进 SQL 由服务端筛过,这里不再二次过滤
+  else if (filterOnServer(m) || !applied.some(isActive)) out = result.rows.map((_, i) => i);
   else out = grid.filterIndices(result.rows, result.columns, applied, conj);
   m.viewCache = { result, applied, conj, out };
   return out;
@@ -625,8 +647,7 @@ export function beautify(m: TabModel) {
 export function gotoPage(m: TabModel, page: number) {
   const table = m.browseTable();
   if (!table || !supportsSql(m.dbKind)) return;
-  const sort = m.sort();
-  const sql = sqlText.pageSql(table, page, PAGE_SIZE, m.dbKind, sort?.col ?? null, sort?.desc);
+  const sql = browsePageSql(m, table, page);
   m.browseSql = sql;
   void spawnQuery(m, sql, (r, elapsed) => {
     m.page.set(page);
@@ -703,8 +724,7 @@ async function refreshRedisKey(m: TabModel, key: string) {
 }
 
 async function refreshTable(m: TabModel, table: string) {
-  const sort = m.sort();
-  const sql = sqlText.pageSql(table, m.page(), PAGE_SIZE, m.dbKind, sort?.col ?? null, sort?.desc);
+  const sql = browsePageSql(m, table, m.page());
   m.browseSql = sql;
   const token = ++m.token;
   m.running.set(true);
@@ -851,8 +871,11 @@ export function toggleFilter(m: TabModel) {
   if (!result) return;
   batch(() => {
     if (m.filterOpen()) {
+      const had = m.applied().some(isActive);
       m.filterOpen.set(false);
       m.applied.set([]);
+      // 服务端筛过的结果:收起筛选条即取消条件,重查第一页
+      if (had && filterOnServer(m)) gotoPage(m, 0);
     } else {
       m.filterOpen.set(true);
       if (m.drafts().length === 0) m.drafts.set([newDraft(m, result.columns[0] ?? "")]);
@@ -886,14 +909,18 @@ export function filterApply(m: TabModel) {
     m.appliedConj.set(m.conj());
     m.selectedRow.set(null);
   });
+  // 表浏览:条件拼进 SQL,从第一页重查整张表
+  if (filterOnServer(m)) gotoPage(m, 0);
 }
 
 /** 清除:草稿与已应用一并清空,并收起筛选条。 */
 export function filterClear(m: TabModel) {
+  const had = m.applied().some(isActive);
   batch(() => {
     resetFilter(m);
     m.selectedRow.set(null);
   });
+  if (had && filterOnServer(m)) gotoPage(m, 0);
 }
 
 /** 发给 AI 的样例行数(帮它认出枚举值的写法)。 */

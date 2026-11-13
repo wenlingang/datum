@@ -1,5 +1,9 @@
 _version: 2
 filter:
+  whole_table:
+    en: Applies to the whole table, on the server
+    zh-CN: 对整张表筛选(在数据库里执行)
+    zh-TW: 對整張表篩選(在資料庫裡執行)
   nl_placeholder:
     en: "Describe it in a sentence, e.g. last 7 days, status failed, amount over 100 — Enter to let AI build the conditions"
     zh-CN: "用一句话描述,如:最近 7 天、状态失败、金额大于 100 —— 回车让 AI 生成条件"

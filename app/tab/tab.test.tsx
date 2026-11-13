@@ -288,3 +288,26 @@ test("一次执行多条语句:每条一个结果标签,出错即停,后面的�
   await app.press("id:stmt-tab:3");
   await app.waitUntil(() => hasText(app, "Not run: an earlier statement failed."), { timeout: 5000 });
 });
+
+test("表浏览筛选在服务端执行:对整张表生效,不只是当前这一页", async () => {
+  const app = await start();
+  await app.press("id:tab:products");
+  await app.waitUntil(() => app.texts().includes("Coffee 2"), { timeout: 15000 });
+  await app.keyboard.press("mod+f");
+  await app.waitFor("id:filter-server-hint", { timeout: 5000 });
+  // 第一页只有前 100 行;Coffee 250 在第 3 页
+  expect(app.texts()).not.toContain("Coffee 250");
+  // 每个标签的第一个草稿条件 id 是 1
+  const draft = "1";
+  await app.press(`id:filter-col:${draft}`);
+  await app.press("text:name >> nth=1");
+  await app.type(`id:filter-value:${draft}`, "Coffee 250");
+  await app.press("id:filter-apply");
+  await app.waitUntil(() => app.texts().includes("Coffee 250"), { timeout: 10000 });
+  expect(app.texts()).not.toContain("Coffee 2");
+  expect(app.texts()).not.toContain("SO-001");
+  // 清除条件:回到不带条件的第一页
+  await app.press("text:Clear");
+  await app.waitUntil(() => app.texts().includes("Coffee 2"), { timeout: 10000 });
+  expect(app.texts()).not.toContain("Coffee 250");
+});

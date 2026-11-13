@@ -201,6 +201,28 @@ impl Grid {
         Ok(build::build_insert(&table, &detail, dialect(&kind)?))
     }
 
+    /// 表浏览的分页 SQL,带服务端筛选:`filters` / `conj` 同筛选条,`types` 为 `{ 列名: 类型名 }`
+    /// (决定按数值、日期还是文本比较)。没有有效条件时与普通分页 SQL 相同。
+    #[allow(clippy::too_many_arguments)]
+    pub fn filtered_page_sql(
+        table: String,
+        page: u32,
+        page_size: u32,
+        kind: String,
+        sort_col: Option<String>,
+        descending: Option<bool>,
+        filters: JsonValue,
+        conj: String,
+        types: JsonValue,
+    ) -> Result<String, String> {
+        let d = dialect(&kind)?;
+        let filters = filters_of(filters)?;
+        let types: std::collections::HashMap<String, String> = if types.is_null() { Default::default() } else { from(types, "types")? };
+        let w = build::where_clause(&filters, conj_of(&conj), d, &types);
+        let sort = sort_col.as_deref().map(|c| (c, descending.unwrap_or(false)));
+        Ok(build::page_sql_where(&table, page as usize, page_size as usize, d, sort, w.as_deref()))
+    }
+
     /// 编辑器补全:`{ start, end, items: [{ label, detail, kind, insert }] }`(偏移为 UTF-16),
     /// 无候选为 null。`columns` 为 `{ 表名: [{ name, dataType }] }`,`explicit` 为用户主动请求。
     pub fn completions(

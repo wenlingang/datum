@@ -13,6 +13,7 @@ import {
   filterClear,
   filterDirty,
   filterFromText,
+  filterOnServer,
   filterPreviewCount,
   removeDraft,
   updateDraft,
@@ -138,11 +139,18 @@ export function FilterBar(props: { m: TabModel }) {
       <View class="flex-row items-center justify-between">
         <Btn small variant="ghost" icon="plus" label={t("filter.add_condition")} onPress={() => filterAdd(m)} />
         <View class="flex-row items-center gap-3">
-          <View class="flex-row items-center gap-1">
-            <Text class={`${FS.xs} text-fg-faint`}>{t("filter.preview_match")}</Text>
-            <Text class={`${FS.xs} font-mono font-bold text-fg-soft`}>{String(filterPreviewCount(m))}</Text>
-            <Text class={`${FS.xs} text-fg-faint`}>{t("filter.of_total_rows", { total: total() })}</Text>
-          </View>
+          <If
+            when={filterOnServer(m)}
+            else={
+              <View class="flex-row items-center gap-1">
+                <Text class={`${FS.xs} text-fg-faint`}>{t("filter.preview_match")}</Text>
+                <Text class={`${FS.xs} font-mono font-bold text-fg-soft`}>{String(filterPreviewCount(m))}</Text>
+                <Text class={`${FS.xs} text-fg-faint`}>{t("filter.of_total_rows", { total: total() })}</Text>
+              </View>
+            }
+          >
+            <Text testID="filter-server-hint" class={`${FS.xs} text-fg-faint`}>{t("filter.whole_table")}</Text>
+          </If>
           <If when={canClear()}>
             <Btn small variant="ghost" label={t("filter.clear")} onPress={() => filterClear(m)} />
           </If>

@@ -215,6 +215,18 @@ export const grid = {
     explicit: boolean,
     fks: ForeignKey[] | null = null,
   ) => Grid.completions(kind, text, caret, tables, columns, explicit, fks) as TabTypes.CompletionResult | null,
+  /** 表浏览带服务端筛选的分页 SQL(没有有效条件时与普通分页相同)。 */
+  filteredPageSql: (
+    table: string,
+    page: number,
+    pageSize: number,
+    kind: DbKind,
+    sortCol: string | null,
+    desc: boolean | null,
+    filters: TabTypes.FilterRow[],
+    conj: TabTypes.Conj,
+    types: Record<string, string>,
+  ) => Grid.filteredPageSql(table, page, pageSize, kind, sortCol, desc, filters, conj, types) as string,
   /** 光标是否在某列的取值位置(`col = '…`、`col IN (…`)。 */
   valueContext: (text: string, caret: number, columns: ColumnsByTable | null) =>
     Grid.valueContext(text, caret, columns) as ValueContext | null,
