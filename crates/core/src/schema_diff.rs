@@ -53,12 +53,53 @@ fn default_sql(v: &str, d: Dialect) -> String {
         return v.to_string();
     }
     let t = v.trim();
+    let upper = t.to_ascii_uppercase();
     let is_num = t.parse::<f64>().is_ok();
-    let is_expr = t.eq_ignore_ascii_case("null")
-        || t.to_ascii_uppercase().starts_with("CURRENT_TIMESTAMP")
-        || t.ends_with(')')
-        || t.starts_with('(');
+    // 只认几种确定的表达式:NULL、CURRENT_TIMESTAMP[(n)]、整体被括号包住的表达式;其余一律当字符串值
+    let is_expr = upper == "NULL"
+        || upper == "CURRENT_TIMESTAMP"
+        || (upper.starts_with("CURRENT_TIMESTAMP(") && upper.ends_with(')') && upper[18..upper.len() - 1].chars().all(|c| c.is_ascii_digit()))
+        || (t.starts_with('(') && t.ends_with(')'));
     if is_num || is_expr { t.to_string() } else { literal(t, d) }
+}
+
+/// 写进注释的文字:换行、回车等控制字符换成空格,防止对象名把注释截断、后半截变成可执行语句。
+fn comment_text(s: &str) -> String {
+    s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+}
+
+/// 语句在引号外是否含分号或换行(来自数据库的类型、默认值里出现这些,说明定义异常)。
+fn suspicious(stmt: &str) -> bool {
+    let body = stmt.trim_end().trim_end_matches(';');
+    let mut quote: Option<char> = None;
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some(q) if c == q => {
+                if chars.peek() == Some(&q) {
+                    chars.next();
+                } else {
+                    quote = None;
+                }
+            }
+            Some(_) => {}
+            None => match c {
+                '\'' | '"' | '`' => quote = Some(c),
+                ';' | '\n' | '\r' => return true,
+                _ => {}
+            },
+        }
+    }
+    quote.is_some()
+}
+
+/// 可执行语句的出口:定义里有异常字符时整条注释掉并提示人工检查。
+fn checked(stmt: String) -> Vec<String> {
+    if suspicious(&stmt) {
+        vec![format!("-- {}", t!("core.diff.suspicious")), commented(&stmt)]
+    } else {
+        vec![stmt]
+    }
 }
 
 /// 列定义:类型 [NOT NULL] [DEFAULT …]。
@@ -81,9 +122,9 @@ fn same_index(a: &IndexInfo, b: &IndexInfo) -> bool {
     norm(&a.columns.replace(' ', "")) == norm(&b.columns.replace(' ', "")) && a.is_unique == b.is_unique
 }
 
-/// 被注释掉的语句(删除类):前缀 `-- `。
+/// 被注释掉的语句(删除类):每一行都加 `-- `,控制字符换成空格(对象名里的换行截不断注释)。
 fn commented(stmt: &str) -> String {
-    format!("-- {stmt}")
+    stmt.split(['\n', '\r']).map(|l| format!("-- {}", comment_text(l))).collect::<Vec<_>>().join("\n")
 }
 
 /// 一张两边都有的表:列与索引的差异 → (说明, 语句)。
@@ -100,10 +141,10 @@ fn diff_table(name: &str, src: &TableDetail, dst: &TableDetail, d: Dialect) -> (
             None => {
                 notes.push(t!("core.diff.col_added", col = c.name, def = column_def(c, d)).to_string());
                 if d == Dialect::Sqlite && c.not_null && c.default.is_none() {
-                    sql.push(format!("-- {}", t!("core.diff.sqlite_not_null", table = name, col = c.name)));
+                    sql.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_not_null", table = name, col = c.name))));
                     sql.push(commented(&format!("ALTER TABLE {tq} ADD COLUMN {cq} {};", column_def(c, d))));
                 } else {
-                    sql.push(format!("ALTER TABLE {tq} ADD COLUMN {cq} {};", column_def(c, d)));
+                    sql.extend(checked(format!("ALTER TABLE {tq} ADD COLUMN {cq} {};", column_def(c, d))));
                 }
             }
             Some(o) => {
@@ -135,7 +176,7 @@ fn diff_table(name: &str, src: &TableDetail, dst: &TableDetail, d: Dialect) -> (
                 match d {
                     Dialect::Pg => {
                         if type_changed {
-                            sql.push(format!("ALTER TABLE {tq} ALTER COLUMN {cq} TYPE {};", c.data_type));
+                            sql.extend(checked(format!("ALTER TABLE {tq} ALTER COLUMN {cq} TYPE {};", c.data_type)));
                         }
                         if null_changed {
                             sql.push(format!(
@@ -144,14 +185,16 @@ fn diff_table(name: &str, src: &TableDetail, dst: &TableDetail, d: Dialect) -> (
                             ));
                         }
                         if def_changed {
-                            sql.push(match &c.default {
+                            sql.extend(checked(match &c.default {
                                 Some(v) => format!("ALTER TABLE {tq} ALTER COLUMN {cq} SET DEFAULT {v};"),
                                 None => format!("ALTER TABLE {tq} ALTER COLUMN {cq} DROP DEFAULT;"),
-                            });
+                            }));
                         }
                     }
-                    Dialect::Mysql => sql.push(format!("ALTER TABLE {tq} MODIFY COLUMN {cq} {};", column_def(c, d))),
-                    Dialect::Sqlite => sql.push(format!("-- {}", t!("core.diff.sqlite_rebuild", table = name, col = c.name))),
+                    Dialect::Mysql => sql.extend(checked(format!("ALTER TABLE {tq} MODIFY COLUMN {cq} {};", column_def(c, d)))),
+                    Dialect::Sqlite => {
+                        sql.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_rebuild", table = name, col = c.name))))
+                    }
                 }
             }
         }
@@ -171,7 +214,7 @@ fn diff_table(name: &str, src: &TableDetail, dst: &TableDetail, d: Dialect) -> (
     };
     if pk(src) != pk(dst) {
         notes.push(t!("core.diff.pk_changed", from = pk(dst).join(", "), to = pk(src).join(", ")).to_string());
-        sql.push(format!("-- {}", t!("core.diff.pk_manual", table = name)));
+        sql.push(format!("-- {}", comment_text(&t!("core.diff.pk_manual", table = name))));
     }
 
     // 索引(不含主键):按名字对齐,列或唯一性不同视为先删后建
@@ -187,12 +230,12 @@ fn diff_table(name: &str, src: &TableDetail, dst: &TableDetail, d: Dialect) -> (
                 } else {
                     notes.push(t!("core.diff.idx_added", name = i.name, cols = i.columns).to_string());
                 }
-                sql.push(format!(
+                sql.extend(checked(format!(
                     "CREATE {}INDEX {} ON {tq} ({});",
                     if i.is_unique { "UNIQUE " } else { "" },
                     ident(&i.name, d),
                     index_cols(i, d)
-                ));
+                )));
             }
         }
     }
@@ -226,9 +269,11 @@ pub fn diff(
         match target.get(name) {
             None => {
                 tables.push(TableDiff { name: name.clone(), status: "added", changes: vec![t!("core.diff.table_added").to_string()] });
-                let ddl = create_sql.get(name).cloned().unwrap_or_else(|| format!("-- {}", t!("core.diff.no_ddl", table = name)));
-                let ddl = ddl.trim().trim_end_matches(';').to_string();
-                blocks.push(format!("-- {name}\n{ddl};"));
+                let header = format!("-- {}", comment_text(name));
+                match create_sql.get(name) {
+                    Some(ddl) => blocks.push(format!("{header}\n{};", ddl.trim().trim_end_matches(';'))),
+                    None => blocks.push(format!("{header}\n-- {}", comment_text(&t!("core.diff.no_ddl", table = name)))),
+                }
             }
             Some(dst) => {
                 let (notes, sql) = diff_table(name, src, dst, d);
@@ -236,7 +281,7 @@ pub fn diff(
                     same += 1;
                 } else {
                     tables.push(TableDiff { name: name.clone(), status: "changed", changes: notes });
-                    blocks.push(format!("-- {name}\n{}", sql.join("\n")));
+                    blocks.push(format!("-- {}\n{}", comment_text(name), sql.join("\n")));
                 }
             }
         }
@@ -244,7 +289,7 @@ pub fn diff(
     for name in target.keys() {
         if !source.contains_key(name) {
             tables.push(TableDiff { name: name.clone(), status: "removed", changes: vec![t!("core.diff.table_removed").to_string()] });
-            blocks.push(format!("-- {name}\n{}", commented(&format!("DROP TABLE {};", ident(name, d)))));
+            blocks.push(format!("-- {}\n{}", comment_text(name), commented(&format!("DROP TABLE {};", ident(name, d)))));
         }
     }
     let sql = if blocks.is_empty() {
@@ -370,5 +415,42 @@ mod tests {
         assert!(r.tables.is_empty());
         assert_eq!(r.same, 3);
         assert!(r.sql.starts_with("-- "));
+    }
+
+    /// 恶意对象名 / 默认值:任何一行要么是注释,要么不含注入的语句。
+    #[test]
+    fn hostile_names_and_defaults_stay_inert() {
+        let evil = "x\nDROP TABLE victims; --";
+        let mut src = BTreeMap::new();
+        let mut dst = BTreeMap::new();
+        dst.insert(evil.to_string(), TableDetail { columns: vec![col("id", "integer", true, None, true)], indexes: vec![] });
+        src.insert(
+            "t".to_string(),
+            TableDetail {
+                columns: vec![
+                    col("id", "integer", true, None, true),
+                    col("a", "text", false, Some("x'); DROP TABLE victims; (1"), false),
+                    col("b", "int; DROP TABLE victims", false, None, false),
+                ],
+                indexes: vec![],
+            },
+        );
+        dst.insert("t".to_string(), TableDetail { columns: vec![col("id", "integer", true, None, true)], indexes: vec![] });
+        for d in [Dialect::Pg, Dialect::Mysql, Dialect::Sqlite] {
+            let r = diff(&src, &dst, &HashMap::new(), d);
+            for line in r.sql.lines() {
+                if line.trim_start().starts_with("--") {
+                    continue;
+                }
+                // 注入的文字只能出现在转义好的字符串里:引号外不能有分号或换行
+                assert!(!suspicious(line), "{d:?} 注入到了可执行行:{line}");
+                assert!(!line.starts_with("DROP"), "{d:?}:{line}");
+            }
+        }
+        // MySQL:非表达式的默认值当字符串
+        assert_eq!(default_sql("x') ; DROP TABLE v; --(", Dialect::Mysql), "'x'') ; DROP TABLE v; --('");
+        assert_eq!(default_sql("CURRENT_TIMESTAMP(3)", Dialect::Mysql), "CURRENT_TIMESTAMP(3)");
+        assert!(suspicious("ALTER TABLE t ADD COLUMN b int; DROP TABLE v;"));
+        assert!(!suspicious("ALTER TABLE \"a;b\" ADD COLUMN c text DEFAULT 'x;y';"));
     }
 }

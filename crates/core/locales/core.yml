@@ -292,6 +292,10 @@ core:
       zh-CN: 或
       zh-TW: 或
   diff:
+    suspicious:
+      en: "The definition below contains unusual characters, so it is commented out; check it by hand"
+      zh-CN: "下面这条的定义里有异常字符,已注释,请手工检查"
+      zh-TW: "下面這條的定義裡有異常字元,已註解,請手動檢查"
     table_added:
       en: "Only in the source: created by the script"
       zh-CN: "只在源库:脚本会建表"
