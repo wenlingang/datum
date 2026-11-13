@@ -248,20 +248,23 @@ pub async fn undo_prepare(state: &AppState, kind: &DbKind, id: &str, sql: &str) 
             return Ok(no(unsupported_reason(Unsupported::WholeTable)));
         }
         let max = undo::MAX_ROWS as u32 + 1;
-        let r = query_read_only_timeout(state, kind, id, &q.snapshot_sql, max, UNDO_TIMEOUT_MS).await?;
+        let name = crate::sql::impact::unquote(q.table.rsplit('.').next().unwrap_or(&q.table));
+        let detail = table_detail(state, kind, id, &name).await.ok();
+        // 二进制值让数据库写好字面量再取回(见 sql::undo 模块说明)
+        let (sql, literal) = match &detail {
+            Some(det) => undo::binary_safe_snapshot(&q.snapshot_sql, &det.columns, dialect),
+            None => (q.snapshot_sql.clone(), vec![]),
+        };
+        let r = query_read_only_timeout(state, kind, id, &sql, max, UNDO_TIMEOUT_MS).await?;
         if r.rows.len() > undo::MAX_ROWS {
             return Ok(no(unsupported_reason(Unsupported::TooManyRows)));
         }
         let primary_key = if matches!(q.op, crate::sql::impact::WriteOp::Update { .. }) {
-            let name = crate::sql::impact::unquote(q.table.rsplit('.').next().unwrap_or(&q.table));
-            table_detail(state, kind, id, &name)
-                .await
-                .map(|d| d.columns.into_iter().filter(|c| c.is_pk).map(|c| c.name).collect())
-                .unwrap_or_default()
+            detail.map(|d| d.columns.into_iter().filter(|c| c.is_pk).map(|c| c.name).collect()).unwrap_or_default()
         } else {
             vec![]
         };
-        let snap = Snapshot { table: q.table, op: q.op, columns: r.columns, rows: r.rows, primary_key };
+        let snap = Snapshot { table: q.table, op: q.op, columns: r.columns, rows: r.rows, primary_key, literal };
         rows += snap.rows.len();
         match undo::statements(&snap, dialect) {
             Ok(s) => per_statement.push(s),

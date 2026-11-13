@@ -91,6 +91,28 @@ async fn check_round_trips(st: &AppState, kind: DbKind, id: &str) {
     assert_eq!(dump(st, kind, id).await, before, "多表写法撤销后应回到原样");
     exec(st, kind, id, "DROP TABLE undo_refs").await;
 
+    // 二进制列:非 UTF-8 的字节撤销后原样回来
+    let (ty, hex) = match kind {
+        DbKind::Pg => ("BYTEA", "encode(b, 'hex')"),
+        DbKind::Mysql => ("BLOB", "LOWER(HEX(b))"),
+        _ => ("BLOB", "LOWER(HEX(b))"),
+    };
+    exec(st, kind, id, "DROP TABLE IF EXISTS undo_bin").await;
+    exec(st, kind, id, &format!("CREATE TABLE undo_bin (id INT PRIMARY KEY, b {ty}, t VARCHAR(10))")).await;
+    let lit = |h: &str| if kind == DbKind::Pg { format!("decode('{h}', 'hex')") } else { format!("X'{h}'") };
+    exec(st, kind, id, &format!("INSERT INTO undo_bin VALUES (1, {}, 'a'), (2, {}, NULL), (3, NULL, 'c')", lit("ff00fe80"), lit(""))).await;
+    let bin_sql = format!("SELECT id, {hex}, t FROM undo_bin ORDER BY id");
+    let bin = || service::query(st, &kind, id, &bin_sql, None);
+    let before_bin = bin().await.unwrap().rows;
+    for sql in ["DELETE FROM undo_bin", "UPDATE undo_bin SET b = NULL, t = 'z'"] {
+        let prep = service::undo_prepare(st, &kind, id, sql).await.unwrap();
+        assert!(prep.reason.is_none(), "{sql}: {:?}", prep.reason);
+        exec(st, kind, id, sql).await;
+        service::import_sql(st, &kind, id, prep.statements).await.unwrap();
+        assert_eq!(bin().await.unwrap().rows, before_bin, "{sql} 撤销后二进制值应原样");
+    }
+    exec(st, kind, id, "DROP TABLE undo_bin").await;
+
     // 不能撤销的情况给出原因
     exec(st, kind, id, "CREATE TABLE IF NOT EXISTS undo_nopk (a INT, b INT)").await;
     let r = service::undo_prepare(st, &kind, id, "UPDATE undo_nopk SET b = 1").await.unwrap();

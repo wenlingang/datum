@@ -3,7 +3,9 @@
 //! - DELETE:用 INSERT 把原始行插回去(全部列)
 //! - UPDATE:按主键把 SET 里赋值过的列改回原值;要求表有主键,且不改主键本身
 //!
-//! 表名照语句原文(带 schema 与引号);值一律写成字符串字面量,由数据库按列类型转换。
+//! 表名照语句原文(带 schema 与引号);值一般写成字符串字面量,由数据库按列类型转换。
+//! 二进制值按文本取回会失真(MySQL 的 BLOB、SQLite 的 BLOB 都按 UTF-8 有损转换),所以抓快照时
+//! 让数据库自己写好字面量(SQLite 的 `quote()`、MySQL 的 `X'十六进制'`),这些列在 `literal` 里标出,原样使用。
 
 use super::build::{ident, literal};
 use super::impact::WriteOp;
@@ -22,6 +24,24 @@ pub struct Snapshot {
     pub rows: Vec<Vec<Option<String>>>,
     /// 主键列(UPDATE 撤销用)
     pub primary_key: Vec<String>,
+    /// 各列的值是否已是数据库写好的 SQL 字面量(见模块说明);空表示都不是
+    pub literal: Vec<bool>,
+}
+
+/// 数据库写好的字面量是否规整:数字、NULL、'…'(内部单引号成对)、X'十六进制'。
+/// 不规整(理论上不会)就当普通文本转义,不原样拼进语句。
+fn plain_literal(v: &str) -> bool {
+    let upper = v.to_ascii_uppercase();
+    if upper == "NULL" {
+        return true;
+    }
+    if let Some(hex) = upper.strip_prefix("X'").and_then(|r| r.strip_suffix('\'')) {
+        return hex.len() % 2 == 0 && hex.bytes().all(|b| b.is_ascii_hexdigit());
+    }
+    if let Some(body) = v.strip_prefix('\'').and_then(|r| r.strip_suffix('\'')) {
+        return !body.replace("''", "").contains('\'');
+    }
+    !v.is_empty() && v.parse::<f64>().is_ok() && v.bytes().all(|b| b.is_ascii_digit() || b"+-.eE".contains(&b))
 }
 
 /// 为什么不能撤销。
@@ -40,8 +60,50 @@ pub enum Unsupported {
     UnknownColumns,
 }
 
-fn value(v: &Option<String>, d: Dialect) -> String {
-    v.as_deref().map_or_else(|| "NULL".to_string(), |v| literal(v, d))
+fn value(s: &Snapshot, row: &[Option<String>], i: usize, d: Dialect) -> String {
+    match row[i].as_deref() {
+        None => "NULL".to_string(),
+        Some(v) if s.literal.get(i).copied().unwrap_or(false) && plain_literal(v) => v.to_string(),
+        Some(v) => literal(v, d),
+    }
+}
+
+/// MySQL 里按二进制存的列类型(值按文本取回会失真)。
+fn mysql_binary(data_type: &str) -> bool {
+    let t = data_type.to_ascii_lowercase();
+    t.contains("binary") || t.contains("blob") || t.starts_with("bit")
+}
+
+/// 包一层快照查询,让数据库把值写成字面量:SQLite 全部列用 `quote()`(类型随值,BLOB 也无损);
+/// MySQL 只处理二进制列(`X'十六进制'`);PG 的 bytea 本来就以 `\x…` 文本往返,不用处理。
+/// 返回 (查询, 各列是否为字面量);列名与快照原样一致。
+pub fn binary_safe_snapshot(
+    snapshot_sql: &str,
+    columns: &[crate::pg::browse::ColumnInfo],
+    d: Dialect,
+) -> (String, Vec<bool>) {
+    let wrap = |exprs: Vec<String>| format!("SELECT {} FROM (\n{}\n) AS datum_snap", exprs.join(", "), snapshot_sql.trim());
+    match d {
+        Dialect::Sqlite if !columns.is_empty() => {
+            let exprs = columns.iter().map(|c| format!("quote({0}) AS {0}", ident(&c.name, d))).collect();
+            (wrap(exprs), vec![true; columns.len()])
+        }
+        Dialect::Mysql if columns.iter().any(|c| mysql_binary(&c.data_type)) => {
+            let exprs = columns
+                .iter()
+                .map(|c| {
+                    let q = ident(&c.name, d);
+                    if mysql_binary(&c.data_type) {
+                        format!("IF({q} IS NULL, NULL, CONCAT('X''', HEX({q}), '''')) AS {q}")
+                    } else {
+                        q
+                    }
+                })
+                .collect();
+            (wrap(exprs), columns.iter().map(|c| mysql_binary(&c.data_type)).collect())
+        }
+        _ => (snapshot_sql.to_string(), vec![]),
+    }
 }
 
 fn index_of(columns: &[String], name: &str) -> Option<usize> {
@@ -60,7 +122,7 @@ pub fn statements(s: &Snapshot, d: Dialect) -> Result<Vec<String>, Unsupported> 
             Ok(s.rows
                 .iter()
                 .map(|r| {
-                    let vals = r.iter().map(|v| value(v, d)).collect::<Vec<_>>().join(", ");
+                    let vals = (0..r.len()).map(|i| value(s, r, i, d)).collect::<Vec<_>>().join(", ");
                     format!("INSERT INTO {} ({cols}) VALUES ({vals})", s.table)
                 })
                 .collect())
@@ -89,12 +151,12 @@ pub fn statements(s: &Snapshot, d: Dialect) -> Result<Vec<String>, Unsupported> 
                 .map(|r| {
                     let set = set_idx
                         .iter()
-                        .map(|(i, c)| format!("{} = {}", ident(c, d), value(&r[*i], d)))
+                        .map(|(i, c)| format!("{} = {}", ident(c, d), value(s, r, *i, d)))
                         .collect::<Vec<_>>()
                         .join(", ");
                     let cond = key_idx
                         .iter()
-                        .map(|(i, c)| format!("{} = {}", ident(c, d), value(&r[*i], d)))
+                        .map(|(i, c)| format!("{} = {}", ident(c, d), value(s, r, *i, d)))
                         .collect::<Vec<_>>()
                         .join(" AND ");
                     format!("UPDATE {} SET {set} WHERE {cond}", s.table)
@@ -119,6 +181,30 @@ mod tests {
                 vec![Some("2".into()), Some("it's".into()), Some("x".into())],
             ],
             primary_key: pk.iter().map(|s| s.to_string()).collect(),
+            literal: vec![],
+        }
+    }
+
+    #[test]
+    fn literal_columns_are_used_verbatim_when_well_formed() {
+        let mut s = snap(WriteOp::Delete, &[]);
+        s.literal = vec![true, true, true];
+        s.rows = vec![vec![Some("1".into()), Some("X'00FF'".into()), Some("'it''s'".into())]];
+        assert_eq!(
+            statements(&s, Sqlite).unwrap()[0],
+            "INSERT INTO public.\"Orders\" (\"id\", \"status\", \"note\") VALUES (1, X'00FF', 'it''s')"
+        );
+        // 不规整的「字面量」当普通文本转义
+        s.rows = vec![vec![Some("1); DROP TABLE x; --".into()), Some("X'0G'".into()), Some("'a' || 'b'".into())]];
+        let out = &statements(&s, Sqlite).unwrap()[0];
+        assert!(out.contains("'1); DROP TABLE x; --'"), "{out}");
+        assert!(out.contains("'X''0G'''"), "{out}");
+        assert!(out.contains("'''a'' || ''b'''"), "{out}");
+        for ok in ["NULL", "-1.5e3", "X''", "''", "'a''b'"] {
+            assert!(plain_literal(ok), "{ok}");
+        }
+        for bad in ["1 OR 1", "'a' 'b'", "X'ABC'", "0x00", ""] {
+            assert!(!plain_literal(bad), "{bad}");
         }
     }
 
