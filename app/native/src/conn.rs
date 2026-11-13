@@ -131,6 +131,12 @@ fn save_json(name: &str, value: &JsonValue) -> Result<(), String> {
     let tmp = dir.join(format!("{name}.tmp"));
     let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
     std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    // 里面有 SQL 与对话内容:只给本用户读写(与 ai_settings.json 一致)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+    }
     std::fs::rename(&tmp, dir.join(name)).map_err(|e| e.to_string())
 }
 

@@ -187,6 +187,18 @@ export function selectConvo(connId: string, key: string) {
   activeByConn.update((m) => ({ ...m, [connId]: key }));
 }
 
+/** 删除连接时一并删掉它保存的对话。 */
+export function forgetConnConvos(connId: string) {
+  batch(() => {
+    convos.update((m) => Object.fromEntries(Object.entries(m).filter(([k]) => convoConn(k) !== connId)));
+    activeByConn.update((m) => {
+      const next = { ...m };
+      delete next[connId];
+      return next;
+    });
+  });
+}
+
 /** 删除一段对话;删的是当前对话时切到最近的另一段(没有则回到空的新对话)。 */
 export function deleteConvo(connId: string, key: string) {
   batch(() => {
@@ -438,9 +450,8 @@ refreshAi();
 
 // ---------------------------------------------------------------- 对话持久化
 
-/** 最多保存多少段对话(最近的优先)、每张查询结果表保留多少行。 */
+/** 最多保存多少段对话(最近的优先)。 */
 const MAX_SAVED_CONVOS = 50;
-const MAX_SAVED_ROWS = 20;
 
 interface SavedConversations {
   version: 1;
@@ -448,10 +459,11 @@ interface SavedConversations {
   active: Record<string, string>;
 }
 
-/** 写盘前去掉只在运行时有意义的字段,大结果表只留前几行。 */
+/** 写盘前去掉只在运行时有意义的字段;查询结果的数据行不落盘(可能来自生产库),只留列名,
+ *  步骤上的摘要(如「2 行」)照常显示,要看数据就重新执行。 */
 function slim(c: Convo): Convo {
   const trimDetail = <T extends { rows?: unknown[] } | null | undefined>(d: T): T =>
-    d && Array.isArray(d.rows) && d.rows.length > MAX_SAVED_ROWS ? ({ ...d, rows: d.rows.slice(0, MAX_SAVED_ROWS) } as T) : d;
+    d && Array.isArray(d.rows) ? ({ ...d, rows: [] } as T) : d;
   return {
     ...c,
     messages: c.messages.map((m) => {

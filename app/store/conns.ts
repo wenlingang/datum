@@ -5,6 +5,7 @@ import { batch, signal } from "nsh";
 import { t } from "nsh/i18n";
 import { db, errorText, store } from "../lib/native";
 import { type ColumnsByTable, type Connection, type ForeignKey, isSupportedKind, supportsSql } from "../lib/types";
+import { forgetConnConvos } from "./ai";
 import { toast } from "./toast";
 
 const connections = signal<Connection[]>([]);
@@ -118,6 +119,8 @@ export function saveConnection(conn: Connection, password: string | null): Conne
 export function deleteConnection(id: string) {
   store.deleteConnection(id);
   forget(id);
+  // 它的 AI 对话里可能有这个库的数据,一并删掉
+  forgetConnConvos(id);
   if (activeId() === id) activeId.set(null);
   reloadConnections();
 }
