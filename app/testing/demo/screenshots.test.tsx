@@ -73,6 +73,8 @@ test("sql-editor.png:暗色,查询 tab 跑出按销售额排名的单品豆", as
   await newQuery(app, TOP_COFFEES);
   await app.press("id:run");
   await app.waitFor("text:Boquete Geisha", T);
+  // 鼠标移开「运行」按钮,截图里不带悬停提示
+  await app.hover("text:-- Top single-origin coffees by revenue");
   await app.wait(800);
   await app.screenshot(`${OUT}/sql-editor.png`);
 }, 90_000);
@@ -123,6 +125,8 @@ test("ai-assistant.png:暗色,AI 面板未配置时的引导", async () => {
   await app.waitFor("text:Boquete Geisha", T);
   await app.press("id:toggle-ai");
   await app.waitFor("id:ai-open-settings", T);
-  await app.wait(800);
+  // 鼠标移开按钮;等演示里连不上的 PG / MySQL 报错提示消失
+  await app.hover("text:-- Top single-origin coffees by revenue");
+  await noToasts(app);
   await app.screenshot(`${OUT}/ai-assistant.png`);
 }, 90_000);
