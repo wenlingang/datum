@@ -638,6 +638,36 @@ pub async fn redis_analysis_cancel(state: &AppState, id: &str) {
     state.redis_pool.cancel_analysis(id).await
 }
 
+/// SQLite:记下连接上 legacy_alter_table / foreign_keys 的当前值(编辑器多语句执行前)。
+pub fn sqlite_session_flags(state: &AppState, id: &str) -> AppResult<sqlite::client::SessionFlags> {
+    state.sqlite_pool.session_flags(id)
+}
+
+/// SQLite:多语句执行出错停下后,回滚未结束的事务并恢复执行前的设置;返回是否回滚了事务。
+pub fn sqlite_recover(state: &AppState, id: &str, before: &sqlite::client::SessionFlags) -> AppResult<bool> {
+    state.sqlite_pool.recover(id, before)
+}
+
+/// SQLite 改表结构:读出表的现状(列、外键、相关对象),界面据此填表单。
+pub fn sqlite_alter_load(state: &AppState, id: &str, table: &str) -> AppResult<sqlite::alter::TableSnapshot> {
+    state.sqlite_pool.with_conn(id, |c| sqlite::alter::snapshot(c, table))
+}
+
+/// SQLite 改表结构:按当前结构生成脚本(预览)。
+pub fn sqlite_alter_preview(state: &AppState, id: &str, plan: &sqlite::alter::AlterPlan) -> AppResult<sqlite::alter::AlterScript> {
+    state.sqlite_pool.with_conn(id, |c| sqlite::alter::generate(&sqlite::alter::snapshot(c, &plan.table)?, plan))
+}
+
+/// SQLite 改表结构:重新生成并核对与预览一致后,在一个事务里执行。
+pub fn sqlite_alter_apply(
+    state: &AppState,
+    id: &str,
+    plan: &sqlite::alter::AlterPlan,
+    expected_sql: &str,
+) -> AppResult<sqlite::alter::ApplyOutcome> {
+    state.sqlite_pool.with_conn(id, |c| sqlite::alter::preview_and_apply(c, plan, expected_sql))
+}
+
 /// SQLite 导入 CSV / JSON:预览文件开头(列、推断类型、样例行)。
 pub fn sqlite_import_preview(src: &sqlite::import_data::SourceOptions) -> AppResult<sqlite::import_data::Preview> {
     sqlite::import_data::preview(src)

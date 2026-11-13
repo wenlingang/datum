@@ -61,6 +61,10 @@ export interface RiskGate {
   impacts: Signal<ImpactState[]>;
   /** 改表结构语句的风险评估,与 findings 一一对应(不是改表结构的为 none;非 MySQL 为空) */
   alters: Signal<AlterState[]>;
+  /** 不显示影响范围预估(改表结构脚本里的 DROP TABLE 删的是已复制过数据的旧表,数行数会误导) */
+  noImpact?: boolean;
+  /** 目标说明下方的补充说明 */
+  note?: string;
   /** 「确认执行」 */
   onConfirm: () => void;
 }
@@ -657,6 +661,10 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
     m.plan.set(null);
     m.lastRun.set({ sql: statements.join(";\n"), explain: false });
   });
+  // SQLite:脚本可能自己写了 BEGIN / PRAGMA(如结构对比生成的重建表脚本),中途出错停下会把连接留在
+  // 未结束的事务里、legacy_alter_table / foreign_keys 停在改过的值;先记下,出错后善后
+  const flags = m.dbKind === "sqlite" && !readOnly ? await db.sqliteSessionFlags(m.connId).catch(() => null) : null;
+  if (token !== m.token) return;
   const out: StmtResult[] = [];
   let failed = false;
   let schemaChanged = false;
@@ -689,6 +697,14 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   if (token !== m.token) return;
   // 默认显示出错的那条,否则最后一条
   const errorAt = out.findIndex((x) => x.error !== null);
+  if (failed && flags) {
+    const rolledBack = await db.sqliteRecover(m.connId, flags).catch(() => false);
+    if (token !== m.token) return;
+    if (rolledBack && errorAt >= 0) {
+      const item = out[errorAt];
+      out[errorAt] = { ...item, error: `${item.error}\n${t("tab.sqlite_rolled_back")}` };
+    }
+  }
   batch(() => {
     m.running.set(false);
     m.undo.set(combineUndo(undos));
@@ -908,6 +924,20 @@ export function refresh(m: TabModel) {
   }
   if (!supportsSql(m.dbKind)) return;
   void refreshTable(m, table);
+}
+
+/** 表结构改了(SQLite 改表结构之后):列可能已改名或删掉,排序、筛选与暂存的编辑都可能指向不存在的列,
+ *  清掉后回到第一页重新读数据与列信息。 */
+export function reloadAfterSchemaChange(m: TabModel) {
+  batch(() => {
+    m.sort.set(null);
+    m.page.set(0);
+    m.dirty.set({});
+    m.deletes.set([]);
+    m.selectedRow.set(null);
+  });
+  resetFilter(m);
+  refresh(m);
 }
 
 /** 重读 Redis key 标签页的值与详情(编辑器写完后调用)。 */

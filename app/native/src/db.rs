@@ -148,6 +148,49 @@ impl Db {
             .map_err(err)
     }
 
+    /// SQLite:连接上 legacy_alter_table / foreign_keys 的当前值 `{ legacyAlterTable, foreignKeys }`。
+    pub async fn sqlite_session_flags(id: String) -> Result<JsonValue, String> {
+        spawn(async move { service::sqlite_session_flags(&state(), &id) })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// SQLite:多语句执行出错后善后——回滚未结束的事务、恢复执行前的设置;返回是否回滚了事务。
+    pub async fn sqlite_recover(id: String, before: JsonValue) -> Result<bool, String> {
+        let before = from(before, "before")?;
+        spawn(async move { service::sqlite_recover(&state(), &id, &before) })
+            .await?
+            .map_err(err)
+    }
+
+    /// SQLite 改表结构:表的现状 `{ table, createSql, columns, fks, objects, names, referencedBy, foreignKeysOn, legacyAlterTable }`。
+    pub async fn sqlite_alter_load(id: String, table: String) -> Result<JsonValue, String> {
+        spawn(async move { service::sqlite_alter_load(&state(), &id, &table) })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// SQLite 改表结构:生成脚本 `{ mode, sql, statements, fkCheck, foreignKeysOff, warnings }`(不执行)。
+    pub async fn sqlite_alter_preview(id: String, plan: JsonValue) -> Result<JsonValue, String> {
+        let plan = from(plan, "plan")?;
+        spawn(async move { service::sqlite_alter_preview(&state(), &id, &plan) })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// SQLite 改表结构:核对脚本与预览一致后在一个事务里执行 `{ applied, violations }`;
+    /// 外键检查不过时整体回滚,applied 为 false。
+    pub async fn sqlite_alter_apply(id: String, plan: JsonValue, expected_sql: String) -> Result<JsonValue, String> {
+        let plan = from(plan, "plan")?;
+        spawn(async move { service::sqlite_alter_apply(&state(), &id, &plan, &expected_sql) })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// SQLite 导入 CSV / JSON:预览文件开头 `{ format, delimiter, jsonLines, columns, rows, tableName, badEncoding, … }`。
     pub async fn sqlite_import_preview(source: JsonValue) -> Result<JsonValue, String> {
         let src = from(source, "source")?;

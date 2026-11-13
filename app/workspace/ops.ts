@@ -273,3 +273,15 @@ export async function confirmDeleteConnection(conn: Connection) {
     toast.error(errorText(e));
   }
 }
+
+/** 正在修改结构的 SQLite 表(AlterTableDialog 读取)。 */
+const alterView = signal<{ connId: string; table: string } | null>(null);
+export const alterTarget = () => alterView();
+export const closeAlterTable = () => alterView.set(null);
+
+/** 右键 SQLite 表「修改表结构」。 */
+export function showAlterTable(connId: string, table: string) {
+  const conn = conns.get(connId);
+  if (!conn || conn.kind !== "sqlite") return;
+  alterView.set({ connId, table });
+}

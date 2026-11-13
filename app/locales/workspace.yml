@@ -149,6 +149,10 @@ workspace:
     zh-CN: "对话绑定的连接已不存在"
     zh-TW: "對話綁定的連線已不存在"
 sidebar:
+  alter_table:
+    en: "Alter Table…"
+    zh-CN: "修改表结构…"
+    zh-TW: "修改資料表結構…"
   mongo_insert_doc:
     en: Insert document
     zh-CN: 插入文档
@@ -383,3 +387,156 @@ ops:
     en: Copy
     zh-CN: 复制
     zh-TW: 複製
+alter:
+  title:
+    en: "Alter Table · %{name}"
+    zh-CN: "修改表结构 · %{name}"
+    zh-TW: "修改資料表結構 · %{name}"
+  loading:
+    en: "Reading the table structure…"
+    zh-CN: "正在读取表结构…"
+    zh-TW: "正在讀取資料表結構…"
+  table_name:
+    en: "Table name"
+    zh-CN: "表名"
+    zh-TW: "資料表名稱"
+  col_name:
+    en: "Column"
+    zh-CN: "列名"
+    zh-TW: "欄位名稱"
+  col_type:
+    en: "Type"
+    zh-CN: "类型"
+    zh-TW: "型別"
+  col_not_null:
+    en: "Not null"
+    zh-CN: "非空"
+    zh-TW: "非空"
+  col_pk:
+    en: "PK"
+    zh-CN: "主键"
+    zh-TW: "主鍵"
+  col_default:
+    en: "Default"
+    zh-CN: "默认值"
+    zh-TW: "預設值"
+  no_default:
+    en: "None"
+    zh-CN: "无"
+    zh-TW: "無"
+  default_tip:
+    en: "An SQL expression written as-is after DEFAULT, e.g. 0, 'text' or CURRENT_TIMESTAMP"
+    zh-CN: "原样写在 DEFAULT 后的 SQL 表达式,如 0、'text' 或 CURRENT_TIMESTAMP"
+    zh-TW: "原樣寫在 DEFAULT 後的 SQL 運算式,如 0、'text' 或 CURRENT_TIMESTAMP"
+  generated:
+    en: "Generated column (kept as is)"
+    zh-CN: "生成列(原样保留)"
+    zh-TW: "生成欄位(原樣保留)"
+  badge_new:
+    en: "new"
+    zh-CN: "新"
+    zh-TW: "新"
+  renamed_from:
+    en: "Renamed from %{name}"
+    zh-CN: "原名 %{name}"
+    zh-TW: "原名 %{name}"
+  move_up:
+    en: "Move up"
+    zh-CN: "上移"
+    zh-TW: "上移"
+  move_down:
+    en: "Move down"
+    zh-CN: "下移"
+    zh-TW: "下移"
+  drop_column:
+    en: "Drop column"
+    zh-CN: "删除列"
+    zh-TW: "刪除欄位"
+  add_column:
+    en: "Add Column"
+    zh-CN: "添加列"
+    zh-TW: "新增欄位"
+  fks:
+    en: "Foreign keys"
+    zh-CN: "外键"
+    zh-TW: "外鍵"
+  no_fks:
+    en: "No foreign keys"
+    zh-CN: "没有外键"
+    zh-TW: "沒有外鍵"
+  drop_fk:
+    en: "Drop foreign key"
+    zh-CN: "删除外键"
+    zh-TW: "刪除外鍵"
+  fk_columns:
+    en: "Columns (a, b)"
+    zh-CN: "本表列(a, b)"
+    zh-TW: "本表欄位(a, b)"
+  fk_table:
+    en: "Referenced table"
+    zh-CN: "被引用的表"
+    zh-TW: "參照的資料表"
+  fk_ref_columns:
+    en: "Referenced columns (blank = PK)"
+    zh-CN: "被引用列(留空为主键)"
+    zh-TW: "參照欄位(留空為主鍵)"
+  fk_on_delete:
+    en: "On delete"
+    zh-CN: "删除时"
+    zh-TW: "刪除時"
+  add_fk:
+    en: "Add Foreign Key"
+    zh-CN: "添加外键"
+    zh-TW: "新增外鍵"
+  script:
+    en: "Script"
+    zh-CN: "脚本"
+    zh-TW: "腳本"
+  mode_noop:
+    en: "No changes"
+    zh-CN: "无变化"
+    zh-TW: "無變化"
+  mode_simple:
+    en: "ALTER TABLE"
+    zh-CN: "ALTER TABLE"
+    zh-TW: "ALTER TABLE"
+  mode_rebuild:
+    en: "Rebuild table"
+    zh-CN: "重建表"
+    zh-TW: "重建資料表"
+  copy:
+    en: "Copy"
+    zh-CN: "复制"
+    zh-TW: "複製"
+  copied:
+    en: "Script copied"
+    zh-CN: "脚本已复制"
+    zh-TW: "腳本已複製"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  execute:
+    en: "Run in a Transaction"
+    zh-CN: "在事务中执行"
+    zh-TW: "在交易中執行"
+  running:
+    en: "Running…"
+    zh-CN: "执行中…"
+    zh-TW: "執行中…"
+  done:
+    en: "Table %{name} updated"
+    zh-CN: "表 %{name} 已修改"
+    zh-TW: "資料表 %{name} 已修改"
+  rebuild_note:
+    en: "The table is rebuilt: data is copied into a new table first, then the old table is dropped and the new one renamed — all in one transaction, rolled back if anything fails."
+    zh-CN: "重建表:先把数据复制到新表,再删旧表、把新表改名,全部在一个事务里完成,任何一步失败都会整体回滚。"
+    zh-TW: "重建資料表:先把資料複製到新表,再刪舊表、把新表改名,全部在一個交易中完成,任何一步失敗都會全部回復。"
+  fk_failed:
+    en: "Foreign key check failed; everything was rolled back. Violating rows: %{count}"
+    zh-CN: "外键检查未通过,已整体回滚。违规行数:%{count}"
+    zh-TW: "外鍵檢查未通過,已全部回復。違規列數:%{count}"
+  violation:
+    en: "%{table} rowid %{rowid} → no matching row in %{parent}"
+    zh-CN: "%{table} 的 rowid %{rowid} → 在 %{parent} 里找不到对应行"
+    zh-TW: "%{table} 的 rowid %{rowid} → 在 %{parent} 中找不到對應列"

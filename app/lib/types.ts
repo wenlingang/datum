@@ -709,6 +709,75 @@ export interface DiffReport {
   sql: string;
 }
 
+/** SQLite 连接上会被脚本改动的设置(多语句执行出错后按它恢复)。 */
+export interface SqliteSessionFlags {
+  legacyAlterTable: boolean;
+  foreignKeys: boolean;
+}
+
+/** SQLite 改表结构:一列。`orig` 是原表里的列名(新加的列为 null),改名 / 删列 / 调顺序靠它对应。 */
+export interface AlterColumn {
+  orig: string | null;
+  name: string;
+  dataType: string;
+  notNull: boolean;
+  /** 默认值表达式,原样写进 DEFAULT(字符串自带引号) */
+  default: string | null;
+  pk: boolean;
+  /** 生成列(只读,不复制数据) */
+  generated: boolean;
+}
+
+/** SQLite 改表结构:外键;列名用改名后的新名字,refColumns 为空表示引用主键。 */
+export interface AlterFk {
+  columns: string[];
+  refTable: string;
+  refColumns: string[];
+  onDelete: string;
+  onUpdate: string;
+}
+
+/** SQLite 改表结构:目标结构(列的顺序即新表列顺序;原表有而这里没有的列会被删掉)。 */
+export interface AlterPlan {
+  table: string;
+  newName: string;
+  columns: AlterColumn[];
+  fks: AlterFk[];
+}
+
+/** SQLite 表的现状。 */
+export interface AlterSnapshot {
+  table: string;
+  createSql: string;
+  columns: AlterColumn[];
+  fks: AlterFk[];
+  foreignKeysOn: boolean;
+}
+
+/** 生成的脚本:noop 无变化;simple 用 ALTER TABLE;rebuild 重建表。`statements` 是事务里依次执行的语句。 */
+export interface AlterScript {
+  mode: "noop" | "simple" | "rebuild";
+  sql: string;
+  statements: string[];
+  fkCheck: string[];
+  foreignKeysOff: boolean;
+  warnings: string[];
+}
+
+/** 外键检查不过的一行。 */
+export interface FkViolation {
+  table: string;
+  rowid: number | null;
+  parent: string;
+  fkid: number;
+}
+
+/** 执行结果:applied 为 false 时已整体回滚(violations 列出违规行)。 */
+export interface AlterOutcome {
+  applied: boolean;
+  violations: FkViolation[];
+}
+
 /** SQLite 导入 CSV / JSON 的列类型。 */
 export type ImportColType = "INTEGER" | "REAL" | "TEXT";
 export type ImportDelimiter = "auto" | "comma" | "tab" | "semicolon";

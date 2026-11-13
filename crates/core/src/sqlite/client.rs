@@ -13,6 +13,14 @@ pub struct SqlitePool {
     conns: Mutex<HashMap<String, SqliteConn>>,
 }
 
+/// 连接级设置的快照(见 [`SqlitePool::session_flags`])。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFlags {
+    pub legacy_alter_table: bool,
+    pub foreign_keys: bool,
+}
+
 /// 把一个单元格的值统一成字符串(NULL → None)。二进制 BLOB 按 lossy UTF-8 呈现,
 /// 与 Redis 侧对二进制值的处理一致。
 fn cell(v: ValueRef<'_>) -> Option<String> {
@@ -64,6 +72,49 @@ impl SqlitePool {
     /// 断开并移除缓存的连接(不存在时静默)。删库前强制断开残留连接用。
     pub fn disconnect(&self, id: &str) {
         self.conns.lock().unwrap().remove(id);
+    }
+
+    /// 持有连接锁执行一段同步操作(读结构 + 执行要在同一把锁里完成,中间插不进别的请求)。
+    pub fn with_conn<R>(&self, id: &str, f: impl FnOnce(&SqliteConn) -> AppResult<R>) -> AppResult<R> {
+        let guard = self.conns.lock().unwrap();
+        let conn = guard
+            .get(id)
+            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
+        f(conn)
+    }
+
+    /// 连接上会被脚本改动、需要在出错后恢复的设置(编辑器多语句执行前记下)。
+    pub fn session_flags(&self, id: &str) -> AppResult<SessionFlags> {
+        self.with_conn(id, |c| {
+            let get = |name: &str| {
+                c.query_row(&format!("PRAGMA {name}"), [], |r| r.get::<_, i64>(0)).map(|v| v != 0).map_err(|e| {
+                    AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(e.to_string())
+                })
+            };
+            Ok(SessionFlags { legacy_alter_table: get("legacy_alter_table")?, foreign_keys: get("foreign_keys")? })
+        })
+    }
+
+    /// 编辑器多语句执行中途出错停下后的善后:连接还在事务里(脚本自己写了 BEGIN,没走到 COMMIT)就回滚,
+    /// 再把 legacy_alter_table / foreign_keys 恢复成执行前的值(foreign_keys 在事务里改不了,所以先回滚)。
+    /// 返回是否回滚了未结束的事务。
+    pub fn recover(&self, id: &str, before: &SessionFlags) -> AppResult<bool> {
+        self.with_conn(id, |c| {
+            let rolled_back = !c.is_autocommit();
+            if rolled_back {
+                c.execute_batch("ROLLBACK").map_err(|e| {
+                    AppError::new(ErrorKind::Query, t!("core.err.exec_failed")).with_detail(e.to_string())
+                })?;
+            }
+            let on = |v: bool| if v { "ON" } else { "OFF" };
+            c.execute_batch(&format!(
+                "PRAGMA legacy_alter_table = {}; PRAGMA foreign_keys = {};",
+                on(before.legacy_alter_table),
+                on(before.foreign_keys)
+            ))
+            .map_err(|e| AppError::new(ErrorKind::Query, t!("core.err.exec_failed")).with_detail(e.to_string()))?;
+            Ok(rolled_back)
+        })
     }
 
     /// 在单事务里逐条执行导入 SQL:全成功提交,任一失败整体回滚(错误标注第几条)。
@@ -336,6 +387,23 @@ mod tests {
             test_connect("/no/such/file.sqlite").unwrap_err().kind,
             ErrorKind::Connection
         );
+    }
+
+    #[test]
+    fn recover_rolls_back_open_transaction_and_restores_flags() {
+        let p = pool();
+        let before = p.session_flags("t").unwrap();
+        // 模拟编辑器逐条执行脚本、中途出错停下:事务没结束,legacy_alter_table 停在 ON
+        p.query("t", "PRAGMA foreign_keys = OFF").unwrap();
+        p.query("t", "BEGIN").unwrap();
+        p.query("t", "PRAGMA legacy_alter_table = ON").unwrap();
+        p.query("t", "CREATE TABLE zz (a)").unwrap();
+        assert!(p.query("t", "INSERT INTO nope VALUES (1)").is_err());
+        assert!(p.recover("t", &before).unwrap(), "回滚了未结束的事务");
+        assert_eq!(p.session_flags("t").unwrap(), before);
+        assert!(p.query("t", "SELECT * FROM zz").is_err(), "建表已回滚");
+        // 没有未结束的事务时只恢复设置
+        assert!(!p.recover("t", &before).unwrap());
     }
 
     #[test]

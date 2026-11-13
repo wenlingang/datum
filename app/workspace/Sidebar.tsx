@@ -27,6 +27,7 @@ import {
   exportTable,
   exportTableLabel,
   pickDatabase,
+  showAlterTable,
   showDdl,
   showTableDetail,
 } from "./ops";
@@ -93,6 +94,9 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
       <MItem label={t("sidebar.view_table_detail")} onSelect={() => showTableDetail(connId, table)} />
       <MItem label={t("workspace.copy_table_name")} onSelect={() => void copyText(table)} />
       <MItem label={t("sidebar.view_ddl")} onSelect={() => void showDdl(connId, table)} />
+      <If when={kind === "sqlite"}>
+        <MItem label={t("sidebar.alter_table")} onSelect={() => showAlterTable(connId, table)} />
+      </If>
       <MSep />
       {EXPORT_FORMATS.map((f) => (
         <MItem label={exportTableLabel(f)} onSelect={() => void exportTable(connId, table, f)} />

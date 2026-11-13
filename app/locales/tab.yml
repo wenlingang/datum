@@ -330,6 +330,10 @@ cell:
     zh-CN: "查看单元格"
     zh-TW: "檢視儲存格"
 tab:
+  sqlite_rolled_back:
+    en: "The script had opened a transaction that never committed; it was rolled back, and foreign_keys / legacy_alter_table were restored to their values before the run"
+    zh-CN: "脚本开启的事务没有走到提交,已整体回滚;foreign_keys / legacy_alter_table 已恢复为执行前的值"
+    zh-TW: "腳本開啟的交易沒有走到提交,已全部回復;foreign_keys / legacy_alter_table 已恢復為執行前的值"
   mongo_unsupported:
     en: "MongoDB is not supported yet"
     zh-CN: "暂不支持 MongoDB"

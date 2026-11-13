@@ -33,6 +33,11 @@ import type {
   ValueContext,
   Plan,
   DiffReport,
+  AlterOutcome,
+  AlterPlan,
+  AlterScript,
+  AlterSnapshot,
+  SqliteSessionFlags,
   ImportPlan,
   ImportPreview,
   ImportProgress,
@@ -88,6 +93,17 @@ export const db = {
   commitEdits: (kind: DbKind, id: string, edits: CellEdit[], deletes: RowDelete[]) =>
     Db.commitEdits(kind, id, edits, deletes),
   importSql: (kind: DbKind, id: string, statements: string[]) => Db.importSql(kind, id, statements),
+  /** SQLite:记下连接上 legacy_alter_table / foreign_keys 的当前值(多语句执行前)。 */
+  sqliteSessionFlags: async (id: string) => (await Db.sqliteSessionFlags(id)) as SqliteSessionFlags,
+  /** SQLite:多语句执行出错后回滚未结束的事务并恢复设置;返回是否回滚了事务。 */
+  sqliteRecover: (id: string, before: SqliteSessionFlags) => Db.sqliteRecover(id, before) as Promise<boolean>,
+  /** SQLite 改表结构:读出表的现状。 */
+  sqliteAlterLoad: async (id: string, table: string) => (await Db.sqliteAlterLoad(id, table)) as AlterSnapshot,
+  /** SQLite 改表结构:生成脚本(不执行);目标结构不合法时报错。 */
+  sqliteAlterPreview: async (id: string, plan: AlterPlan) => (await Db.sqliteAlterPreview(id, plan)) as AlterScript,
+  /** SQLite 改表结构:核对与预览一致后在一个事务里执行;外键检查不过整体回滚,applied 为 false。 */
+  sqliteAlterApply: async (id: string, plan: AlterPlan, expectedSql: string) =>
+    (await Db.sqliteAlterApply(id, plan, expectedSql)) as AlterOutcome,
   /** SQLite 导入 CSV / JSON:预览文件开头(列、推断类型、样例行)。 */
   sqliteImportPreview: async (source: ImportSource) => (await Db.sqliteImportPreview(source)) as ImportPreview,
   /** 后台开始导入(单事务);用 sqliteImportProgress 轮询。 */

@@ -7,6 +7,7 @@ import { ChatPanel } from "../chat";
 import { PANEL, setPanelWidth, workspace } from "../store/workspace";
 import { DetailPanel, TabView } from "../tab";
 import { installAppCommands } from "./commands";
+import { AlterTableDialog } from "./AlterTableDialog";
 import { DdlDialog } from "./DdlDialog";
 import { EmptyWorkspace } from "./EmptyWorkspace";
 import { Sidebar } from "./Sidebar";
@@ -111,6 +112,7 @@ export function Workspace() {
       </View>
       <StatusBar />
       <DdlDialog />
+      <AlterTableDialog />
     </View>
   );
 }

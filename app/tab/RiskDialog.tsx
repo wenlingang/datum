@@ -282,6 +282,7 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
         <View class="min-w-0 flex-1 gap-1.5">
           <Text class={`${FS.base} font-bold text-popover-foreground`}>{t("risk.title")}</Text>
           <Text class={`${FS.sm} text-muted-foreground`}>{target}</Text>
+          <If when={g.note}>{(n) => <Text class={`${FS.xs} text-muted-foreground`}>{n()}</Text>}</If>
         </View>
       </View>
       <Scroll class="min-h-0 shrink pl-[30px]" style={{ maxHeight: 460 }} contentClass="gap-2">
@@ -317,7 +318,7 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
               <If when={f().schemaChange}>
                 <Alter s={g.alters()[i()]} />
               </If>
-              <If when={g.relational && !f().schemaChange}>
+              <If when={g.relational && !f().schemaChange && !g.noImpact}>
                 <Impact s={g.impacts()[i()]} />
               </If>
             </View>
@@ -348,6 +349,23 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
   );
 }
 
+/** 风险审查弹窗:`gate` 非空时显示。编辑器之外的执行入口(如 SQLite 改表结构)也用它。 */
+export function RiskGateDialog(props: { gate: RiskGate | null; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <Dialog
+      testID="risk-dialog"
+      open={props.gate !== null}
+      onOpenChange={(e) => !e.open && props.onCancel()}
+      closeOnEscape
+      animation="fade"
+      backdropClass="bg-overlay"
+      class="m-auto w-[560px] max-w-[92%] rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+    >
+      <If when={props.gate}>{(g) => <Body gate={g()} onCancel={props.onCancel} onConfirm={props.onConfirm} />}</If>
+    </Dialog>
+  );
+}
+
 /** 风险审查弹窗宿主:模型的 `risk` 非空时显示。 */
 export function RiskDialog(props: { m: TabModel }) {
   const m = props.m;
@@ -357,17 +375,5 @@ export function RiskDialog(props: { m: TabModel }) {
     m.risk.set(null);
     gate?.onConfirm();
   };
-  return (
-    <Dialog
-      testID="risk-dialog"
-      open={m.risk() !== null}
-      onOpenChange={(e) => !e.open && cancel()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[560px] max-w-[92%] rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
-    >
-      <If when={m.risk()}>{(g) => <Body gate={g()} onCancel={cancel} onConfirm={confirm} />}</If>
-    </Dialog>
-  );
+  return <RiskGateDialog gate={m.risk()} onCancel={cancel} onConfirm={confirm} />;
 }

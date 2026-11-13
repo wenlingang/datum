@@ -61,6 +61,7 @@ async fn roundtrip(st: &AppState, kind: DbKind, src: &str, dst: &str) {
     exec(st, kind, dst, "CREATE TABLE legacy (id INT PRIMARY KEY)").await;
     exec(st, kind, dst, "CREATE TABLE items (id INT PRIMARY KEY, order_id INT)").await;
     exec(st, kind, dst, "CREATE VIEW v_legacy AS SELECT id FROM legacy").await;
+    exec(st, kind, dst, "INSERT INTO orders (id, status, old_flag) VALUES (1, 'paid', 7)").await;
     // 注释(SQLite 没有)
     match kind {
         DbKind::Pg => {
@@ -89,6 +90,13 @@ async fn roundtrip(st: &AppState, kind: DbKind, src: &str, dst: &str) {
         assert!(orders.changes.iter().any(|c| c.contains("状态")), "{:?}", orders.changes);
     }
     eprintln!("{kind:?} script:\n{}", r.sql);
+    if kind == DbKind::Sqlite {
+        // SQLite 改不了列定义、加不了外键:改为生成重建表脚本(12 步流程),不再只写注释
+        assert!(r.sql.contains("PRAGMA foreign_keys = OFF;"), "{}", r.sql);
+        assert!(r.sql.contains("CREATE TABLE \"_datum_new_orders\""), "{}", r.sql);
+        assert!(r.sql.contains("CREATE TABLE \"_datum_new_items\""), "{}", r.sql);
+        assert!(r.sql.contains("PRAGMA foreign_key_check(\"orders\");"), "{}", r.sql);
+    }
     apply(st, kind, dst, &r.sql).await;
 
     // 再对比:只剩目标库独有的(删除语句是注释,没执行)
@@ -98,17 +106,16 @@ async fn roundtrip(st: &AppState, kind: DbKind, src: &str, dst: &str) {
     // 视图已建;目标库独有的视图只给了注释掉的 DROP
     assert!(!left.contains(&("v_orders", "added")), "{left:?}");
     assert!(left.contains(&("v_legacy", "removed")));
-    // 外键已补上(SQLite 不能给已有的表加外键,仍会列出)
-    assert_eq!(left.contains(&("items", "changed")), kind == DbKind::Sqlite, "{left:?}");
-    let orders = again.tables.iter().find(|t| t.name == "orders");
-    if let Some(o) = orders {
-        // SQLite 改不了列定义;其余只应剩下目标库独有的列
-        if kind != DbKind::Sqlite {
-            assert_eq!(o.changes.len(), 1, "{:?}", o.changes);
-            assert!(o.changes[0].contains("old_flag"));
-        }
-    }
+    // 外键已补上(SQLite 经重建表补上)
+    assert!(!left.contains(&("items", "changed")), "{left:?}");
+    // 列定义已一致,只应剩下目标库独有的列(SQLite 重建时也保留了它)
+    let o = again.tables.iter().find(|t| t.name == "orders").expect("orders 仍有目标库独有的列");
+    assert_eq!(o.changes.len(), 1, "{:?}", o.changes);
+    assert!(o.changes[0].contains("old_flag"));
     assert!(!left.iter().any(|(n, _)| *n == "refunds"), "新表已建好");
+    // 目标库原有的数据还在(SQLite 重建表复制了数据)
+    let rows = service::query(st, &kind, dst, "SELECT id, status, old_flag FROM orders", None).await.unwrap().rows;
+    assert_eq!(rows, vec![vec![Some("1".to_string()), Some("paid".to_string()), Some("7".to_string())]]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

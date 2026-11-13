@@ -40,6 +40,13 @@ if want workspace; then
   sqlite3 "$D/shop.db" "create table items(id integer primary key, title text); insert into items(title) values('a');"
   printf '[%s,%s]\n' "$(conn c-roastery roastery "$D/roastery.db")" "$(conn c-shop shop "$D/shop.db")" > "$D/connections.json"
   run workspace "$D" workspace/Workspace.test.tsx
+  # SQLite 改表结构:独立的库(带索引、视图与一行外键违规数据),跑完核对文件里的结果
+  D="$ROOT/alter"; mkdir -p "$D"
+  sqlite3 "$D/alter.db" "create table products(id integer primary key, name text not null, country text, price real); create index products_country on products(country); insert into products(name,country,price) values('Boquete','Panama',12),('Nyeri','Kenya',9); create view v_kenya as select name from products where country = 'Kenya'; create table order_items(id integer primary key, product_id int, qty int); insert into order_items values(1,1,2),(2,99,1);"
+  printf '[%s]\n' "$(conn c-alter alter "$D/alter.db")" > "$D/connections.json"
+  run workspace-alter "$D" workspace/alter-sqlite.test.tsx
+  [ "$(sqlite3 "$D/alter.db" "select count(*) from products where country is not null; select name from v_kenya; select count(*) from sqlite_master where name = 'products_country'; select count(*) from pragma_foreign_key_list('line_items'); select count(*) from line_items")" = "$(printf '2\nNyeri\n1\n0\n2')" ] \
+    || { echo "alter: 数据、视图、索引或外键回滚不符合预期"; FAILED=1; }
 fi
 
 if want tab; then

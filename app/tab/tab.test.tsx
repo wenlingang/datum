@@ -301,6 +301,27 @@ test("一次执行多条语句:每条一个结果标签,出错即停,后面的�
   await app.waitUntil(() => hasText(app, "Not run: an earlier statement failed."), { timeout: 5000 });
 });
 
+test("SQLite 多条语句中途出错:回滚脚本开的事务,恢复 legacy_alter_table", async () => {
+  const app = await start();
+  // 粘贴而不是逐键输入:编辑器会自动补括号与引号
+  await app.press("text:-- Top products by revenue");
+  await app.keyboard.press("mod+a");
+  await app.paste("id:sql-editor", {
+    text: "BEGIN;\nPRAGMA legacy_alter_table = ON;\nCREATE TABLE zz_tmp (a);\nINSERT INTO zz_nope VALUES (1);\nCOMMIT",
+  });
+  await app.keyboard.press("mod+shift+enter");
+  await app.waitUntil(() => app.texts().includes("Result 5 · Not run"), { timeout: 15000 });
+  await app.waitUntil(() => app.texts().some((s) => s.includes("it was rolled back")), { timeout: 5000 });
+  // 事务已回滚(建的表不在),设置恢复;没有残留事务,下一条照常自动提交
+  await app.press("text:COMMIT");
+  await app.keyboard.press("mod+a");
+  await app.paste("id:sql-editor", {
+    text: "SELECT 'n=' || (SELECT count(*) FROM sqlite_master WHERE name = 'zz_tmp') || ' l=' || (SELECT * FROM pragma_legacy_alter_table) AS r",
+  });
+  await app.press("id:run");
+  await app.waitUntil(() => app.texts().includes("n=0 l=0"), { timeout: 15000 });
+});
+
 test("表浏览筛选在服务端执行:对整张表生效,不只是当前这一页", async () => {
   const app = await start();
   await app.press("id:tab:products");

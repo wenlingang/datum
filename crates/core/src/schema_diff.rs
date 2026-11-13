@@ -14,6 +14,7 @@ use crate::pg::browse::{ColumnInfo, IndexInfo, TableDetail};
 use crate::service;
 use crate::sql::build::{ident, literal};
 use crate::sql::Dialect;
+use crate::sqlite::alter as sqlite_alter;
 use crate::AppState;
 use rust_i18n::t;
 use serde::Serialize;
@@ -202,6 +203,8 @@ pub struct Extras {
     pub fks: BTreeMap<String, Vec<Fk>>,
     /// 表名 → 表注释(没有的不出现)
     pub table_comments: BTreeMap<String, String>,
+    /// SQLite:表名 → 表的现状(原始建表语句、相关对象等),生成重建表脚本用;只为目标库读取
+    pub sqlite_tables: BTreeMap<String, sqlite_alter::TableSnapshot>,
 }
 
 fn view_sql(name: &str, def: &str, d: Dialect) -> String {
@@ -327,6 +330,71 @@ fn commented(stmt: &str) -> String {
     stmt.split(['\n', '\r']).map(|l| format!("-- {}", comment_text(l))).collect::<Vec<_>>().join("\n")
 }
 
+/// SQLite 改不了列定义、主键与外键:需要时用改表结构的生成器出一份重建表脚本,让目标表与源表一致。
+/// 目标库独有的列与外键保留(与其他删除类改动一样不自动删);不需要重建或拿不到现状时返回 None,
+/// 由调用方按原来的方式只写注释。
+fn sqlite_rebuild(name: &str, src: &TableDetail, dst: &TableDetail, (sx, dx): (&Extras, &Extras)) -> Option<Vec<String>> {
+    let snap = dx.sqlite_tables.get(name)?;
+    let none = vec![];
+    let src_fks = sx.fks.get(name).unwrap_or(&none);
+    let dst_fks = dx.fks.get(name).unwrap_or(&none);
+    let dst_cols: HashMap<&str, &ColumnInfo> = dst.columns.iter().map(|c| (c.name.as_str(), c)).collect();
+    let col_changed = src.columns.iter().any(|c| {
+        dst_cols.get(c.name.as_str()).is_some_and(|o| {
+            norm(&o.data_type) != norm(&c.data_type) || (o.not_null != c.not_null && !c.is_pk) || !same_default(&o.default, &c.default)
+        })
+    });
+    let pk = |t: &TableDetail| {
+        let mut v: Vec<String> = t.columns.iter().filter(|c| c.is_pk).map(|c| c.name.clone()).collect();
+        v.sort();
+        v
+    };
+    let fk_added = src_fks.iter().any(|f| !dst_fks.iter().any(|o| o.same(f)));
+    if !(col_changed || pk(src) != pk(dst) || fk_added) {
+        return None;
+    }
+    let generated = |n: &str| snap.columns.iter().any(|c| c.name == n && c.generated);
+    let mut columns: Vec<sqlite_alter::ColumnSpec> = src
+        .columns
+        .iter()
+        .map(|c| sqlite_alter::ColumnSpec {
+            orig: dst_cols.contains_key(c.name.as_str()).then(|| c.name.clone()),
+            name: c.name.clone(),
+            data_type: c.data_type.clone(),
+            not_null: c.not_null,
+            default: c.default.clone(),
+            pk: c.is_pk,
+            generated: generated(&c.name),
+        })
+        .collect();
+    for c in snap.columns.iter().filter(|c| !src.columns.iter().any(|s| s.name == c.name)) {
+        columns.push(sqlite_alter::ColumnSpec { pk: false, ..c.clone() });
+    }
+    let spec = |f: &Fk| sqlite_alter::FkSpec {
+        columns: f.columns.clone(),
+        ref_table: f.ref_table.clone(),
+        ref_columns: f.ref_columns.clone(),
+        on_delete: f.on_delete.clone(),
+        on_update: f.on_update.clone(),
+    };
+    let mut fks: Vec<sqlite_alter::FkSpec> = src_fks.iter().map(spec).collect();
+    fks.extend(dst_fks.iter().filter(|o| !src_fks.iter().any(|f| f.same(o))).map(spec));
+    let plan = sqlite_alter::AlterPlan { table: snap.table.clone(), new_name: snap.table.clone(), columns, fks };
+    let script = match sqlite_alter::generate(snap, &plan) {
+        Ok(s) => s,
+        Err(e) => return Some(vec![format!("-- {}", comment_text(&t!("core.diff.sqlite_rebuild_failed", table = name, error = e.display())))]),
+    };
+    let mut out: Vec<String> = script.warnings.iter().map(|w| format!("-- {}", comment_text(w))).collect();
+    // 编辑器按分号切语句,触发器体里的分号会被切断:有这种语句时整段注释,交给「修改表结构」去执行
+    if script.statements.iter().any(|s| !single_statement(s)) {
+        out.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_rebuild_manual", table = name))));
+        out.push(commented(&script.sql));
+    } else {
+        out.push(script.sql);
+    }
+    Some(out)
+}
+
 /// 一张两边都有的表:列、索引、外键、表注释的差异 → (说明, 语句)。
 fn diff_table(
     name: &str,
@@ -340,13 +408,17 @@ fn diff_table(
     let mut sql = vec![];
     let dst_cols: HashMap<&str, &ColumnInfo> = dst.columns.iter().map(|c| (c.name.as_str(), c)).collect();
     let src_cols: HashMap<&str, &ColumnInfo> = src.columns.iter().map(|c| (c.name.as_str(), c)).collect();
+    // SQLite 需要重建表时,列 / 主键 / 新外键的改动都由重建脚本完成,下面不再逐条写
+    let rebuild = if d == Dialect::Sqlite { sqlite_rebuild(name, src, dst, (sx, dx)) } else { None };
+    let rebuilt = rebuild.is_some();
 
     for c in &src.columns {
         let cq = ident(&c.name, d);
         match dst_cols.get(c.name.as_str()) {
             None => {
                 notes.push(t!("core.diff.col_added", col = c.name, def = column_def(c, d)).to_string());
-                if d == Dialect::Sqlite && c.not_null && c.default.is_none() {
+                if rebuilt {
+                } else if d == Dialect::Sqlite && c.not_null && c.default.is_none() {
                     sql.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_not_null", table = name, col = c.name))));
                     sql.push(commented(&format!("ALTER TABLE {tq} ADD COLUMN {cq} {};", column_def(c, d))));
                 } else {
@@ -413,6 +485,7 @@ fn diff_table(
                         }
                     }
                     Dialect::Mysql => sql.extend(checked(format!("ALTER TABLE {tq} MODIFY COLUMN {cq} {};", column_def(c, d)))),
+                    Dialect::Sqlite if rebuilt => {}
                     Dialect::Sqlite => {
                         sql.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_rebuild", table = name, col = c.name))))
                     }
@@ -443,7 +516,9 @@ fn diff_table(
     };
     if pk(src) != pk(dst) {
         notes.push(t!("core.diff.pk_changed", from = pk(dst).join(", "), to = pk(src).join(", ")).to_string());
-        sql.push(format!("-- {}", comment_text(&t!("core.diff.pk_manual", table = name))));
+        if !rebuilt {
+            sql.push(format!("-- {}", comment_text(&t!("core.diff.pk_manual", table = name))));
+        }
     }
 
     // 索引(不含主键):按名字对齐,列或唯一性不同视为先删后建
@@ -481,7 +556,8 @@ fn diff_table(
     let dst_fks = dx.fks.get(name).unwrap_or(&none);
     for f in src_fks.iter().filter(|f| !dst_fks.iter().any(|o| o.same(f))) {
         notes.push(t!("core.diff.fk_added", fk = f.describe()).to_string());
-        if d == Dialect::Sqlite {
+        if rebuilt {
+        } else if d == Dialect::Sqlite {
             sql.push(format!("-- {}", comment_text(&t!("core.diff.sqlite_fk", table = name))));
             sql.push(commented(&f.add_sql(name, d)));
         } else {
@@ -504,6 +580,9 @@ fn diff_table(
             notes.push(t!("core.diff.table_comment", from = dc.unwrap_or("—"), to = sc.unwrap_or("—")).to_string());
             sql.push(stmt);
         }
+    }
+    if let Some(r) = rebuild {
+        sql.splice(0..0, r);
     }
     (notes, sql)
 }
@@ -785,9 +864,15 @@ async fn sqlite_create_sql(state: &AppState, kind: &DbKind, id: &str, table: &st
 pub async fn compare(state: &AppState, kind: &DbKind, source_id: &str, target_id: &str) -> AppResult<DiffReport> {
     let d = Dialect::from_kind(kind).ok_or_else(|| AppError::new(ErrorKind::Query, t!("core.err.redis_unsupported")))?;
     let sx = extras(state, kind, source_id, d).await?;
-    let dx = extras(state, kind, target_id, d).await?;
+    let mut dx = extras(state, kind, target_id, d).await?;
     let source = snapshot(state, kind, source_id, &sx.views).await?;
     let target = snapshot(state, kind, target_id, &dx.views).await?;
+    if d == Dialect::Sqlite {
+        for name in target.keys().filter(|n| source.contains_key(*n)) {
+            let snap = state.sqlite_pool.with_conn(target_id, |c| sqlite_alter::snapshot(c, name))?;
+            dx.sqlite_tables.insert(name.clone(), snap);
+        }
+    }
     let mut create_sql = HashMap::new();
     for name in source.keys().filter(|n| !target.contains_key(*n)) {
         let ddl = if d == Dialect::Sqlite {

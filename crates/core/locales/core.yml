@@ -407,6 +407,115 @@ core:
       en: Or
       zh-CN: 或
       zh-TW: 或
+  alter:
+    no_table:
+      en: "Table %{table} doesn't exist"
+      zh-CN: "表 %{table} 不存在"
+      zh-TW: "資料表 %{table} 不存在"
+    stale:
+      en: "The table structure changed after the preview; preview the script again before running it"
+      zh-CN: "预览之后表结构被改动过,请重新预览脚本再执行"
+      zh-TW: "預覽之後資料表結構有變動,請重新預覽腳本再執行"
+    noop:
+      en: "Nothing to change"
+      zh-CN: "没有需要修改的地方"
+      zh-TW: "沒有需要修改的地方"
+    header_simple:
+      en: "Change table %{table} with ALTER TABLE"
+      zh-CN: "用 ALTER TABLE 修改表 %{table}"
+      zh-TW: "用 ALTER TABLE 修改資料表 %{table}"
+    header_rebuild:
+      en: "Rebuild table %{table} (SQLite's ALTER TABLE can't make this change): new table → copy data → drop old table → rename → rebuild indexes, triggers and views → check foreign keys"
+      zh-CN: "重建表 %{table}(SQLite 的 ALTER TABLE 做不到这项修改):建新表 → 复制数据 → 删旧表 → 改名 → 重建索引、触发器与视图 → 检查外键"
+      zh-TW: "重建資料表 %{table}(SQLite 的 ALTER TABLE 做不到這項修改):建新表 → 複製資料 → 刪舊表 → 改名 → 重建索引、觸發器與檢視表 → 檢查外鍵"
+    commented_objects:
+      en: "These depend on dropped columns and are not recreated; fix them by hand if you still need them:"
+      zh-CN: "以下对象引用了删除的列,不会重建;仍需要的话请手工修改后再建:"
+      zh-TW: "以下物件參照了刪除的欄位,不會重建;仍需要的話請手動修改後再建:"
+    bad_default:
+      en: "Default value of %{col} must be a single expression (no semicolons, comments or line breaks; brackets and quotes must match): %{value}"
+      zh-CN: "列 %{col} 的默认值必须是单个表达式(不能有分号、注释、换行,括号与引号要配对):%{value}"
+      zh-TW: "欄位 %{col} 的預設值必須是單一運算式(不能有分號、註解、換行,括號與引號要成對):%{value}"
+    bad_type:
+      en: "Type of %{col} may only contain words, numbers, brackets and commas: %{value}"
+      zh-CN: "列 %{col} 的类型只能包含单词、数字、括号与逗号:%{value}"
+      zh-TW: "欄位 %{col} 的型別只能包含單字、數字、括號與逗號:%{value}"
+    bad_fk_action:
+      en: "Unknown foreign key action: %{action}"
+      zh-CN: "不认识的外键动作:%{action}"
+      zh-TW: "不認得的外鍵動作:%{action}"
+    empty_table_name:
+      en: "The table name can't be empty"
+      zh-CN: "表名不能为空"
+      zh-TW: "資料表名稱不能為空"
+    no_columns:
+      en: "The table needs at least one column"
+      zh-CN: "表至少要有一列"
+      zh-TW: "資料表至少要有一個欄位"
+    name_taken:
+      en: "%{name} is already used by another table, view or index"
+      zh-CN: "%{name} 已被其他表、视图或索引占用"
+      zh-TW: "%{name} 已被其他資料表、檢視表或索引使用"
+    empty_column_name:
+      en: "Column names can't be empty"
+      zh-CN: "列名不能为空"
+      zh-TW: "欄位名稱不能為空"
+    dup_column:
+      en: "Duplicate column name: %{col}"
+      zh-CN: "列名重复:%{col}"
+      zh-TW: "欄位名稱重複:%{col}"
+    unknown_column:
+      en: "Column %{col} isn't in the original table"
+      zh-CN: "原表里没有列 %{col}"
+      zh-TW: "原資料表沒有欄位 %{col}"
+    bad_fk:
+      en: "Each foreign key needs its columns and the referenced table; referenced columns, if given, must match the column count"
+      zh-CN: "外键要填本表列与被引用的表;填了被引用列时,个数要与本表列一致"
+      zh-TW: "外鍵要填本表欄位與參照的資料表;填了參照欄位時,數量要與本表欄位一致"
+    fk_unknown_column:
+      en: "Foreign key column %{col} isn't in the table"
+      zh-CN: "外键列 %{col} 不在表里"
+      zh-TW: "外鍵欄位 %{col} 不在資料表中"
+    warn_drop:
+      en: "Dropping column %{col} deletes its data"
+      zh-CN: "删除列 %{col} 会丢掉这一列的数据"
+      zh-TW: "刪除欄位 %{col} 會遺失這個欄位的資料"
+    warn_unparsed:
+      en: "Couldn't parse the original CREATE TABLE; CHECK, UNIQUE, COLLATE and similar constraints won't be kept"
+      zh-CN: "看不懂原来的建表语句,CHECK、UNIQUE、COLLATE 等约束不会保留"
+      zh-TW: "看不懂原本的建表陳述式,CHECK、UNIQUE、COLLATE 等限制不會保留"
+    warn_constraint_dropped:
+      en: "This constraint uses a dropped column and is removed: %{def}"
+      zh-CN: "这条约束用到了删除的列,已去掉:%{def}"
+      zh-TW: "這條限制用到了刪除的欄位,已移除:%{def}"
+    warn_not_null_no_default:
+      en: "New column %{col} is NOT NULL without a default: copying fails if the table already has rows"
+      zh-CN: "新列 %{col} 是 NOT NULL 且没有默认值:表里已有数据时复制会失败"
+      zh-TW: "新欄位 %{col} 是 NOT NULL 且沒有預設值:資料表已有資料時複製會失敗"
+    warn_now_not_null:
+      en: "%{col} becomes NOT NULL: copying fails if it has NULL values"
+      zh-CN: "%{col} 改成了 NOT NULL:已有 NULL 值时复制会失败"
+      zh-TW: "%{col} 改成 NOT NULL:已有 NULL 值時複製會失敗"
+    warn_object_dropped:
+      en: "%{kind} %{name} uses a dropped column and won't be recreated (see the end of the script)"
+      zh-CN: "%{kind} %{name} 引用了删除的列,不会重建(见脚本末尾)"
+      zh-TW: "%{kind} %{name} 參照了刪除的欄位,不會重建(見腳本末尾)"
+    warn_check_renamed:
+      en: "%{kind} %{name} was recreated with the renamed columns substituted by name; check it's still correct"
+      zh-CN: "%{kind} %{name} 按列名替换成了新列名后重建,请检查是否正确"
+      zh-TW: "%{kind} %{name} 依欄位名稱替換成新名稱後重建,請檢查是否正確"
+    warn_view_dropped_col:
+      en: "View %{name} uses a dropped column; recreating it will likely fail and roll everything back — fix the view first"
+      zh-CN: "视图 %{name} 用到了删除的列,重建很可能失败并整体回滚,请先修改视图"
+      zh-TW: "檢視表 %{name} 用到了刪除的欄位,重建很可能失敗並全部回復,請先修改檢視表"
+    warn_check_other:
+      en: "%{kind} %{name} on another table mentions renamed or dropped columns of this table; it isn't changed — check it by hand"
+      zh-CN: "其他表上的 %{kind} %{name} 提到了本表改名或删除的列,不会自动修改,请手工检查"
+      zh-TW: "其他資料表上的 %{kind} %{name} 提到了本表改名或刪除的欄位,不會自動修改,請手動檢查"
+    warn_child_fk:
+      en: "Foreign keys on %{table} reference renamed or dropped columns of this table and will no longer match"
+      zh-CN: "%{table} 的外键引用了本表改名或删除的列,改完后将对不上"
+      zh-TW: "%{table} 的外鍵參照了本表改名或刪除的欄位,修改後將對不上"
   diff:
     view:
       en: "View"
@@ -520,6 +629,14 @@ core:
       en: "Index %{name} differs: recreated"
       zh-CN: "索引 %{name} 定义不同:重建"
       zh-TW: "索引 %{name} 定義不同:重建"
+    sqlite_rebuild_failed:
+      en: "Couldn't generate the rebuild script for %{table}: %{error}"
+      zh-CN: "生成 %{table} 的重建表脚本失败:%{error}"
+      zh-TW: "產生 %{table} 的重建資料表腳本失敗:%{error}"
+    sqlite_rebuild_manual:
+      en: "%{table} has triggers (their bodies contain semicolons, which the editor would split), so the rebuild below is commented out; use Alter Table on %{table} to run it"
+      zh-CN: "%{table} 有触发器(触发器体里的分号会被编辑器切断),下面的重建脚本已注释;请在表的右键菜单用「修改表结构」执行"
+      zh-TW: "%{table} 有觸發器(觸發器本體中的分號會被編輯器切斷),下面的重建腳本已註解;請在資料表的右鍵選單用「修改資料表結構」執行"
     sqlite_rebuild:
       en: "SQLite cannot change a column definition: rebuild %{table} by hand to change %{col}"
       zh-CN: "SQLite 不支持修改列定义:要改 %{col},需手工重建表 %{table}"
