@@ -1,6 +1,8 @@
 // Redis key 的按类型编辑器:String 直接改、Hash / ZSet / List / Set 按元素增删改、Stream 按 ID 范围分页浏览、
 // 追加条目与查看消费组;标题栏设置 / 移除 TTL、重命名。key 标签页与分析页(集群里的 key,在所在节点上)共用;
 // 侧栏的「新建 key」也在这里。
+// 值的查看带格式识别(JSON / MessagePack / gzip / zlib / Java 序列化 / Protobuf,见 RedisValueView):
+// String 在编辑区上方选格式,集合元素与 Stream 条目点「查看」弹窗识别;识别出的非文本格式只读。
 //
 // 只改界面上显示出来的那部分(大 key 只读了前 1000 个元素、字符串前 1 MB),写完整体重读一次。
 // 写操作:prod 连接一律先确认;删除元素在任何环境都先确认。确认框里的命令只是给人看的,
@@ -13,11 +15,22 @@ import { DialogFrame, Field, Segmented } from "../dialogs/controls";
 import { db, errorText } from "../lib/native";
 import type { KeyDetail, RedisEdit, RedisKeyValue, RedisStreamGroup, RedisStreamPage } from "../lib/types";
 import { conns } from "../store/conns";
+import { viewFormat } from "../store/redisFormats";
 import { toast } from "../store/toast";
 import { editorText } from "../ui/editor";
 import { ErrorText } from "../ui/error";
 import { Btn, Hint, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
+import {
+  createDecoded,
+  DecodedBody,
+  DecodeInfo,
+  ElementViewDialog,
+  FormatPicker,
+  rawOf,
+  ViewToggle,
+  type ElementView,
+} from "./RedisValueView";
 
 // ------------------------------------------------------------------ 写操作的确认
 
@@ -248,11 +261,13 @@ function ElementList(props: {
   /** 首列固定宽度(多列时) */
   firstWidth?: number;
   readOnly: boolean;
+  /** 查看值(识别格式);只读时也有 */
+  onView?: (r: Row) => void;
   onEdit?: (r: Row) => void;
   onDelete?: (r: Row) => void;
 }) {
   const multi = () => props.columns.length > 1;
-  const actions = () => (props.readOnly ? 0 : (props.onEdit ? 26 : 0) + (props.onDelete ? 26 : 0));
+  const actions = () => (props.onView ? 26 : 0) + (props.readOnly ? 0 : (props.onEdit ? 26 : 0) + (props.onDelete ? 26 : 0));
   return (
     <View testID="rkey-elements" class="min-h-0 flex-1 rounded-(--radius) border border-border">
       <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
@@ -293,6 +308,18 @@ function ElementList(props: {
                 </Text>
               )}
             </Each>
+            <If when={props.onView}>
+              {(view) => (
+                <IconButton
+                  icon="eye"
+                  size={13}
+                  class="p-1"
+                  label={`${t("rkey.view")} ${r().cells[0]}`}
+                  tooltip={t("rkey.view")}
+                  onPress={() => view()(r())}
+                />
+              )}
+            </If>
             <If when={!props.readOnly}>
               <View class="flex-row">
                 <If when={props.onEdit}>
@@ -336,6 +363,8 @@ interface Ctx {
   key: string;
   gate: Gate;
   form: Signal<FormSpec | null>;
+  /** 元素查看弹窗 */
+  view: Signal<ElementView | null>;
   readOnly: boolean;
   reload: () => Promise<void>;
 }
@@ -347,6 +376,10 @@ async function edit(ctx: Ctx, op: Omit<WriteOp, "run">, e: RedisEdit): Promise<b
   return ok;
 }
 
+/**
+ * String 值:上方选查看格式(自动识别),文本 / JSON 可直接编辑(JSON 默认展开成树,切到「文本」编辑),
+ * 其余识别出的格式(MessagePack、压缩、Java、Protobuf、十六进制)只读展示。
+ */
 function StringBody(props: { ctx: Ctx; value: RedisKeyValue }) {
   const ctx = props.ctx;
   const original = () => props.value.rows[0]?.[0] ?? "";
@@ -358,20 +391,60 @@ function StringBody(props: { ctx: Ctx; value: RedisKeyValue }) {
   });
   const dirty = () => draft() !== original();
   const locked = () => ctx.readOnly || !!props.value.truncated;
+  const format = () => viewFormat(ctx.connId, ctx.key);
+  // 非 UTF-8 的值按原始字节识别;UTF-8 的按草稿识别(在「文本」里改了 JSON,切回树看到的是改后的)
+  const b64 = () => rawOf(props.value.raw, 0, 0);
+  const decoded = createDecoded(() => ({ text: b64() ? original() : draft(), b64: b64() }), format);
+  /** 解出来就是值本身(文本、未压缩的 JSON):可编辑;没解完之前也按文本 */
+  const textual = () => {
+    const d = decoded();
+    return !d || (d.layers.length === 0 && (d.format === "text" || d.format === "json"));
+  };
+  const mode = signal<"tree" | "text">("tree");
+  const hasTree = () => decoded()?.tree != null;
+  /** 显示可编辑的编辑器:文本值,或 JSON 切到了「文本」 */
+  const editing = () => textual() && !(hasTree() && mode() === "tree");
   const save = () =>
     void edit(
       ctx,
       { title: t("rkey.confirm_save", { key: ctx.key }), command: previewCommand(["SET", ctx.key, draft(), "XX"]) },
       { op: "stringSet", value: draft() },
     );
+  /** 非 UTF-8 的值识别出了二进制格式(不是回退到的文本 / 十六进制):只读是因为格式,不必再提替换符 */
+  const decodedBinary = () => {
+    const d = decoded();
+    return !!props.value.binary && !!d && !d.fallback && d.format !== "text" && d.format !== "hex";
+  };
   return (
     <View class="min-h-0 flex-1 gap-2">
+      <If when={props.value.binary && !decodedBinary()}>
+        <Text class={`${FS.xs} text-warning`}>{t("rkey.binary_read_only")}</Text>
+      </If>
+      <View class="flex-row items-center gap-2">
+        <FormatPicker connId={ctx.connId} keyName={ctx.key} />
+        <DecodeInfo decoded={decoded()} requested={format()} />
+        <If when={decodedBinary()}>
+          <View testID="rkey-binary-format" class="shrink-0 flex-row items-center gap-1">
+            <Icon name="lock" size={12} color="fg-faint" />
+            <Text class={`${FS.xs} text-muted-foreground`}>{t("rkey.binary_format_read_only")}</Text>
+          </View>
+        </If>
+        <If when={hasTree()}>
+          <ViewToggle mode={mode()} onChange={(m) => mode.set(m)} />
+        </If>
+      </View>
       <View class="min-h-0 flex-1 overflow-hidden rounded-(--radius) border border-border">
-        <StringEditor value={draft} readOnly={locked()} />
+        <If when={!editing() ? decoded() : null}>{(d) => <DecodedBody decoded={d()} mode={mode()} />}</If>
+        {/* 编辑器一直挂着(看树时隐藏):不受控的编辑器重建会丢撤销历史 */}
+        <View class="min-h-0 flex-1" classList={{ hidden: !editing() }}>
+          <StringEditor value={draft} readOnly={locked()} />
+        </View>
       </View>
       <View class="flex-row items-center gap-2">
-        <Text class={`${FS.xs} ${MONO} flex-1 text-fg-faint`}>{t("rkey.chars", { n: [...draft()].length })}</Text>
-        <If when={!locked()}>
+        <Text class={`${FS.xs} ${MONO} flex-1 text-fg-faint`}>
+          {textual() ? t("rkey.chars", { n: [...draft()].length }) : t("rkey.bytes", { n: (decoded()?.size ?? 0).toLocaleString() })}
+        </Text>
+        <If when={!locked() && textual()}>
           <Btn small variant="outline" label={t("rkey.revert")} disabled={!dirty()} onPress={() => draft.set(original())} />
           <Btn
             testID="rkey-string-save"
@@ -589,6 +662,16 @@ function CollectionBody(props: { ctx: Ctx; value: RedisKeyValue; size: number })
     }
   };
 
+  /** 查看元素的值:hash / list 为值列,set / zset 为成员 */
+  const viewRow = (r: Row) => {
+    const col = type() === "hash" || type() === "list" ? 1 : 0;
+    const [a] = r.cells;
+    ctx.view.set({
+      title: t("rkey.view_title", { name: type() === "list" ? `#${a}` : a }),
+      items: [{ name: "", source: { text: r.cells[col] ?? "", b64: rawOf(props.value.raw, r.ix, col) } }],
+    });
+  };
+
   const columns = () => {
     switch (type()) {
       case "hash":
@@ -620,6 +703,7 @@ function CollectionBody(props: { ctx: Ctx; value: RedisKeyValue; size: number })
         rows={rows()}
         firstWidth={type() === "list" ? 64 : type() === "zset" ? undefined : 220}
         readOnly={ctx.readOnly}
+        onView={viewRow}
         onEdit={type() === "set" ? undefined : editRow}
         onDelete={del}
       />
@@ -751,6 +835,15 @@ function StreamBody(props: { ctx: Ctx; version: number }) {
 
   const rows = (): Row[] =>
     (page()?.entries ?? []).map((e, ix) => ({ ix, cells: [e.id, e.fields.map(([f, v]) => `${f}: ${v}`).join("  ·  ")] }));
+  /** 查看条目:各字段的值逐个识别格式(弹窗里切换字段) */
+  const view = (r: Row) => {
+    const e = page()?.entries[r.ix];
+    if (!e) return;
+    ctx.view.set({
+      title: t("rkey.view_title", { name: e.id }),
+      items: e.fields.map(([f, v], i) => ({ name: f, source: { text: v, b64: rawOf(e.raw, i, 1) } })),
+    });
+  };
 
   return (
     <View class="min-h-0 flex-1 gap-2">
@@ -784,6 +877,7 @@ function StreamBody(props: { ctx: Ctx; version: number }) {
         rows={rows()}
         firstWidth={190}
         readOnly={ctx.readOnly}
+        onView={view}
         onDelete={del}
       />
       <View class="flex-row items-center gap-2">
@@ -864,6 +958,7 @@ export function RedisKeyEditor(props: {
 }) {
   const gate = createGate(props.connId, () => props.node);
   const form = signal<FormSpec | null>(null);
+  const view = signal<ElementView | null>(null);
   /** 每次写完 +1,Stream 视图据此重读当前页 */
   const version = signal(0);
   const key = () => props.value?.key ?? props.detail?.key ?? "";
@@ -875,6 +970,7 @@ export function RedisKeyEditor(props: {
     key: key(),
     gate,
     form,
+    view,
     readOnly: readOnly(),
     reload: async () => {
       await props.reload();
@@ -978,7 +1074,8 @@ export function RedisKeyEditor(props: {
           {type() === "string" ? t("rkey.string_truncated") : t("rkey.truncated")}
         </Text>
       </If>
-      <If when={readOnly()}>
+      {/* String 的提示放在 StringBody 里:识别出二进制格式时换成更贴切的说明 */}
+      <If when={readOnly() && type() !== "string"}>
         <Text class={`${FS.xs} text-warning`}>{t("rkey.binary_read_only")}</Text>
       </If>
       <If when={missing()}>
@@ -1002,6 +1099,7 @@ export function RedisKeyEditor(props: {
         )}
       </If>
       <FormDialog spec={form()} busy={gate.busy()} onClose={() => form.set(null)} />
+      <ElementViewDialog connId={props.connId} keyName={key()} view={view()} onClose={() => view.set(null)} />
       <gate.Host />
     </View>
   );

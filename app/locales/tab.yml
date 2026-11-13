@@ -2002,6 +2002,10 @@ rkey:
     en: "Apply"
     zh-CN: "应用"
     zh-TW: "套用"
+  binary_format_read_only:
+    en: "Binary format, read-only"
+    zh-CN: "二进制格式,只读"
+    zh-TW: "二進位格式,唯讀"
   binary_read_only:
     en: "Some elements aren't valid UTF-8 text. They're shown with replacement characters, so editing is disabled to avoid corrupting them."
     zh-CN: "部分元素不是合法的 UTF-8 文本,显示的是替换后的字符;为免改坏原值,已禁用编辑。"
@@ -2318,6 +2322,70 @@ rkey:
     en: "Length: %{n} bytes"
     zh-CN: "长度 %{n} 字节"
     zh-TW: "長度 %{n} 位元組"
+  view:
+    en: "View"
+    zh-CN: "查看"
+    zh-TW: "檢視"
+  view_title:
+    en: "View value · %{name}"
+    zh-CN: "查看值 · %{name}"
+    zh-TW: "檢視值 · %{name}"
+  view_field:
+    en: "Field"
+    zh-CN: "字段"
+    zh-TW: "欄位"
+  view_as:
+    en: "View as"
+    zh-CN: "查看格式"
+    zh-TW: "檢視格式"
+  view_as_tip:
+    en: "How to decode the value. A manual choice is remembered for keys with the same prefix on this connection."
+    zh-CN: "按什么格式解码值。手动选的格式会记住,对此连接下前缀相同的 key 生效。"
+    zh-TW: "按什麼格式解碼值。手動選的格式會記住,對此連線下前綴相同的 key 生效。"
+  fmt_auto:
+    en: "Auto detect"
+    zh-CN: "自动识别"
+    zh-TW: "自動識別"
+  fmt_text:
+    en: "Text"
+    zh-CN: "文本"
+    zh-TW: "文字"
+  fmt_hex:
+    en: "Hex"
+    zh-CN: "十六进制"
+    zh-TW: "十六進位"
+  fmt_java:
+    en: "Java serialization"
+    zh-CN: "Java 序列化"
+    zh-TW: "Java 序列化"
+  decompressed_from:
+    en: "decompressed from %{layers}"
+    zh-CN: "解压自 %{layers}"
+    zh-TW: "解壓自 %{layers}"
+  format_fallback:
+    en: "Not valid %{format}, showing as %{shown}"
+    zh-CN: "不是有效的 %{format},按%{shown}显示"
+    zh-TW: "不是有效的 %{format},按%{shown}顯示"
+  note_hex_truncated:
+    en: "Hex shows the first 64 KB only"
+    zh-CN: "十六进制只显示前 64 KB"
+    zh-TW: "十六進位只顯示前 64 KB"
+  note_inflate_limit:
+    en: "Decompressed size exceeds 10 MB, not decompressed"
+    zh-CN: "解压后超过 10 MB,未解压"
+    zh-TW: "解壓後超過 10 MB,未解壓"
+  note_java_partial:
+    en: "Couldn't fully parse the Java stream: showing the classes and fields found, plus hex"
+    zh-CN: "Java 序列化未能完整解析:显示已识别的类与字段,文本视图为十六进制"
+    zh-TW: "Java 序列化未能完整解析:顯示已識別的類別與欄位,文字檢視為十六進位"
+  note_too_large:
+    en: "Too large or too deeply nested to show as a tree"
+    zh-CN: "节点太多或嵌套太深,不展开成树"
+    zh-TW: "節點太多或巢狀太深,不展開成樹"
+  bytes:
+    en: "Size: %{n} B"
+    zh-CN: "%{n} 字节"
+    zh-TW: "%{n} 位元組"
 json:
   view_tree:
     en: Tree

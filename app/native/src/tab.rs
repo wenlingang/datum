@@ -395,9 +395,9 @@ impl Grid {
     /// MySQL / SQLite 为 `$.a[0].b`(`JSON_EXTRACT` / `json_extract` 的路径)。
     pub fn json_path_text(kind: String, column: String, path: JsonValue) -> Result<String, String> {
         let path: Vec<PathSeg> = from(path, "path")?;
-        let d = dialect(&kind)?;
-        Ok(match d {
-            Dialect::Pg => json::pg_path(&build::ident(&column, d), &path, true),
+        // 没有 SQL 方言的(Redis 值的 JSON 树)也用 `$.a[0].b`:通用、jq 之类工具也认
+        Ok(match dialect(&kind) {
+            Ok(d @ Dialect::Pg) => json::pg_path(&build::ident(&column, d), &path, true),
             _ => json::dollar_path(&path),
         })
     }
@@ -470,6 +470,7 @@ mod tests {
         assert_eq!(Grid::json_value_at(r#"{"a":{"s":"x"}}"#.into(), json!(["a", "s"])).unwrap().as_deref(), Some("x"));
         assert_eq!(Grid::json_path_text("pg".into(), "doc".into(), json!(["a", 0.0])).unwrap(), "\"doc\"->'a'->>0");
         assert_eq!(Grid::json_path_text("mysql".into(), "doc".into(), json!(["a", 0])).unwrap(), "$.a[0]");
+        assert_eq!(Grid::json_path_text("redis".into(), "value".into(), json!(["a", 0])).unwrap(), "$.a[0]");
         assert!(Grid::is_json_document(" [1]".into()));
         assert!(!Grid::is_json_document("42".into()));
         // JS 传来的 JSON 路径条件:客户端按路径筛,服务端拼成 PG 的 WHERE

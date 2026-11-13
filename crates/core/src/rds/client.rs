@@ -22,6 +22,31 @@ pub struct KeyValue {
     /// 有元素不是合法 UTF-8,显示的是替换过的文本:按显示的文本去改 / 删会对不上原值,界面据此只读
     #[serde(default)]
     pub binary: bool,
+    /// 不是合法 UTF-8 的单元格的原始字节:`rows` 里是替换过的文本,查看时识别格式(MessagePack、gzip…)要用原始字节。
+    /// 合法 UTF-8 的单元格不重复带,文本本身就能还原出原始字节
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub raw: Vec<RawCell>,
+}
+
+/// 一个单元格的原始字节(base64)。
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RawCell {
+    pub row: usize,
+    pub col: usize,
+    pub b64: String,
+}
+
+/// 字节转文本;不是合法 UTF-8 时用替换符,并把原始字节记进 `raw`。
+pub(super) fn cell_text(b: Vec<u8>, row: usize, col: usize, raw: &mut Vec<RawCell>) -> String {
+    use base64::Engine;
+    match String::from_utf8(b) {
+        Ok(s) => s,
+        Err(e) => {
+            let b = e.into_bytes();
+            raw.push(RawCell { row, col, b64: base64::engine::general_purpose::STANDARD.encode(&b) });
+            String::from_utf8_lossy(&b).into_owned()
+        }
+    }
 }
 
 /// 查看集合类 key 时最多取的元素数:大 key 一次全读会拖住实例,也撑爆界面。
@@ -165,22 +190,6 @@ async fn open(url: &str) -> AppResult<MultiplexedConnection> {
     }
 }
 
-/// 字节转 UTF-8,非法字节用替换符(兼容二进制值)。
-fn lossy(b: Vec<u8>) -> String {
-    String::from_utf8_lossy(&b).into_owned()
-}
-
-/// 同 [`lossy`],遇到非法 UTF-8 时记下 `binary`。
-fn utf8(b: Vec<u8>, binary: &mut bool) -> String {
-    match String::from_utf8(b) {
-        Ok(s) => s,
-        Err(e) => {
-            *binary = true;
-            lossy(e.into_bytes())
-        }
-    }
-}
-
 /// 把任意 Redis 回复转成可读字符串(版本无关,基于 FromRedisValue)。
 fn format_reply(v: &redis::Value) -> String {
     if let Ok(s) = String::from_redis_value(v) {
@@ -205,8 +214,6 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
     let t: String = redis::cmd("TYPE").arg(key).query_async(con).await.map_err(qerr)?;
     let max = MAX_ELEMENTS as i64;
     let mut truncated = false;
-    let mut binary = false;
-    let b = &mut binary;
     // HSCAN / SSCAN 分批取到上限;返回的是扁平列表
     async fn scan_all(con: &mut MultiplexedConnection, cmd: &str, key: &str, cap: usize) -> AppResult<(Vec<Vec<u8>>, bool)> {
         let mut out = vec![];
@@ -232,7 +239,8 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
             }
         }
     }
-    let (columns, rows): (Vec<String>, Vec<Vec<String>>) = match t.as_str() {
+    // 各类型先取原始字节,最后统一转文本(顺带记下非 UTF-8 单元格的原始字节)
+    let (columns, cells): (Vec<String>, Vec<Vec<Vec<u8>>>) = match t.as_str() {
         "string" => {
             let len: i64 = redis::cmd("STRLEN").arg(key).query_async(con).await.unwrap_or(0);
             let v: Option<Vec<u8>> = if len as usize > MAX_STRING_BYTES {
@@ -241,14 +249,14 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
             } else {
                 redis::cmd("GET").arg(key).query_async(con).await.map_err(qerr)?
             };
-            (vec!["value".into()], vec![vec![v.map(|v| utf8(v, b)).unwrap_or_default()]])
+            (vec!["value".into()], vec![vec![v.unwrap_or_default()]])
         }
         "hash" => {
             let (flat, more) = scan_all(con, "HSCAN", key, MAX_ELEMENTS * 2).await?;
             truncated = more;
             (
                 vec!["field".into(), "value".into()],
-                flat.chunks(2).map(|p| vec![utf8(p[0].clone(), b), utf8(p.get(1).cloned().unwrap_or_default(), b)]).collect(),
+                flat.chunks(2).map(|p| vec![p[0].clone(), p.get(1).cloned().unwrap_or_default()]).collect(),
             )
         }
         "list" => {
@@ -257,13 +265,13 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
             let l: Vec<Vec<u8>> = redis::cmd("LRANGE").arg(key).arg(0).arg(max - 1).query_async(con).await.map_err(qerr)?;
             (
                 vec!["index".into(), "value".into()],
-                l.into_iter().enumerate().map(|(i, v)| vec![i.to_string(), utf8(v, b)]).collect(),
+                l.into_iter().enumerate().map(|(i, v)| vec![i.to_string().into_bytes(), v]).collect(),
             )
         }
         "set" => {
             let (members, more) = scan_all(con, "SSCAN", key, MAX_ELEMENTS).await?;
             truncated = more;
-            (vec!["member".into()], members.into_iter().map(|m| vec![utf8(m, b)]).collect())
+            (vec!["member".into()], members.into_iter().map(|m| vec![m]).collect())
         }
         "zset" => {
             let len: i64 = redis::cmd("ZCARD").arg(key).query_async(con).await.unwrap_or(0);
@@ -276,12 +284,18 @@ async fn read_value(con: &mut MultiplexedConnection, key: &str) -> AppResult<Key
                 .query_async(con)
                 .await
                 .map_err(qerr)?;
-            (vec!["member".into(), "score".into()], z.into_iter().map(|(m, sc)| vec![utf8(m, b), sc]).collect())
+            (vec!["member".into(), "score".into()], z.into_iter().map(|(m, sc)| vec![m, sc.into_bytes()]).collect())
         }
         // stream 不在这里读:按 ID 范围分页浏览,见 edit::stream_range
         _ => (vec![], vec![]),
     };
-    Ok(KeyValue { key: key.into(), key_type: t, columns, rows, truncated, binary })
+    let mut raw = vec![];
+    let rows = cells
+        .into_iter()
+        .enumerate()
+        .map(|(r, row)| row.into_iter().enumerate().map(|(c, b)| cell_text(b, r, c, &mut raw)).collect())
+        .collect();
+    Ok(KeyValue { key: key.into(), key_type: t, columns, rows, truncated, binary: !raw.is_empty(), raw })
 }
 
 async fn read_detail(con: &mut MultiplexedConnection, key: &str) -> AppResult<KeyDetail> {

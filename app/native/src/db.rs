@@ -286,6 +286,17 @@ impl Db {
             .and_then(json)
     }
 
+    /// Redis:按查看格式识别 / 解码一个值(只读查看用)。`b64` 为非 UTF-8 单元格的原始字节(KeyValue 的 `raw`),
+    /// 没有时用 `text` 本身的字节。`format`:auto / text / hex / json / msgpack / gzip / zlib / java / protobuf。
+    /// 解不出来回退到文本 / 十六进制,不报错;返回 `{ format, layers, text, tree, fallback, notes, size }`。
+    pub async fn redis_decode(text: String, b64: Option<String>, format: String) -> Result<JsonValue, String> {
+        let f: datum_core::rds::decode::Format = from(JsonValue::String(format), "format")?;
+        // 解压最多 10 MB、解析大值也要一会儿:放到线程池上,不卡界面
+        spawn(async move { datum_core::rds::decode::decode_cell(&text, b64.as_deref(), f) })
+            .await?
+            .and_then(json)
+    }
+
     /// Redis 分析:概览(INFO 里的内存、命中率、key 数等)。
     pub async fn redis_overview(id: String) -> Result<JsonValue, String> {
         spawn(async move { service::redis_overview(&state(), &id).await })

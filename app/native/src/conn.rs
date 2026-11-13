@@ -120,6 +120,16 @@ impl Store {
     pub fn save_snippets(data: JsonValue) -> Result<(), String> {
         save_json(SNIPPETS_FILE, &data)
     }
+
+    /// Redis 值的查看格式偏好(按连接 + key 前缀记住);没有或读不了为 null。
+    pub fn load_redis_formats() -> JsonValue {
+        load_json(REDIS_FORMATS_FILE)
+    }
+
+    /// 保存 Redis 值的查看格式偏好(原子写)。
+    pub fn save_redis_formats(data: JsonValue) -> Result<(), String> {
+        save_json(REDIS_FORMATS_FILE, &data)
+    }
 }
 
 /// 会话文件名(在配置目录下)。
@@ -128,6 +138,8 @@ const SESSION_FILE: &str = "session.json";
 const AI_CONVOS_FILE: &str = "ai_conversations.json";
 /// SQL 片段文件名(在配置目录下)。
 const SNIPPETS_FILE: &str = "snippets.json";
+/// Redis 查看格式偏好文件名(在配置目录下)。
+const REDIS_FORMATS_FILE: &str = "redis_formats.json";
 
 fn load_json(name: &str) -> JsonValue {
     std::fs::read(state().config_dir.join(name))

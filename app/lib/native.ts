@@ -61,6 +61,8 @@ export const store = {
   saveAiConversations: (data: unknown) => Store.saveAiConversations(data),
   loadSnippets: () => Store.loadSnippets() as unknown,
   saveSnippets: (data: unknown) => Store.saveSnippets(data),
+  loadRedisFormats: () => Store.loadRedisFormats() as unknown,
+  saveRedisFormats: (data: unknown) => Store.saveRedisFormats(data),
 };
 
 export const db = {
@@ -126,6 +128,9 @@ export const db = {
     (await Db.redisStreamRange(id, node, key, start, end, count, rev)) as TabTypes.RedisStreamPage,
   redisStreamGroups: async (id: string, node: string | null, key: string) =>
     (await Db.redisStreamGroups(id, node, key)) as TabTypes.RedisStreamGroup[],
+  /** 按查看格式解码一个值;`b64` 为非 UTF-8 单元格的原始字节。解不出来回退文本 / 十六进制,不抛错 */
+  redisDecode: async (text: string, b64: string | null, format: TabTypes.RedisViewFormat) =>
+    (await Db.redisDecode(text, b64, format)) as TabTypes.RedisDecoded,
   /** 表结构对比:脚本让目标库与源库一致(删除类语句已注释)。 */
   schemaDiff: async (kind: DbKind, sourceId: string, targetId: string) =>
     (await Db.schemaDiff(kind, sourceId, targetId)) as DiffReport,

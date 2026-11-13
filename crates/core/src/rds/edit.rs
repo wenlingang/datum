@@ -7,7 +7,7 @@
 //! - 多步改动(改字段名、删列表元素)用 MULTI/EXEC 一次提交。多路复用连接被别的请求共用,不能 WATCH,
 //!   所以「核对旧值」与事务之间仍有极短的窗口;换来的是不依赖 Lua(不少托管实例禁用 EVAL)。
 
-use super::client::qerr;
+use super::client::{cell_text, qerr};
 use crate::error::{AppError, AppResult, ErrorKind};
 use redis::aio::MultiplexedConnection;
 use redis::Value;
@@ -74,6 +74,9 @@ pub struct NewKey {
 pub struct StreamEntry {
     pub id: String,
     pub fields: Vec<(String, String)>,
+    /// 不是合法 UTF-8 的字段名 / 值的原始字节:`row` 为字段下标,`col` 0 为字段名、1 为值(同 KeyValue 的 `raw`)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub raw: Vec<super::client::RawCell>,
 }
 
 /// Stream 的一页。`next` 是下一页的起点(含):正序时作为新的 start,倒序时作为新的 end;没有更多为 None。
@@ -435,6 +438,14 @@ fn text(v: &Value) -> String {
     }
 }
 
+/// 回复里的原始字节(批量字符串原样,其余同 [`text`])。
+fn bytes(v: &Value) -> Vec<u8> {
+    match v {
+        Value::BulkString(b) => b.clone(),
+        other => text(other).into_bytes(),
+    }
+}
+
 fn int(v: Option<&Value>) -> Option<i64> {
     match v? {
         Value::Int(i) => Some(*i),
@@ -468,11 +479,19 @@ fn parse_entries(v: &Value) -> Vec<StreamEntry> {
                 return None;
             };
             let id = text(parts.first()?);
+            // 字段名 / 值按原始字节取:值可能是 MessagePack 等二进制,查看时要原始字节
+            let mut raw = vec![];
             let fields = match parts.get(1) {
+                Some(Value::Array(a)) => a
+                    .chunks(2)
+                    .filter(|c| c.len() == 2)
+                    .enumerate()
+                    .map(|(i, c)| (cell_text(bytes(&c[0]), i, 0, &mut raw), cell_text(bytes(&c[1]), i, 1, &mut raw)))
+                    .collect(),
                 Some(f) => pairs(f).into_iter().map(|(k, v)| (k, text(v))).collect(),
                 None => vec![],
             };
-            Some(StreamEntry { id, fields })
+            Some(StreamEntry { id, fields, raw })
         })
         .collect()
 }
@@ -586,6 +605,12 @@ mod tests {
         assert_eq!(e.len(), 2);
         assert_eq!(e[0].id, "1-0");
         assert_eq!(e[0].fields, vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())]);
+        assert!(e[0].raw.is_empty());
+        // 非 UTF-8 的值:显示替换符,原始字节另带
+        let v = Value::Array(vec![Value::Array(vec![bulk("3-0"), Value::Array(vec![bulk("p"), Value::BulkString(vec![0x82, 0xff])])])]);
+        let e = parse_entries(&v);
+        assert_eq!(e[0].fields[0].1, "\u{fffd}\u{fffd}");
+        assert_eq!(e[0].raw, vec![super::super::client::RawCell { row: 0, col: 1, b64: "gv8=".into() }]);
         let m = Value::Map(vec![(bulk("name"), bulk("g")), (bulk("pending"), Value::Int(2))]);
         let p = pairs(&m);
         assert_eq!(int(get(&p, "pending")), Some(2));

@@ -313,6 +313,35 @@ export interface RedisKeyValue {
   truncated?: boolean;
   /** 有元素不是合法 UTF-8(显示的是替换后的文本):按它去改会对不上原值,编辑器只读 */
   binary?: boolean;
+  /** 非 UTF-8 单元格的原始字节(base64),查看时识别格式用 */
+  raw?: RedisRawCell[];
+}
+
+/** 一个单元格的原始字节:`row` / `col` 为在 rows 里的位置(Stream 条目里 row 为字段下标,col 0 字段名、1 值)。 */
+export interface RedisRawCell {
+  row: number;
+  col: number;
+  b64: string;
+}
+
+/** Redis 值的查看格式;gzip / zlib 解压后再自动识别内层。 */
+export type RedisViewFormat = "auto" | "text" | "hex" | "json" | "msgpack" | "gzip" | "zlib" | "java" | "protobuf";
+
+/** 解码结果(core 的 `rds::decode::Decoded`)。 */
+export interface RedisDecoded {
+  /** 最终展示的格式:text / hex / json / msgpack / java / protobuf */
+  format: RedisViewFormat;
+  /** 依次解开的压缩层 */
+  layers: RedisViewFormat[];
+  /** 文本视图:原文、格式化的 JSON 或十六进制转储 */
+  text: string;
+  /** 树视图的 JSON 文本;不是树形格式为 null */
+  tree: string | null;
+  /** 手动选的格式解不出来,回退到了文本 / 十六进制 */
+  fallback: boolean;
+  notes: ("hex_truncated" | "inflate_limit" | "java_partial" | "too_large")[];
+  /** 展示内容的字节数(解压后) */
+  size: number;
 }
 
 /** Redis key 的一次元素级编辑(core 的 `KeyEdit`);分数用文本,允许 inf / -inf。 */
@@ -350,6 +379,7 @@ export interface RedisNewKey {
 export interface RedisStreamEntry {
   id: string;
   fields: [string, string][];
+  raw?: RedisRawCell[];
 }
 
 /** Stream 的一页;`next` 是下一页的起点(含),正序作 start、倒序作 end;没有更多为 null。 */
