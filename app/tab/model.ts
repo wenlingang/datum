@@ -439,6 +439,13 @@ function record(
   );
 }
 
+/** 会改表结构的语句(建 / 改 / 删表、视图、索引等):执行后要重新加载表清单、列与外键(补全用)。
+ *  普通的增删改不用——每次都重新查一遍整库的列与外键太重。 */
+export function changesSchema(sql: string): boolean {
+  const body = sql.replace(/^(\s|--[^\n]*(\n|$)|\/\*[\s\S]*?\*\/)*/, "");
+  return /^(create|alter|drop|rename|comment)\b/i.test(body);
+}
+
 /** 写语句执行前的撤销准备;出错时以原因的形式返回(不阻止执行)。 */
 function prepareUndo(m: TabModel, sql: string): Promise<UndoPrep> {
   return db.undoPrepare(m.dbKind, m.connId, sql).catch((e): UndoPrep => ({ statements: [], rows: 0, reason: errorText(e) }));
@@ -546,8 +553,8 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
       m.elapsedMs.set(elapsed);
       setResult(m, r);
       m.undo.set(undo);
-      // 非查询语句可能改变表结构:刷新表列表
-      if (!query && conns.tables(m.connId)) void refreshTables(m.connId);
+      // 改了表结构:刷新表清单、列与外键(补全的 JOIN … ON 推荐跟着变)
+      if (!query && changesSchema(sql) && conns.tables(m.connId)) void refreshTables(m.connId);
       if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null), undo);
     });
   // 写语句:先抓会被改动的原始行,生成撤销用的反向语句,再执行
@@ -585,7 +592,7 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   });
   const out: StmtResult[] = [];
   let failed = false;
-  let wrote = false;
+  let schemaChanged = false;
   const undos: UndoPrep[] = [];
   for (const sql of statements) {
     const isQuery = sqlText.isQuery(sql);
@@ -603,7 +610,7 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
       if (token !== m.token) return;
       const elapsed = Date.now() - started;
       out.push({ sql, result: r, error: null, elapsedMs: elapsed, isQuery, skipped: false });
-      if (!isQuery) wrote = true;
+      if (!isQuery && changesSchema(sql)) schemaChanged = true;
       if (undo) undos.push(undo);
       if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null), undo);
     } catch (e) {
@@ -621,7 +628,7 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
     m.multi.set(out);
     selectResult(m, errorAt >= 0 ? errorAt : out.length - 1);
   });
-  if (wrote && conns.tables(m.connId)) void refreshTables(m.connId);
+  if (schemaChanged && conns.tables(m.connId)) void refreshTables(m.connId);
 }
 
 /** 多条写语句的撤销合成一份:后执行的先撤销;任一条不能撤销就整体不提供。没改到行的语句不参与。 */
