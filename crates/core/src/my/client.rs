@@ -52,6 +52,9 @@ async fn read_only_on(
     result
 }
 
+/// 建连(含 TLS 握手与认证)最多等多久。
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 fn connerr(e: impl std::fmt::Display) -> AppError {
     AppError::new(
         ErrorKind::Connection,
@@ -130,7 +133,9 @@ fn opts(target: &Target, user: &str, pass: &str, db: &str, ssl: Option<SslOpts>)
         .tcp_port(target.port)
         .user(Some(user.to_string()))
         .db_name(Some(db.to_string()))
-        .ssl_opts(ssl);
+        .ssl_opts(ssl)
+        // 空闲连接每分钟探测一次:NAT / 防火墙悄悄断开的连接能尽早发现
+        .tcp_keepalive(Some(60_000u32));
     // 经隧道的 Unix 套接字(只有本用户能连):驱动直接连它
     if let Some(crate::ssh::Via::Socket(path)) = &target.via {
         b = b.socket(Some(path.display().to_string())).prefer_socket(true);
@@ -174,7 +179,13 @@ async fn open_pool(
     };
     for ssl in attempts {
         let pool = Pool::new(opts(target, user, pass, db, ssl));
-        match pool.get_conn().await {
+        // 主机不可达时不等系统的 TCP 超时(约 75 秒)
+        // 超时说明主机不可达,不再换明文重试
+        let Ok(conn) = tokio::time::timeout(CONNECT_TIMEOUT, pool.get_conn()).await else {
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(1), pool.disconnect()).await;
+            return Err(connerr(t!("core.err.connect_timeout")));
+        };
+        match conn {
             Ok(conn) => {
                 drop(conn);
                 return Ok(pool);

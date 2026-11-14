@@ -122,7 +122,22 @@ pub fn apply_target(cfg: &mut Config, target: &Target) {
 /// 按目标建一条连接:直连 / 本地端口走 `Config::connect`;经 SSH 通道时在通道上 `connect_raw`
 /// (TLS 照常按数据库原主机名校验)。连接的驱动任务在后台跑,Client 丢弃即断开。
 async fn dial(cfg: &Config, target: &Target, ssl: SslMode) -> Result<Client, String> {
+    // 主机不可达时不等系统的 TCP 超时(约 75 秒);经 SSH 通道的握手同样受限
+    match tokio::time::timeout(CONNECT_TIMEOUT, dial_inner(cfg, target, ssl)).await {
+        Ok(r) => r,
+        Err(_) => Err(t!("core.err.connect_timeout").to_string()),
+    }
+}
+
+/// 建连(含 TLS 握手与认证)最多等多久。
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+async fn dial_inner(cfg: &Config, target: &Target, ssl: SslMode) -> Result<Client, String> {
     use tokio_postgres::tls::MakeTlsConnect;
+    // 空闲连接每分钟探测一次:NAT / 防火墙悄悄断开的连接能尽早发现
+    let mut cfg = cfg.clone();
+    cfg.keepalives(true).keepalives_idle(std::time::Duration::from_secs(60));
+    let cfg = &cfg;
     if let Some(stream) = target.open_stream().await {
         let stream = stream.map_err(|e| e.display())?;
         let mut make = tls_connector(ssl);
