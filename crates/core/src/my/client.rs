@@ -5,42 +5,51 @@ use crate::ssh::Target;
 use mysql_async::prelude::Queryable;
 use mysql_async::{Opts, OptsBuilder, Pool, Row, SslOpts, TxOpts, Value};
 use rust_i18n::t;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// 每个连接一条固定的会话(编辑器的语句、影响预估、撤销快照、AI 查询都在这里),
+/// 这样 BEGIN 之后的语句仍在同一个事务里,SET 的会话变量、临时表也都有效;
+/// 元数据、诊断走连接池,不排在会话上的长查询后面。
+#[derive(Default)]
+struct Session {
+    conn: Arc<Mutex<Option<mysql_async::Conn>>>,
+    /// 会话连接的服务器线程号(「停止」时 KILL QUERY 它,不用拿会话锁)
+    thread: std::sync::atomic::AtomicU32,
+}
 
 #[derive(Default)]
 pub struct MyPool {
     pools: Mutex<HashMap<String, Pool>>,
-    /// 各连接上正在执行编辑器语句的服务器线程号(连接池里每次取到的连接不同),
-    /// 「停止」时对它们 `KILL QUERY`
-    running: Arc<std::sync::Mutex<HashMap<String, HashSet<u32>>>>,
+    sessions: std::sync::Mutex<HashMap<String, Arc<Session>>>,
 }
 
-/// 登记一条正在执行编辑器语句的线程号,离开作用域(含出错、被丢弃)时注销。
-struct Running {
-    map: Arc<std::sync::Mutex<HashMap<String, HashSet<u32>>>>,
-    id: String,
-    thread: u32,
-}
-
-impl Running {
-    fn new(pool: &MyPool, id: &str, thread: u32) -> Self {
-        pool.running.lock().unwrap().entry(id.to_string()).or_default().insert(thread);
-        Running { map: pool.running.clone(), id: id.to_string(), thread }
+/// 在给定连接上只读执行。`guard`:切成只读会话,由服务器拒绝写入(事务进行中时做不到,传 false)。
+/// 结束后恢复读写(含 `SET TRANSACTION` 留下的「下一个事务只读」),否则这条连接之后一直只读。
+async fn read_only_on(
+    conn: &mut mysql_async::Conn,
+    sql: &str,
+    max_rows: Option<u32>,
+    timeout_ms: Option<u32>,
+    guard: bool,
+) -> AppResult<QueryResult> {
+    if guard {
+        conn.query_drop("SET SESSION TRANSACTION READ ONLY").await.map_err(qerr)?;
     }
-}
-
-impl Drop for Running {
-    fn drop(&mut self) {
-        let mut map = self.map.lock().unwrap();
-        if let Some(set) = map.get_mut(&self.id) {
-            set.remove(&self.thread);
-            if set.is_empty() {
-                map.remove(&self.id);
-            }
-        }
+    let limited = match timeout_ms {
+        Some(ms) => conn.query_drop(format!("SET SESSION max_execution_time = {ms}")).await.is_ok(),
+        None => false,
+    };
+    let result = MyPool::run_capped(conn, sql, max_rows).await;
+    if limited {
+        conn.query_drop("SET SESSION max_execution_time = DEFAULT").await.map_err(qerr)?;
     }
+    if guard {
+        conn.query_drop("SET SESSION TRANSACTION READ WRITE").await.map_err(qerr)?;
+        conn.query_drop("SET TRANSACTION READ WRITE").await.map_err(qerr)?;
+    }
+    result
 }
 
 fn connerr(e: impl std::fmt::Display) -> AppError {
@@ -239,26 +248,57 @@ impl MyPool {
     /// 断开并移除连接池(不存在时静默):先移出映射再优雅关闭,
     /// 服务器侧会话随之结束 —— 删库前强制断开残留连接用。
     pub async fn disconnect(&self, id: &str) {
+        let session = self.sessions.lock().unwrap().remove(id);
+        if let Some(session) = session {
+            // 等手上的语句结束;会话连接随之关闭(不归还连接池,池马上也要断开)
+            if let Some(conn) = session.conn.lock().await.take() {
+                let _ = conn.disconnect().await;
+            }
+        }
         let pool = self.pools.lock().await.remove(id);
         if let Some(p) = pool {
             let _ = p.disconnect().await;
         }
     }
 
-    /// 执行任意 SQL,值统一转为文本。
-    /// 只读执行:连接池里每次取到的连接可能不同,会话级只读设置必须和语句在同一条连接上,
-    /// 并且归还连接前恢复读写,否则池里的这条连接会一直只读。
+    /// 取出该连接的会话(没有或已断开就从连接池取一条),返回时持有会话锁。
+    async fn session(&self, id: &str) -> AppResult<tokio::sync::OwnedMutexGuard<Option<mysql_async::Conn>>> {
+        let pool = self.pool(id).await?;
+        let session = self.sessions.lock().unwrap().entry(id.to_string()).or_default().clone();
+        let mut guard = session.conn.clone().lock_owned().await;
+        if guard.is_none() {
+            let conn = pool.get_conn().await.map_err(qerr)?;
+            session.thread.store(conn.id(), std::sync::atomic::Ordering::Relaxed);
+            *guard = Some(conn);
+        }
+        Ok(guard)
+    }
+
+    /// 会话上的语句出错后:连接已断(服务器重启、网络中断、被 KILL)就丢掉,下次重新取。
+    async fn drop_if_dead(guard: &mut Option<mysql_async::Conn>) {
+        if let Some(conn) = guard.as_mut() {
+            if conn.ping().await.is_err() {
+                *guard = None;
+            }
+        }
+    }
+
+    /// 只读执行(会话上):免确认执行、影响预估、撤销快照、AI 查询。
     pub async fn query_read_only(
         &self,
         id: &str,
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        self.read_only(id, sql, max_rows, None, true).await
+        self.query_read_only_bounded(id, sql, max_rows, None).await
     }
 
     /// 同 [`Self::query_read_only`],`timeout_ms` 给定时由服务端限制 SELECT 的执行时长
     /// (MySQL 的 max_execution_time;MariaDB 没有这个变量,设置失败就不限时)。
+    ///
+    /// 会话不在事务里时,先切成只读会话再执行,由服务器拒绝写入。
+    /// 用户在编辑器里开着事务时,MySQL 不允许改当前事务的只读属性:直接在事务里执行
+    /// (看得到事务里未提交的改动),只读由调用方的静态检查保证(只交来只读语句)。
     pub async fn query_read_only_bounded(
         &self,
         id: &str,
@@ -266,48 +306,51 @@ impl MyPool {
         max_rows: Option<u32>,
         timeout_ms: Option<u32>,
     ) -> AppResult<QueryResult> {
-        self.read_only(id, sql, max_rows, timeout_ms, false).await
+        let mut guard = self.session(id).await?;
+        let conn = guard.as_mut().expect("会话已建立");
+        // 事务进行中时 SET TRANSACTION 报 1568;不在事务里则只作用于下一个事务(之后会恢复)
+        let in_txn = match conn.query_drop("SET TRANSACTION READ ONLY").await {
+            Ok(()) => false,
+            Err(mysql_async::Error::Server(e)) if e.code == 1568 => true,
+            Err(e) => {
+                let err = qerr(e);
+                Self::drop_if_dead(&mut guard).await;
+                return Err(err);
+            }
+        };
+        let result = read_only_on(conn, sql, max_rows, timeout_ms, !in_txn).await;
+        if result.is_err() {
+            Self::drop_if_dead(&mut guard).await;
+        }
+        result
     }
 
-    /// `stoppable`:编辑器发起的执行,登记线程号供「停止」取消。
-    async fn read_only(
+    /// 元数据 / 诊断的只读查询(连接池):不排在会话上的长查询后面,也不受会话里事务的影响。
+    pub async fn query_meta_read_only_bounded(
         &self,
         id: &str,
         sql: &str,
         max_rows: Option<u32>,
         timeout_ms: Option<u32>,
-        stoppable: bool,
     ) -> AppResult<QueryResult> {
         let pool = self.pool(id).await?;
         let mut conn = pool.get_conn().await.map_err(qerr)?;
-        let _running = stoppable.then(|| Running::new(self, id, conn.id()));
-        conn.query_drop("SET SESSION TRANSACTION READ ONLY")
-            .await
-            .map_err(qerr)?;
-        let limited = match timeout_ms {
-            Some(ms) => conn
-                .query_drop(format!("SET SESSION max_execution_time = {ms}"))
-                .await
-                .is_ok(),
-            None => false,
-        };
-        let result = Self::run_capped(&mut conn, sql, max_rows).await;
-        if limited {
-            conn.query_drop("SET SESSION max_execution_time = DEFAULT")
-                .await
-                .map_err(qerr)?;
-        }
-        conn.query_drop("SET SESSION TRANSACTION READ WRITE")
-            .await
-            .map_err(qerr)?;
-        result
+        read_only_on(&mut conn, sql, max_rows, timeout_ms, true).await
     }
 
+    /// 元数据查询(连接池):表清单、表结构等。
     pub async fn query(&self, id: &str, sql: &str) -> AppResult<QueryResult> {
-        self.query_capped(id, sql, None).await
+        self.query_pool(id, sql, None).await
     }
 
-    /// 同 query,但结果行数不超过 max_rows(None = 不限)。
+    /// 同 [`Self::query`],结果行数不超过 max_rows。
+    pub async fn query_pool(&self, id: &str, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
+        let pool = self.pool(id).await?;
+        let mut conn = pool.get_conn().await.map_err(qerr)?;
+        Self::run_capped(&mut conn, sql, max_rows).await
+    }
+
+    /// 在会话上执行(编辑器):结果行数不超过 max_rows(None = 不限)。
     /// 逐行流式读取:上限之内才转换存储,之后的行读完即丢(排空结果集保持协议干净、
     /// affected_rows 可靠),峰值内存 O(max_rows)。
     pub async fn query_capped(
@@ -316,29 +359,29 @@ impl MyPool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        let pool = self.pool(id).await?;
-        let mut conn = pool.get_conn().await.map_err(qerr)?;
-        let _running = Running::new(self, id, conn.id());
-        Self::run_capped(&mut conn, sql, max_rows).await
+        let mut guard = self.session(id).await?;
+        let result = Self::run_capped(guard.as_mut().expect("会话已建立"), sql, max_rows).await;
+        if result.is_err() {
+            Self::drop_if_dead(&mut guard).await;
+        }
+        result
     }
 
-    /// 停止编辑器在该连接上正在执行的语句:另取一条连接对它们 `KILL QUERY`(只中止语句,不断开连接)。
-    /// 返回是否有语句被取消。语句已经结束、线程号不在了时静默跳过。
+    /// 停止会话上正在执行的语句:另取一条连接 `KILL QUERY` 会话线程(只中止语句,不断开连接)。
+    /// 会话空闲时什么都不做,返回 false。
     pub async fn cancel(&self, id: &str) -> AppResult<bool> {
-        let threads: Vec<u32> = self.running.lock().unwrap().get(id).map(|s| s.iter().copied().collect()).unwrap_or_default();
-        if threads.is_empty() {
+        let Some(session) = self.sessions.lock().unwrap().get(id).cloned() else {
+            return Ok(false);
+        };
+        // 拿得到会话锁说明没有语句在执行
+        if session.conn.try_lock().is_ok() {
             return Ok(false);
         }
+        let thread = session.thread.load(std::sync::atomic::Ordering::Relaxed);
         let pool = self.pool(id).await?;
         let mut conn = pool.get_conn().await.map_err(qerr)?;
-        let mut any = false;
-        for t in threads {
-            // 1094 Unknown thread id:语句刚好结束、连接已关闭
-            if conn.query_drop(format!("KILL QUERY {t}")).await.is_ok() {
-                any = true;
-            }
-        }
-        Ok(any)
+        // 1094 Unknown thread id:语句刚好结束、连接已关闭
+        Ok(conn.query_drop(format!("KILL QUERY {thread}")).await.is_ok())
     }
 
     async fn run_capped(

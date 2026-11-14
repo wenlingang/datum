@@ -191,6 +191,7 @@ async fn read_only_timeout(
     let r = match kind {
         DbKind::Pg if meta => state.pg_pool.query_meta_read_only(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
+        DbKind::Mysql if meta => state.my_pool.query_meta_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Sqlite => {
             let (id, sql) = (id.to_string(), sql.to_string());
@@ -222,6 +223,7 @@ pub async fn query_meta(
 ) -> AppResult<QueryResult> {
     match kind {
         DbKind::Pg => state.pg_pool.query_meta(id, sql, max_rows).await,
+        DbKind::Mysql => state.my_pool.query_pool(id, sql, max_rows).await,
         _ => query(state, kind, id, sql, max_rows).await,
     }
 }
