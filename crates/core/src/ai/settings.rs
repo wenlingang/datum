@@ -195,22 +195,11 @@ impl AiSettingsRepo {
     }
 
     pub fn save(&self, settings: &AiSettings) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| t!("ai.err.create_config_dir", error = e).to_string())?;
-        }
         let json = serde_json::to_vec_pretty(settings)
             .map_err(|e| t!("ai.err.serialize", error = e).to_string())?;
-        std::fs::write(&self.path, json)
-            .map_err(|e| t!("ai.err.write_config", error = e).to_string())?;
-        // api_key 是明文,收紧到仅本用户可读。
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600))
-                .map_err(|e| t!("ai.err.set_permissions", error = e).to_string())?;
-        }
-        Ok(())
+        // api_key 是明文:仅本用户可读写
+        crate::core::fsutil::write_private(&self.path, &json)
+            .map_err(|e| t!("ai.err.write_config", error = e).to_string())
     }
 }
 

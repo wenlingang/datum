@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 
 /// 历史上限:超出后丢最旧的。
 pub const MAX_ENTRIES: usize = 200;
+/// 单条 SQL 超过这个长度(字节)不进历史:大脚本反复执行会让每次整份重写的历史文件越来越大;
+/// 截断后的 SQL 再次执行会出错,所以不记而不是截断。
+pub const MAX_SQL_BYTES: usize = 64 * 1024;
 
 /// kind 存 String 而非 DbKind 枚举:历史文件里出现未知 kind 时不至于整个文件解析失败。
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -52,6 +55,9 @@ impl HistoryRepo {
     /// 返回截断后的完整列表。
     pub fn append(&self, entry: HistoryEntry) -> AppResult<Vec<HistoryEntry>> {
         let mut entries = self.load();
+        if entry.sql.len() > MAX_SQL_BYTES {
+            return Ok(entries);
+        }
         match entries.first_mut() {
             Some(head) if head.sql == entry.sql && head.conn_id == entry.conn_id => {
                 head.executed_at = entry.executed_at;
@@ -85,32 +91,16 @@ impl HistoryRepo {
     }
 
     fn save(&self, entries: &[HistoryEntry]) -> AppResult<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                AppError::new(ErrorKind::Config, t!("core.err.create_config_dir_failed"))
-                    .with_detail(e.to_string())
-            })?;
-        }
-        let json = serde_json::to_vec_pretty(entries).map_err(|e| {
+        // 紧凑 JSON:每执行一条都要整份重写,文件越小越快
+        let json = serde_json::to_vec(entries).map_err(|e| {
             AppError::new(ErrorKind::Config, t!("core.err.serialize_history_failed"))
                 .with_detail(e.to_string())
         })?;
-        std::fs::write(&self.path, json).map_err(|e| {
+        // SQL 文本可能含敏感字面量:仅本用户可读写
+        crate::core::fsutil::write_private(&self.path, &json).map_err(|e| {
             AppError::new(ErrorKind::Config, t!("core.err.write_history_failed"))
                 .with_detail(e.to_string())
-        })?;
-        // SQL 文本可能含敏感字面量,收紧到仅本用户可读。
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600)).map_err(
-                |e| {
-                    AppError::new(ErrorKind::Config, t!("core.err.set_permissions_failed"))
-                        .with_detail(e.to_string())
-                },
-            )?;
-        }
-        Ok(())
+        })
     }
 }
 
@@ -161,6 +151,17 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].id, "b");
         assert_eq!(repo.load(), list);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn oversized_sql_is_not_recorded() {
+        let (dir, repo) = temp_repo("big");
+        repo.append(entry("a", "select 1", "c1")).unwrap();
+        let big = format!("select '{}'", "x".repeat(MAX_SQL_BYTES));
+        let list = repo.append(entry("b", &big, "c1")).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(repo.load()[0].id, "a");
         std::fs::remove_dir_all(&dir).ok();
     }
 

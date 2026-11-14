@@ -24,7 +24,11 @@ impl ConnectionRepo {
                 .with_detail(e.to_string())
         })?;
         // 旧版本写出的文件可能是 0644:读取时顺手收紧(失败不影响读取)
-        let _ = self.restrict_permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600));
+        }
         serde_json::from_slice(&bytes).map_err(|e| {
             AppError::new(ErrorKind::Config, t!("core.err.parse_config_failed"))
                 .with_detail(e.to_string())
@@ -32,36 +36,15 @@ impl ConnectionRepo {
     }
 
     pub fn save(&self, conns: &[Connection]) -> AppResult<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                AppError::new(ErrorKind::Config, t!("core.err.create_config_dir_failed"))
-                    .with_detail(e.to_string())
-            })?;
-        }
         let json = serde_json::to_vec_pretty(conns).map_err(|e| {
             AppError::new(ErrorKind::Config, t!("core.err.serialize_config_failed"))
                 .with_detail(e.to_string())
         })?;
-        std::fs::write(&self.path, json).map_err(|e| {
+        // local 环境的连接密码明文存在这个文件里:仅本用户可读写
+        crate::core::fsutil::write_private(&self.path, &json).map_err(|e| {
             AppError::new(ErrorKind::Config, t!("core.err.write_config_failed"))
                 .with_detail(e.to_string())
-        })?;
-        self.restrict_permissions()
-    }
-
-    /// local 环境的连接密码明文存在这个文件里,收紧到仅本用户可读写。
-    fn restrict_permissions(&self) -> AppResult<()> {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(0o600)).map_err(
-                |e| {
-                    AppError::new(ErrorKind::Config, t!("core.err.set_permissions_failed"))
-                        .with_detail(e.to_string())
-                },
-            )?;
-        }
-        Ok(())
+        })
     }
 }
 

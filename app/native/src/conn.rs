@@ -148,20 +148,10 @@ fn load_json(name: &str) -> JsonValue {
         .unwrap_or(JsonValue::Null)
 }
 
-/// 先写临时文件再改名:写到一半崩溃也不会留下坏文件。
+/// 里面有 SQL 与对话内容:仅本用户可读写;先写临时文件再改名,写到一半崩溃也不会留下坏文件。
 fn save_json(name: &str, value: &JsonValue) -> Result<(), String> {
-    let dir = state().config_dir.clone();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let tmp = dir.join(format!("{name}.tmp"));
     let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
-    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    // 里面有 SQL 与对话内容:只给本用户读写(与 ai_settings.json 一致)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
-    }
-    std::fs::rename(&tmp, dir.join(name)).map_err(|e| e.to_string())
+    datum_core::core::fsutil::write_private(&state().config_dir.join(name), &bytes).map_err(|e| e.to_string())
 }
 
 /// 表单参数建隧道的上下文:SSH 密钥取表单里填的,没填(null)则用已保存的。
