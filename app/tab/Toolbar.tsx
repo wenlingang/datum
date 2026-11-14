@@ -4,13 +4,13 @@
 import { signal, Text, View } from "nsh";
 import { Button, Popover } from "nsh/base";
 import { t } from "nsh/i18n";
-import { supportsSql } from "../lib/types";
+import { supportsCancel, supportsSql } from "../lib/types";
 import { MAX_ROWS_OPTIONS, maxRows, normalizeMaxRows, updatePrefs } from "../store/prefs";
 import { Btn, Icon, TextField, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { HistoryPanel } from "./History";
 import { SnippetPanel } from "./Snippets";
-import { beautify, explain, run, runAll, type TabModel } from "./model";
+import { beautify, explain, run, runAll, stop, type TabModel } from "./model";
 
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
 
@@ -107,6 +107,17 @@ export function Toolbar(props: { m: TabModel }) {
           </Popover>
         </If>
       </View>
+      <If when={m.running() && supportsCancel(m.dbKind)}>
+        <Btn
+          small
+          variant="outline"
+          testID="stop"
+          icon="square"
+          label={t("toolbar.stop")}
+          tooltip={t("toolbar.stop_tooltip")}
+          onPress={() => stop(m)}
+        />
+      </If>
       <If when={relational()}>
         <Btn
           small

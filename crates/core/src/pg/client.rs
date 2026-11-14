@@ -79,6 +79,9 @@ async fn column_type(
 /// 连接表只在查找时短暂加锁(同步锁、不跨 await),一条连接上的慢查询不挡别的连接。
 pub struct PgConn {
     session: Mutex<Client>,
+    /// 用户会话的服务器进程号:取消查询时在辅助会话上 `pg_cancel_backend` 它
+    /// (走已有的辅助会话,SSH 隧道与 TLS 下都一样可用)
+    session_pid: i32,
     aux: Mutex<Option<Client>>,
     config: Config,
     ssl: SslMode,
@@ -226,8 +229,10 @@ impl PgPool {
         let client = dial(config, target, ssl).await.map_err(|e| {
             AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
         })?;
+        let session_pid = backend_pid(&client).await?;
         let conn = PgConn {
             session: Mutex::new(client),
+            session_pid,
             aux: Mutex::new(None),
             config: config.clone(),
             ssl,
@@ -388,6 +393,18 @@ impl PgPool {
         run_read_only(&client, sql, max_rows, timeout_ms).await
     }
 
+    /// 取消用户会话上正在执行的语句(编辑器的「停止」)。返回服务器是否接受了取消请求;
+    /// 会话空闲时请求被忽略,不影响之后的语句。语句在用户开的事务里时,事务随之进入出错状态,
+    /// 与 psql 里按 Ctrl+C 一样需要用户 ROLLBACK。
+    pub async fn cancel(&self, id: &str) -> AppResult<bool> {
+        let conn = self.get(id)?;
+        let sql = format!("SELECT pg_cancel_backend({})", conn.session_pid);
+        let mut aux = conn.aux().await?;
+        let client = aux.as_mut().expect("aux 已建立");
+        let r = run_capped(client, &sql, Some(1)).await?;
+        Ok(r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_deref()) == Some("t"))
+    }
+
     /// 元数据查询(辅助会话):表清单、列与外键、诊断等。不受用户会话上的慢查询与事务影响。
     pub async fn query_meta(&self, id: &str, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
         let conn = self.get(id)?;
@@ -423,6 +440,16 @@ impl PgConn {
         }
         Ok(aux)
     }
+}
+
+async fn backend_pid(client: &Client) -> AppResult<i32> {
+    let r = run_capped(client, "SELECT pg_backend_pid()", Some(1)).await?;
+    r.rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_deref())
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")))
 }
 
 /// 会话当前是否处在事务块里(`BEGIN` 之后、提交 / 回滚之前)。

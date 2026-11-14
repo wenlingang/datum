@@ -30,6 +30,7 @@ import {
   type TableDetail,
   type UndoPrep,
   type WriteImpact,
+  supportsCancel,
   supportsSql,
 } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
@@ -531,6 +532,13 @@ function resetFilter(m: TabModel) {
     m.filterOpen.set(false);
     m.nlNote.set(null);
   });
+}
+
+/** 停止编辑器正在执行的语句:服务器端中止(PG / MySQL),被停的那次执行以「已取消」报错结束,
+ *  多语句执行随之停在这一条。只发请求,结果仍由原来的执行流程落到结果区。 */
+export function stop(m: TabModel) {
+  if (!m.running() || !supportsCancel(m.dbKind)) return;
+  db.cancelQuery(m.dbKind, m.connId).catch((e) => m.err.set(errorText(e)));
 }
 
 /** 运行编辑器里的 SQL(或 Redis 命令)。`override` 用于「插入并运行」「再次执行历史」。 */

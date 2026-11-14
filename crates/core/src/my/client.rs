@@ -5,12 +5,42 @@ use crate::ssh::Target;
 use mysql_async::prelude::Queryable;
 use mysql_async::{Opts, OptsBuilder, Pool, Row, SslOpts, TxOpts, Value};
 use rust_i18n::t;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub struct MyPool {
     pools: Mutex<HashMap<String, Pool>>,
+    /// 各连接上正在执行编辑器语句的服务器线程号(连接池里每次取到的连接不同),
+    /// 「停止」时对它们 `KILL QUERY`
+    running: Arc<std::sync::Mutex<HashMap<String, HashSet<u32>>>>,
+}
+
+/// 登记一条正在执行编辑器语句的线程号,离开作用域(含出错、被丢弃)时注销。
+struct Running {
+    map: Arc<std::sync::Mutex<HashMap<String, HashSet<u32>>>>,
+    id: String,
+    thread: u32,
+}
+
+impl Running {
+    fn new(pool: &MyPool, id: &str, thread: u32) -> Self {
+        pool.running.lock().unwrap().entry(id.to_string()).or_default().insert(thread);
+        Running { map: pool.running.clone(), id: id.to_string(), thread }
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let mut map = self.map.lock().unwrap();
+        if let Some(set) = map.get_mut(&self.id) {
+            set.remove(&self.thread);
+            if set.is_empty() {
+                map.remove(&self.id);
+            }
+        }
+    }
 }
 
 fn connerr(e: impl std::fmt::Display) -> AppError {
@@ -224,7 +254,7 @@ impl MyPool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        self.query_read_only_bounded(id, sql, max_rows, None).await
+        self.read_only(id, sql, max_rows, None, true).await
     }
 
     /// 同 [`Self::query_read_only`],`timeout_ms` 给定时由服务端限制 SELECT 的执行时长
@@ -236,8 +266,21 @@ impl MyPool {
         max_rows: Option<u32>,
         timeout_ms: Option<u32>,
     ) -> AppResult<QueryResult> {
+        self.read_only(id, sql, max_rows, timeout_ms, false).await
+    }
+
+    /// `stoppable`:编辑器发起的执行,登记线程号供「停止」取消。
+    async fn read_only(
+        &self,
+        id: &str,
+        sql: &str,
+        max_rows: Option<u32>,
+        timeout_ms: Option<u32>,
+        stoppable: bool,
+    ) -> AppResult<QueryResult> {
         let pool = self.pool(id).await?;
         let mut conn = pool.get_conn().await.map_err(qerr)?;
+        let _running = stoppable.then(|| Running::new(self, id, conn.id()));
         conn.query_drop("SET SESSION TRANSACTION READ ONLY")
             .await
             .map_err(qerr)?;
@@ -275,7 +318,27 @@ impl MyPool {
     ) -> AppResult<QueryResult> {
         let pool = self.pool(id).await?;
         let mut conn = pool.get_conn().await.map_err(qerr)?;
+        let _running = Running::new(self, id, conn.id());
         Self::run_capped(&mut conn, sql, max_rows).await
+    }
+
+    /// 停止编辑器在该连接上正在执行的语句:另取一条连接对它们 `KILL QUERY`(只中止语句,不断开连接)。
+    /// 返回是否有语句被取消。语句已经结束、线程号不在了时静默跳过。
+    pub async fn cancel(&self, id: &str) -> AppResult<bool> {
+        let threads: Vec<u32> = self.running.lock().unwrap().get(id).map(|s| s.iter().copied().collect()).unwrap_or_default();
+        if threads.is_empty() {
+            return Ok(false);
+        }
+        let pool = self.pool(id).await?;
+        let mut conn = pool.get_conn().await.map_err(qerr)?;
+        let mut any = false;
+        for t in threads {
+            // 1094 Unknown thread id:语句刚好结束、连接已关闭
+            if conn.query_drop(format!("KILL QUERY {t}")).await.is_ok() {
+                any = true;
+            }
+        }
+        Ok(any)
     }
 
     async fn run_capped(

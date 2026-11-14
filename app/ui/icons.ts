@@ -64,6 +64,7 @@ import search from "../assets/icons/search.svg";
 import send from "../assets/icons/send.svg";
 import settings from "../assets/icons/settings.svg";
 import sparkles from "../assets/icons/sparkles.svg";
+import square from "../assets/icons/square.svg";
 import squarePlay from "../assets/icons/square-play.svg";
 import stethoscope from "../assets/icons/stethoscope.svg";
 import sun from "../assets/icons/sun.svg";
@@ -144,6 +145,7 @@ export const ICONS = {
   "send": send,
   "settings": settings,
   "sparkles": sparkles,
+  "square": square,
   "square-play": squarePlay,
   "stethoscope": stethoscope,
   "sun": sun,

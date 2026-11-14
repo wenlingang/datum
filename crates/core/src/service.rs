@@ -217,6 +217,16 @@ pub async fn query_meta(
     }
 }
 
+/// 停止该连接上编辑器正在执行的语句(PG 取消用户会话上的语句;MySQL 对执行中的线程 KILL QUERY)。
+/// 返回是否发出了有效的取消。SQLite / Redis 暂不支持,返回 false。
+pub async fn cancel_query(state: &AppState, kind: &DbKind, id: &str) -> AppResult<bool> {
+    match kind {
+        DbKind::Pg => state.pg_pool.cancel(id).await,
+        DbKind::Mysql => state.my_pool.cancel(id).await,
+        _ => Ok(false),
+    }
+}
+
 /// 预估一条写语句的影响范围:改写成只读的 COUNT 与预览查询,在数据库强制只读的会话里执行。
 /// 改写不了的语句(一次改多张表、数据修改 CTE、INSERT 等)返回 None。
 pub async fn write_impact(state: &AppState, kind: &DbKind, id: &str, stmt: &str) -> AppResult<Option<WriteImpact>> {

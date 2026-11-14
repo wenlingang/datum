@@ -83,6 +83,15 @@ impl Db {
             .and_then(json)
     }
 
+    /// 停止该连接上编辑器正在执行的语句(PG / MySQL;其他类型返回 false)。
+    /// 返回是否发出了有效的取消;被停的那次执行会以服务器的「已取消」报错结束。
+    pub async fn cancel_query(kind: String, id: String) -> Result<bool, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::cancel_query(&state(), &k, &id).await })
+            .await?
+            .map_err(err)
+    }
+
     /// 预估一条写语句的影响范围(只读执行改写后的 COUNT 与预览):
     /// `{ count, wholeTable, columns, rows }`;改写不了的语句返回 null。
     pub async fn write_impact(kind: String, id: String, sql: String) -> Result<JsonValue, String> {

@@ -124,6 +124,7 @@ if [ -n "${DATUM_TEST_MYSQL:-}" ] && want mysql; then
     SET foreign_key_checks = 0;
     ALTER TABLE legacy_users MODIFY user_name VARCHAR(40) CHARACTER SET utf8mb3 NOT NULL;" >/dev/null
   run mysql-charset "$D" tab/charset-mysql.test.tsx
+  run mysql-stop "$D" tab/stop.test.tsx
   kill $SLEEPER 2>/dev/null; wait $SLEEPER 2>/dev/null || true
   kill_sleepers
   $M -e "DROP DATABASE IF EXISTS datum_ui_test" >/dev/null
@@ -154,6 +155,7 @@ SQL
   printf '[{"id":"pg","name":"pg","kind":"pg","env":"local","host":"127.0.0.1","port":%s,"user":"postgres","database":"datum_ui_test","plaintextPassword":"","sslMode":"disable"}]\n' "$DATUM_TEST_PG" > "$D/connections.json"
   run pg "$D" tab/diag-pg.test.tsx
   run pg-jsonb "$D" tab/jsonb-pg.test.tsx
+  run pg-stop "$D" tab/stop.test.tsx
   $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 

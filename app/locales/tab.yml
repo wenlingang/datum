@@ -146,6 +146,14 @@ toolbar:
     en: "Run (limit %{n})"
     zh-CN: "运行 (limit %{n})"
     zh-TW: "執行 (limit %{n})"
+  stop:
+    en: "Stop"
+    zh-CN: "停止"
+    zh-TW: "停止"
+  stop_tooltip:
+    en: "Abort the running statement on the server"
+    zh-CN: "在服务器端中止正在执行的语句"
+    zh-TW: "在伺服器端中止正在執行的語句"
   run_tooltip:
     en: "Run (⌘↵)"
     zh-CN: "运行 (⌘↵)"

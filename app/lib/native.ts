@@ -84,6 +84,8 @@ export const db = {
     (await Db.query(kind, id, sql, maxRows)) as QueryResult,
   queryReadOnly: async (kind: DbKind, id: string, sql: string, maxRows: number | null) =>
     (await Db.queryReadOnly(kind, id, sql, maxRows)) as QueryResult,
+  /** 停止该连接上编辑器正在执行的语句(PG / MySQL);返回是否发出了有效的取消 */
+  cancelQuery: (kind: DbKind, id: string) => Db.cancelQuery(kind, id) as Promise<boolean>,
   /** 执行写语句前的撤销准备(抓快照、生成反向语句) */
   undoPrepare: async (kind: DbKind, id: string, sql: string) => (await Db.undoPrepare(kind, id, sql)) as UndoPrep,
   /** 写语句的影响范围预估;改写不了的语句为 null */
