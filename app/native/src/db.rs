@@ -51,6 +51,15 @@ impl Db {
             .and_then(json)
     }
 
+    /// 补全用的整库结构,一次取齐:`{ columns: { 表名: [{ name, dataType }] }, foreignKeys }`。
+    pub async fn completion_schema(kind: String, id: String) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        spawn(async move { service::completion_schema(&state(), &k, &id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// 整库的列信息:`{ 表名: [{ name, dataType }] }`(补全与 AI 上下文)。
     pub async fn fetch_columns(kind: String, id: String) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;

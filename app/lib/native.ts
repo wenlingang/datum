@@ -80,6 +80,9 @@ export const db = {
   listObjects: async (kind: DbKind, id: string) => (await Db.listObjects(kind, id)) as string[],
   listDatabases: async (kind: DbKind, id: string) => (await Db.listDatabases(kind, id)) as string[],
   fetchColumns: async (kind: DbKind, id: string) => (await Db.fetchColumns(kind, id)) as ColumnsByTable,
+  /** 补全用的整库结构:列与外键一次取齐(列只查一遍) */
+  completionSchema: async (kind: DbKind, id: string) =>
+    (await Db.completionSchema(kind, id)) as { columns: ColumnsByTable; foreignKeys: ForeignKey[] },
   query: async (kind: DbKind, id: string, sql: string, maxRows: number | null) =>
     (await Db.query(kind, id, sql, maxRows)) as QueryResult,
   queryReadOnly: async (kind: DbKind, id: string, sql: string, maxRows: number | null) =>

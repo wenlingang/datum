@@ -543,11 +543,35 @@ pub async fn fetch_erd_schema(state: &AppState, kind: &DbKind, id: &str) -> AppR
 
 /// 补全用的外键:物理外键 + 按命名约定推断的逻辑外键(物理外键已覆盖的列不再推断)。
 pub async fn foreign_keys(state: &AppState, kind: &DbKind, id: &str) -> AppResult<Vec<schema::ForeignKey>> {
-    let erd = fetch_erd_schema(state, kind, id).await?;
     let columns = fetch_columns(state, kind, id).await?;
+    foreign_keys_with(state, kind, id, &columns).await
+}
+
+/// 整库列速览 + 补全用的外键,一次取齐(列信息只查一遍,外键推断复用它)。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionSchema {
+    pub columns: ColumnsByTable,
+    pub foreign_keys: Vec<schema::ForeignKey>,
+}
+
+pub async fn completion_schema(state: &AppState, kind: &DbKind, id: &str) -> AppResult<CompletionSchema> {
+    let columns = fetch_columns(state, kind, id).await?;
+    // 外键查不出来(权限、老版本)不影响列信息
+    let foreign_keys = foreign_keys_with(state, kind, id, &columns).await.unwrap_or_default();
+    Ok(CompletionSchema { columns, foreign_keys })
+}
+
+async fn foreign_keys_with(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    columns: &ColumnsByTable,
+) -> AppResult<Vec<schema::ForeignKey>> {
+    let erd = fetch_erd_schema(state, kind, id).await?;
     let tables: Vec<String> = columns.keys().cloned().collect();
     let mut fks = erd.fks;
-    let inferred = crate::erd::infer_foreign_keys(&tables, &columns, &fks);
+    let inferred = crate::erd::infer_foreign_keys(&tables, columns, &fks);
     fks.extend(inferred);
     Ok(fks)
 }

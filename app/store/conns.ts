@@ -77,11 +77,13 @@ export async function loadTables(id: string): Promise<string[]> {
     setKey(connected, id, true);
   });
   if (supportsSql(conn.kind)) {
-    db.fetchColumns(conn.kind, id)
-      .then((cols) => setKey(columns, id, cols))
-      .catch(() => {});
-    db.foreignKeys(conn.kind, id)
-      .then((fks) => setKey(foreignKeys, id, fks))
+    db.completionSchema(conn.kind, id)
+      .then((s) =>
+        batch(() => {
+          setKey(columns, id, s.columns);
+          setKey(foreignKeys, id, s.foreignKeys);
+        }),
+      )
       .catch(() => {});
   }
   return list;

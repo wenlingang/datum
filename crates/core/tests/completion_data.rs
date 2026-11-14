@@ -71,6 +71,10 @@ async fn check(st: &AppState, kind: DbKind, id: &str) {
     let inf = fks.iter().find(|f| f.table == "notes").unwrap();
     assert_eq!((inf.column.as_str(), inf.ref_table.as_str(), inf.inferred), ("order_id", "orders", true));
     assert_eq!(fks.iter().filter(|f| f.table == "orders").count(), 1, "物理外键覆盖的列不再推断");
+    // 一次取齐的补全结构:与分开取的列、外键一致
+    let both = service::completion_schema(st, &kind, id).await.unwrap();
+    assert_eq!(both.foreign_keys, fks);
+    assert_eq!(both.columns, service::fetch_columns(st, &kind, id).await.unwrap());
 
     let mut v = service::distinct_values(st, &kind, id, "users", "status", "varchar").await.unwrap().unwrap();
     v.sort();
