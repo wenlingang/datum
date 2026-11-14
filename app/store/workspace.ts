@@ -20,6 +20,8 @@ export type TabKind =
   | "redis"
   /** Redis 实时:Pub/Sub 订阅与发布、MONITOR(专用连接) */
   | "rlive"
+  /** Redis Lua 脚本:编辑、KEYS / ARGV、EVAL(专用连接)、SCRIPT KILL */
+  | "rlua"
   /** 关系库诊断(PG / MySQL / SQLite):会话、锁等待、长事务、慢 SQL、索引与空间 */
   | "diag"
   /** 表结构对比:本连接(源)对比另一个同类型的库(目标),生成迁移脚本 */

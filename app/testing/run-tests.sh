@@ -150,11 +150,12 @@ SQL
   $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 
-# Redis 分析(多级前缀、删除大 key、集群逐节点扫描)与实时(Pub/Sub、MONITOR):DATUM_TEST_REDIS=单机端口(会清空库 0,只用测试实例);
+# Redis 分析(多级前缀、删除大 key、集群逐节点扫描)、实时(Pub/Sub、MONITOR)与 Lua 脚本:DATUM_TEST_REDIS=单机端口(会清空库 0,只用测试实例;
+# Lua 脚本用库 11,其中有只读死循环脚本,结束时会 SCRIPT KILL 掉);
 # DATUM_TEST_REDIS_CLUSTER=三主节点集群的首个端口(各节点端口依次 +1,宣告地址 127.0.0.1)
 if { [ -n "${DATUM_TEST_REDIS:-}" ] || [ -n "${DATUM_TEST_REDIS_CLUSTER:-}" ]; } && want redis; then
   D="$ROOT/redis"; mkdir -p "$D"
-  rconn() { printf '{"id":"%s","name":"%s","kind":"redis","env":"local","host":"127.0.0.1","port":%s,"user":"","database":"0","plaintextPassword":"","sslMode":"disable"}' "$1" "$2" "$3"; }
+  rconn() { printf '{"id":"%s","name":"%s","kind":"redis","env":"local","host":"127.0.0.1","port":%s,"user":"","database":"%s","plaintextPassword":"","sslMode":"disable"}' "$1" "$2" "$3" "${4:-0}"; }
   LIST=""
   [ -n "${DATUM_TEST_REDIS:-}" ] && LIST="$(rconn rs redis-single "$DATUM_TEST_REDIS")"
   if [ -n "${DATUM_TEST_REDIS_CLUSTER:-}" ]; then
@@ -164,6 +165,11 @@ if { [ -n "${DATUM_TEST_REDIS:-}" ] || [ -n "${DATUM_TEST_REDIS_CLUSTER:-}" ]; }
   printf '[%s]\n' "$LIST" > "$D/connections.json"
   run redis "$D" tab/redis-insight.test.tsx
   run redis-live "$D" tab/redis-live.test.tsx
+  if [ -n "${DATUM_TEST_REDIS:-}" ]; then
+    D="$ROOT/redis-lua"; mkdir -p "$D"
+    printf '[%s]\n' "$(rconn rl redis-lua "$DATUM_TEST_REDIS" 11)" > "$D/connections.json"
+    run redis-lua "$D" tab/redis-lua.test.tsx
+  fi
 fi
 
 if want chat; then

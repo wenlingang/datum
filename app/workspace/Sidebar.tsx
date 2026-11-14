@@ -9,7 +9,7 @@ import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables, refreshTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { openDiagnostics, openRedisInsight, openRedisLive, openSchemaDiff, openTable } from "../tab";
+import { openDiagnostics, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
 import { NewKeyDialog } from "../tab/RedisKeyEditor";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
@@ -228,6 +228,11 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
             icon="radio"
             tooltip={t("workspace.redis_live")}
             onPress={() => openRedisLive(conn().id)}
+          />
+          <IconButton
+            icon="code-xml"
+            tooltip={t("workspace.redis_lua")}
+            onPress={() => openRedisLua(conn().id)}
           />
           <NewKeyDialog
             connId={conn().id}

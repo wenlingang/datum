@@ -9,6 +9,7 @@ import { store } from "../lib/native";
 import { isSupportedKind, supportsSql } from "../lib/types";
 import { activate, conns, loadTables } from "../store/conns";
 import { activeTabIds, newTabId, restoreTabs, type TabKind, type WorkTab, workspace } from "../store/workspace";
+import { createLuaModel, luaModelOf } from "./luaModel";
 import { createModel, modelOf, setSql } from "./model";
 
 /** 写盘前等多久(连续输入只写最后一次)。 */
@@ -22,6 +23,8 @@ interface SessionTab {
   table: string | null;
   title: string;
   sql?: string;
+  /** Lua 脚本标签页:脚本与上次填的 KEYS / ARGV */
+  lua?: { script: string; keys: string[]; args: string[] };
 }
 
 interface Session {
@@ -45,12 +48,14 @@ function snapshot(): Session {
     tabs: list.map((tab) => {
       const m = modelOf(tab);
       const sql = tab.kind === "query" && m ? m.sql() : undefined;
+      const lm = tab.kind === "rlua" ? luaModelOf(tab) : undefined;
       return {
         kind: tab.kind,
         connId: tab.connId,
         table: tab.table,
         title: tab.title(),
         ...(sql !== undefined ? { sql: sql.slice(0, MAX_SQL_CHARS) } : {}),
+        ...(lm ? { lua: { script: lm.script().slice(0, MAX_SQL_CHARS), keys: lm.keys(), args: lm.args() } } : {}),
       };
     }),
     active,
@@ -80,6 +85,20 @@ function rebuild(s: SessionTab): WorkTab | null {
       return supportsSql(conn.kind) ? { ...base, title: signal(t("diag.title")), state: null } : null;
     case "redis":
       return conn.kind === "redis" ? { ...base, title: signal(t("rinsight.title")), state: null } : null;
+    case "rlua": {
+      if (conn.kind !== "redis") return null;
+      const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+      const lua = s.lua;
+      return {
+        ...base,
+        table: null,
+        state: createLuaModel(conn.id, {
+          script: typeof lua?.script === "string" ? lua.script : "",
+          keys: strs(lua?.keys),
+          args: strs(lua?.args),
+        }),
+      };
+    }
     case "erd":
       return supportsSql(conn.kind) ? { ...base, title: signal(t("erd.title")), state: null } : null;
     default:

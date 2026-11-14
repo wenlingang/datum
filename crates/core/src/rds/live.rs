@@ -96,6 +96,40 @@ pub enum Frame {
     Int(i64),
     Bulk(Option<Bytes>),
     Array(Option<Vec<Frame>>),
+    /// 数组里没保留下来的元素个数(超出每层保留数 / 整帧节点预算 / 嵌套层数时读走丢掉),
+    /// 作为该数组的最后一项出现。只是标记,不是服务器发来的值。
+    Skipped(usize),
+}
+
+/// 读取一个顶层帧的上限。Pub/Sub 用 [`FrameLimits::default`];Lua 脚本的结果另有一套(见 `lua.rs`)。
+#[derive(Debug, Clone, Copy)]
+pub struct FrameLimits {
+    /// 单个字符串(simple / bulk)最多保留的字节数
+    pub cap: usize,
+    /// 整帧共享的字节预算在 `cap` 之外多留的余量:整帧最多保留 `cap + slack` 字节
+    pub slack: usize,
+    /// 每个数组最多保留的元素数
+    pub kept: usize,
+    /// 整帧最多保留的节点数(所有层合计):只限每层元素数不够,保留量会按层相乘
+    pub nodes: usize,
+    /// 保留的嵌套层数
+    pub depth: usize,
+    /// 超过 `depth` 的数组:`true` 读走丢掉(记为 [`Frame::Skipped`]),`false` 当作协议错误
+    pub skip_deep: bool,
+}
+
+impl Default for FrameLimits {
+    fn default() -> Self {
+        Self {
+            cap: MAX_STORED_BYTES,
+            slack: FRAME_SLACK,
+            kept: MAX_ARRAY_KEPT,
+            // 每层都保留满时的节点数(16 + 16² + 16³),Pub/Sub 推送实际只有几个
+            nodes: 1 << 13,
+            depth: MAX_DEPTH,
+            skip_deep: false,
+        }
+    }
 }
 
 fn bad(msg: impl Into<String>) -> io::Error {
@@ -106,13 +140,20 @@ fn bad(msg: impl Into<String>) -> io::Error {
 pub struct FrameReader<R> {
     r: BufReader<R>,
     cap: usize,
-    /// 当前顶层帧还能保留的字节数(每次 `read` 重置为 `cap + FRAME_SLACK`)。
+    limits: FrameLimits,
+    /// 当前顶层帧还能保留的字节数(每次 `read` 重置为 `cap + slack`)。
     budget: usize,
+    /// 当前顶层帧还能保留的节点数(每次 `read` 重置)。
+    nodes: usize,
 }
 
 impl<R: AsyncRead + Unpin + Send> FrameReader<R> {
     pub fn new(r: R, cap: usize) -> Self {
-        Self { r: BufReader::new(r), cap, budget: 0 }
+        Self::with_limits(r, FrameLimits { cap, ..FrameLimits::default() })
+    }
+
+    pub fn with_limits(r: R, limits: FrameLimits) -> Self {
+        Self { r: BufReader::new(r), cap: limits.cap, limits, budget: 0, nodes: 0 }
     }
 
     /// 读一行(到 `\n`),去掉行尾 `\r\n`,最多保留 `cap` 字节;`len` 为去掉行尾后的原长。
@@ -167,8 +208,46 @@ impl<R: AsyncRead + Unpin + Send> FrameReader<R> {
     }
 
     pub async fn read(&mut self) -> io::Result<Frame> {
-        self.budget = self.cap.saturating_add(FRAME_SLACK);
+        self.budget = self.cap.saturating_add(self.limits.slack);
+        self.nodes = self.limits.nodes;
         self.frame(0).await
+    }
+
+    /// 读走 `count` 个元素(及其嵌套的全部内容)丢掉,什么都不保留。用计数代替递归:
+    /// 再深的嵌套也只占一个计数器。只做协议层面的合法性检查(类型行长度、bulk / 数组长度)。
+    async fn skip_items(&mut self, count: u64) -> io::Result<()> {
+        let mut pending = count;
+        while pending > 0 {
+            pending -= 1;
+            match self.r.read_u8().await? {
+                b'+' | b'-' => {
+                    self.line(0).await?;
+                }
+                b':' => {
+                    self.header_num().await?;
+                }
+                b'$' => {
+                    let n = self.header_num().await?;
+                    if n >= 0 {
+                        if n as usize > MAX_BULK_LEN {
+                            return Err(bad("RESP bulk too long"));
+                        }
+                        self.skip(n as u64 + 2).await?;
+                    }
+                }
+                b'*' => {
+                    let n = self.header_num().await?;
+                    if n > 0 {
+                        if n as usize > MAX_ARRAY_LEN {
+                            return Err(bad("RESP array too long"));
+                        }
+                        pending = pending.saturating_add(n as u64);
+                    }
+                }
+                other => return Err(bad(format!("unexpected RESP type byte {other:#04x}"))),
+            }
+        }
+        Ok(())
     }
 
     /// 从本帧预算里扣出最多 `want` 字节的保留额度。
@@ -189,7 +268,13 @@ impl<R: AsyncRead + Unpin + Send> FrameReader<R> {
                     self.budget += keep - l.data.len();
                     Ok(Frame::Simple(l))
                 }
-                b'-' => Ok(Frame::Error(self.line(MAX_ERROR).await?.text())),
+                b'-' => {
+                    // 错误文本同样从整帧预算里扣:数组里可以有成千上万个错误回复
+                    let keep = MAX_ERROR.min(self.budget);
+                    let l = self.line(keep).await?;
+                    self.budget -= l.data.len();
+                    Ok(Frame::Error(l.text()))
+                }
                 b':' => Ok(Frame::Int(self.header_num().await?)),
                 b'$' => {
                     let n = self.header_num().await?;
@@ -212,15 +297,29 @@ impl<R: AsyncRead + Unpin + Send> FrameReader<R> {
                     if n < 0 {
                         return Ok(Frame::Array(None));
                     }
-                    if depth >= MAX_DEPTH || n as usize > MAX_ARRAY_LEN {
-                        return Err(bad("RESP array too deep or too long"));
+                    let n = n as usize;
+                    if n > MAX_ARRAY_LEN {
+                        return Err(bad("RESP array too long"));
                     }
-                    let mut items = Vec::with_capacity((n as usize).min(MAX_ARRAY_KEPT));
-                    for i in 0..n as usize {
-                        let f = self.frame(depth + 1).await?;
-                        if i < MAX_ARRAY_KEPT {
-                            items.push(f);
+                    if depth >= self.limits.depth {
+                        if !self.limits.skip_deep {
+                            return Err(bad("RESP array too deep"));
                         }
+                        self.skip_items(n as u64).await?;
+                        return Ok(Frame::Array(Some(if n > 0 { vec![Frame::Skipped(n)] } else { vec![] })));
+                    }
+                    let mut items = Vec::with_capacity(n.min(self.limits.kept).min(self.nodes));
+                    let mut i = 0;
+                    while i < n {
+                        if i >= self.limits.kept || self.nodes == 0 {
+                            // 剩下的读走丢掉:不再递归解析,也就不再占内存
+                            self.skip_items((n - i) as u64).await?;
+                            items.push(Frame::Skipped(n - i));
+                            break;
+                        }
+                        self.nodes -= 1;
+                        items.push(self.frame(depth + 1).await?);
+                        i += 1;
                     }
                     Ok(Frame::Array(Some(items)))
                 }
@@ -243,11 +342,11 @@ pub fn encode(args: &[&[u8]]) -> Vec<u8> {
 
 // ---------------------------------------------------------------- 专用连接
 
-trait Io: AsyncRead + AsyncWrite + Send + Unpin {}
+pub(super) trait Io: AsyncRead + AsyncWrite + Send + Unpin {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin> Io for T {}
-type Stream = Box<dyn Io>;
-type Reader = FrameReader<ReadHalf<Stream>>;
-type Writer = WriteHalf<Stream>;
+pub(super) type Stream = Box<dyn Io>;
+pub(super) type Reader = FrameReader<ReadHalf<Stream>>;
+pub(super) type Writer = WriteHalf<Stream>;
 
 /// 建专用连接需要的参数:和普通连接同一个目标(含 SSH 隧道)、同样的认证与 TLS。
 #[derive(Clone)]
@@ -256,6 +355,8 @@ pub struct LiveParams {
     pub user: String,
     pub pass: String,
     pub ssl: SslMode,
+    /// 连接设置里的库号:Pub/Sub、MONITOR 与库无关,执行 Lua 脚本的专用连接要先 SELECT 它
+    pub db: i64,
 }
 
 impl LiveParams {
@@ -267,6 +368,7 @@ impl LiveParams {
             user: info.redis.username.unwrap_or_default(),
             pass: info.redis.password.unwrap_or_default(),
             ssl,
+            db: info.redis.db,
         })
     }
 
@@ -285,6 +387,7 @@ impl LiveParams {
             user: info.redis.username.unwrap_or_default(),
             pass: info.redis.password.unwrap_or_default(),
             ssl,
+            db: info.redis.db,
         })
     }
 }
@@ -319,7 +422,7 @@ async fn connect_stream(p: &LiveParams) -> Result<Stream, String> {
     Ok(Box::new(tls))
 }
 
-async fn send(w: &mut Writer, args: &[&[u8]]) -> io::Result<()> {
+pub(super) async fn send(w: &mut Writer, args: &[&[u8]]) -> io::Result<()> {
     w.write_all(&encode(args)).await?;
     w.flush().await
 }
@@ -330,10 +433,15 @@ fn connect_failed(detail: String) -> AppError {
 
 /// 建专用连接并认证;`name` 设为 CLIENT SETNAME,便于在 CLIENT LIST 里认出来(也方便测试确认已关闭)。
 async fn open(p: &LiveParams, name: &str) -> AppResult<(Reader, Writer)> {
+    open_with(p, name, FrameLimits::default()).await
+}
+
+/// 同 [`open`],回复按 `limits` 读取(Lua 脚本的结果用另一套上限)。
+pub(super) async fn open_with(p: &LiveParams, name: &str, limits: FrameLimits) -> AppResult<(Reader, Writer)> {
     let fut = async {
         let stream = connect_stream(p).await?;
         let (r, mut w) = tokio::io::split(stream);
-        let mut rd = FrameReader::new(r, MAX_STORED_BYTES);
+        let mut rd = FrameReader::with_limits(r, limits);
         if !p.pass.is_empty() {
             let mut args: Vec<&[u8]> = vec![b"AUTH"];
             if !p.user.is_empty() {
@@ -1173,7 +1281,9 @@ mod tests {
         input.extend(b":99\r\n");
         let f = frames(&input, 16).await;
         let Frame::Array(Some(items)) = &f[0] else { panic!() };
-        assert_eq!(items.len(), MAX_ARRAY_KEPT);
+        // 前 16 个 + 一个「丢掉了 4 个」的标记
+        assert_eq!(items.len(), MAX_ARRAY_KEPT + 1);
+        assert_eq!(items[MAX_ARRAY_KEPT], Frame::Skipped(20 - MAX_ARRAY_KEPT));
         assert_eq!(f[1], Frame::Int(99));
     }
 

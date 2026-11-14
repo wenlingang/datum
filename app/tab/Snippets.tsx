@@ -1,5 +1,7 @@
 // SQL 片段浮层:收藏当前编辑器里的语句(或选区),按名称 / 内容筛选,点一下插入到光标处。
 // 片段不分连接(常用语句往往跨库通用),只按语言分开;插入后不自动执行,由用户自己运行。
+// Redis 分类下另有标记为 Lua 的脚本:查询标签页里一并列出(带 Lua 标签,选中时开 Lua 脚本标签页),
+// Lua 脚本标签页里只列 Lua 脚本。
 
 import { List, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
@@ -7,6 +9,7 @@ import { defaultName, deleteSnippet, saveSnippet, searchSnippets, type Snippet, 
 import { toast } from "../store/toast";
 import { Btn, Icon, IconButton, TextField } from "../ui/kit";
 import { FS } from "../ui/text";
+import { openRedisLua } from "./luaModel";
 import { insertAtCursor, selectionText, type TabModel } from "./model";
 
 const compress = (sql: string) => sql.split(/\s+/).filter(Boolean).join(" ");
@@ -18,14 +21,38 @@ const sourceText = (m: TabModel) => (selectionText(m).trim() || m.sql()).trim();
 
 export function SnippetPanel(props: { m: TabModel }) {
   const m = props.m;
-  const lang = snippetLang(m);
+  return (
+    <SnippetList
+      lang={snippetLang(m)}
+      source={() => sourceText(m)}
+      hasSelection={() => selectionText(m).trim() !== ""}
+      onPick={(s) => {
+        m.snippetsOpen.set(false);
+        // Lua 脚本不是一条命令:开 Lua 脚本标签页
+        if (s.lua) openRedisLua(m.connId, s.sql);
+        else insertAtCursor(m, s.sql);
+      }}
+    />
+  );
+}
+
+/** 片段列表 + 收藏当前内容。`lua`:只列 Lua 脚本,收藏时标记为 Lua(Lua 脚本标签页用)。 */
+export function SnippetList(props: {
+  lang: SnippetLang;
+  lua?: boolean;
+  source: () => string;
+  hasSelection: () => boolean;
+  onPick: (s: Snippet) => void;
+}) {
+  const lang = props.lang;
+  const lua = props.lua === true;
   const query = signal("");
   /** 正在给当前语句起名(null 为未在收藏) */
   const naming = signal<string | null>(null);
-  const found = () => searchSnippets(lang, query());
+  const found = () => searchSnippets(lang, query(), lua);
 
   const startSave = () => {
-    const text = sourceText(m);
+    const text = props.source();
     if (!text) {
       toast.info(t("snippets.empty_editor"));
       return;
@@ -35,15 +62,12 @@ export function SnippetPanel(props: { m: TabModel }) {
   const finishSave = () => {
     const name = naming();
     if (name === null) return;
-    if (saveSnippet(lang, name, sourceText(m))) {
+    if (saveSnippet(lang, name, props.source(), lua)) {
       naming.set(null);
       toast.success(t("snippets.saved"));
     }
   };
-  const pick = (s: Snippet) => {
-    m.snippetsOpen.set(false);
-    insertAtCursor(m, s.sql);
-  };
+  const pick = (s: Snippet) => props.onPick(s);
 
   return (
     <View class="w-[440px]">
@@ -55,7 +79,7 @@ export function SnippetPanel(props: { m: TabModel }) {
           variant="ghost"
           icon="plus"
           testID="snippet-add"
-          label={selectionText(m).trim() ? t("snippets.save_selection") : t("snippets.save_current")}
+          label={props.hasSelection() ? t("snippets.save_selection") : t("snippets.save_current")}
           onPress={startSave}
         />
       </View>
@@ -74,7 +98,7 @@ export function SnippetPanel(props: { m: TabModel }) {
           <Btn small variant="ghost" label={t("snippets.cancel")} onPress={() => naming.set(null)} />
         </View>
       </If>
-      <If when={searchSnippets(lang, "").length > 5}>
+      <If when={searchSnippets(lang, "", lua).length > 5}>
         <View class="border-b border-border px-3 py-2">
           <TextField
             class="h-7"
@@ -106,7 +130,12 @@ export function SnippetPanel(props: { m: TabModel }) {
               class="flex-row items-center gap-2 border-b border-border px-3 py-1.5 hover:bg-list-hover"
             >
               <View class="min-w-0 flex-1">
-                <Text class={`${FS.xs} font-bold text-foreground line-clamp-1`}>{s().name}</Text>
+                <View class="flex-row items-center gap-1.5">
+                  <If when={s().lua && !lua}>
+                    <Text testID="snippet-lua-tag" class={`${FS["2xs"]} shrink-0 rounded-full bg-raised px-1.5 text-data`}>Lua</Text>
+                  </If>
+                  <Text class={`${FS.xs} min-w-0 font-bold text-foreground line-clamp-1`}>{s().name}</Text>
+                </View>
                 <Text class={`${FS.xs} font-mono text-muted-foreground line-clamp-1`}>{compress(s().sql)}</Text>
               </View>
               <IconButton

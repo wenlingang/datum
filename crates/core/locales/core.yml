@@ -17,6 +17,22 @@ core:
       en: "This live session has ended"
       zh-CN: "实时会话已结束"
       zh-TW: "即時工作階段已結束"
+    redis_eval_empty:
+      en: "The script is empty"
+      zh-CN: "脚本为空"
+      zh-TW: "腳本為空"
+    redis_eval_too_long:
+      en: "The script is too long (max %{max} KB)"
+      zh-CN: "脚本太长(最多 %{max} KB)"
+      zh-TW: "腳本太長(最多 %{max} KB)"
+    redis_eval_too_many_params:
+      en: "Too many KEYS and ARGV (max %{max} in total)"
+      zh-CN: "KEYS 和 ARGV 太多(合计最多 %{max} 个)"
+      zh-TW: "KEYS 和 ARGV 太多(合計最多 %{max} 個)"
+    redis_eval_abandoned:
+      en: "Stopped waiting for the script; it may still be running on the server"
+      zh-CN: "已放弃等待脚本结果;脚本可能仍在服务器上运行"
+      zh-TW: "已放棄等待腳本結果;腳本可能仍在伺服器上執行"
     redis_live_too_many:
       en: "Too many live sessions are open (max %{max}); close some Redis Live tabs first"
       zh-CN: "打开的实时会话太多(最多 %{max} 个),请先关掉一些 Redis 实时标签页"

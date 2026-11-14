@@ -543,6 +543,64 @@ export interface RedisOverview {
   expires: number | null;
 }
 
+/** Lua 脚本的静态检查(core 的 `rds::lua::Analysis`;命令名大写、去重)。 */
+export interface LuaAnalysis {
+  commands: string[];
+  writes: string[];
+  /** FLUSHALL / FLUSHDB / SWAPDB / KEYS */
+  dangerous: string[];
+  /** 不在只读与写清单里的命令(按可能写入处理) */
+  unknown: string[];
+  /** 有无法静态判断的调用(命令名不是字面量、动态加载代码) */
+  dynamic: boolean;
+  mayWrite: boolean;
+}
+
+/** KEYS 的集群槽。 */
+export interface LuaSlotCheck {
+  slots: { key: string; slot: number }[];
+  same: boolean;
+}
+
+/** 脚本返回值(RESP2)。字符串的 `stored < len` 表示只保留了开头;数组的 `items.length < len` 表示后面的没保留。 */
+export type LuaValue =
+  | { type: "nil" }
+  | { type: "int"; text: string }
+  | { type: "status"; text: string }
+  | { type: "error"; text: string }
+  | { type: "str"; text: string; b64?: string; stored: number; len: number }
+  | { type: "array"; items: LuaValue[]; len: number };
+
+export type LuaErrorHint =
+  | "disabled"
+  | "noPerm"
+  | "noScript"
+  | "compile"
+  | "runtime"
+  | "killed"
+  | "crossSlot"
+  | "moved"
+  | "readOnly"
+  | "busy"
+  | "oom"
+  | "notAllowed";
+
+/** 一次 EVAL 的结果(core 的 `rds::lua::EvalOutcome`)。 */
+export interface LuaOutcome {
+  value: LuaValue;
+  /** 顶层是错误回复时的分类 */
+  hint: LuaErrorHint | null;
+  elapsedMs: number;
+  /** 有被截掉的部分(超长字符串、超多元素、过深嵌套) */
+  truncated: boolean;
+  db: number;
+}
+
+export interface LuaKillResult {
+  status: "killed" | "notBusy" | "unkillable" | "failed";
+  message: string;
+}
+
 /** Redis 实时的一个订阅:频道或模式(PSUBSCRIBE);`active` 为服务器已确认。 */
 export interface RedisSub {
   pattern: boolean;

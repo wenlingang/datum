@@ -136,6 +136,12 @@ export const db = {
   redisLiveStop: (session: string) => Db.redisLiveStop(session) as Promise<void>,
   redisLiveClose: (session: string) => Db.redisLiveClose(session) as Promise<void>,
   redisPublish: (id: string, channel: string, message: string) => Db.redisPublish(id, channel, message) as Promise<number>,
+  /** Redis Lua:EVAL(专用连接,等到脚本结束);`run` 为执行 id,用于 redisEvalAbandon。 */
+  redisEval: async (id: string, run: string, req: { script: string; keys: string[]; args: string[] }) =>
+    (await Db.redisEval(id, run, req)) as TabTypes.LuaOutcome,
+  redisEvalAbandon: (run: string) => Db.redisEvalAbandon(run) as Promise<void>,
+  redisScriptKill: async (id: string) => (await Db.redisScriptKill(id)) as TabTypes.LuaKillResult,
+  redisClusterEnabled: (id: string) => Db.redisClusterEnabled(id) as Promise<boolean>,
   /** 分析排行榜里的 key 的值(集群模式传所在节点) */
   redisKeyOn: async (id: string, node: string | null, key: string) =>
     (await Db.redisKeyOn(id, node, key)) as TabTypes.RedisKeyValue,
@@ -194,6 +200,8 @@ export const sql = {
   /** MySQL:另把改表结构的语句列出(带 schemaChange / assessOnly),执行前评估锁表与重建风险 */
   analyzeMysql: (doc: string, strict = false) => Sql.analyzeMysql(doc, strict) as RiskFinding[],
   analyzeRedis: (cmd: string) => Sql.analyzeRedis(cmd) as RiskFinding[],
+  analyzeLua: (script: string) => Sql.analyzeLua(script) as TabTypes.LuaAnalysis,
+  keySlots: (keys: string[]) => Sql.keySlots(keys) as TabTypes.LuaSlotCheck,
   ident: (name: string, kind: DbKind) => Sql.ident(name, kind),
   literal: (value: string, kind: DbKind) => Sql.literal(value, kind),
   pageSql: (table: string, page: number, pageSize: number, kind: DbKind, sortCol?: string | null, desc?: boolean) =>

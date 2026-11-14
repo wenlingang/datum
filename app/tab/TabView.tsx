@@ -21,6 +21,8 @@ import { Diagnostics } from "./Diagnostics";
 import { SchemaDiff } from "./SchemaDiff";
 import { RedisInsight } from "./RedisInsight";
 import { RedisLive } from "./RedisLive";
+import { RedisLua } from "./RedisLua";
+import { luaModelOf } from "./luaModel";
 import { RiskDialog } from "./RiskDialog";
 import { UndoDialog } from "./UndoDialog";
 import { ParamsDialog } from "./ParamsDialog";
@@ -118,6 +120,10 @@ export function TabBody(props: { tab: WorkTab }) {
   const m = modelOf(props.tab);
   if (props.tab.kind === "redis") return <RedisInsight connId={props.tab.connId} />;
   if (props.tab.kind === "rlive") return <RedisLive connId={props.tab.connId} />;
+  if (props.tab.kind === "rlua") {
+    const lm = luaModelOf(props.tab);
+    return lm ? <RedisLua m={lm} /> : <Placeholder icon="network" text={t("erd.wip")} />;
+  }
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
   if (props.tab.kind === "erd" || !m) return <Placeholder icon="network" text={t("erd.wip")} />;

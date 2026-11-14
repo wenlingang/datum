@@ -98,6 +98,16 @@ impl Sql {
         findings_json(risk::analyze_redis(&cmd))
     }
 
+    /// Lua 脚本的静态检查:`{ commands, writes, dangerous, unknown, dynamic, mayWrite }`。
+    pub fn analyze_lua(script: String) -> JsonValue {
+        serde_json::to_value(datum_core::rds::lua::analyze(&script)).unwrap_or(JsonValue::Null)
+    }
+
+    /// KEYS 的集群槽:`{ slots: [{ key, slot }], same }`。
+    pub fn key_slots(keys: Vec<String>) -> JsonValue {
+        serde_json::to_value(datum_core::rds::lua::check_slots(&keys)).unwrap_or(JsonValue::Null)
+    }
+
     /// 带方言转义的标识符。
     pub fn ident(name: String, kind: String) -> Result<String, String> {
         Ok(build::ident(&name, dialect(&kind)?))

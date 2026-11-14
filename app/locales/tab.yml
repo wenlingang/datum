@@ -2725,3 +2725,269 @@ rlive:
     en: "matched %{pattern}"
     zh-CN: "匹配模式 %{pattern}"
     zh-TW: "符合模式 %{pattern}"
+rlua:
+  title:
+    en: "Lua Script"
+    zh-CN: "Lua 脚本"
+    zh-TW: "Lua 腳本"
+  placeholder:
+    en: "-- Lua script; KEYS[1], ARGV[1] come from the form on the right\nreturn redis.call('GET', KEYS[1])"
+    zh-CN: "-- Lua 脚本;KEYS[1]、ARGV[1] 来自右侧表单\nreturn redis.call('GET', KEYS[1])"
+    zh-TW: "-- Lua 腳本;KEYS[1]、ARGV[1] 來自右側表單\nreturn redis.call('GET', KEYS[1])"
+  run:
+    en: "Run"
+    zh-CN: "运行"
+    zh-TW: "執行"
+  keys_title:
+    en: "KEYS (key names)"
+    zh-CN: "KEYS(key 名)"
+    zh-TW: "KEYS(key 名稱)"
+  args_title:
+    en: "ARGV (other arguments)"
+    zh-CN: "ARGV(其他参数)"
+    zh-TW: "ARGV(其他參數)"
+  add:
+    en: "Add"
+    zh-CN: "添加"
+    zh-TW: "新增"
+  remove:
+    en: "Remove"
+    zh-CN: "删除"
+    zh-TW: "刪除"
+  no_keys:
+    en: "No keys"
+    zh-CN: "没有 key"
+    zh-TW: "沒有 key"
+  no_args:
+    en: "No arguments"
+    zh-CN: "没有参数"
+    zh-TW: "沒有參數"
+  params_hint:
+    en: "Each value is sent to EVAL as a separate argument, as is (no quoting or escaping needed). Values are remembered per tab."
+    zh-CN: "每个值原样作为一个单独的参数传给 EVAL,不用加引号或转义;每个标签页记住各自填的值。"
+    zh-TW: "每個值原樣作為一個單獨的參數傳給 EVAL,不用加引號或跳脫;每個分頁記住各自填的值。"
+  slot_warning:
+    en: "These keys are in different hash slots. In cluster mode the script fails with CROSSSLOT; use a hash tag such as {user1}:a to keep them together."
+    zh-CN: "这些 key 不在同一个槽。集群模式下脚本会报 CROSSSLOT;可以用 {user1}:a 这样的 hash tag 让它们落在同一槽。"
+    zh-TW: "這些 key 不在同一個槽。叢集模式下腳本會報 CROSSSLOT;可以用 {user1}:a 這樣的 hash tag 讓它們落在同一槽。"
+  tag_danger:
+    en: "Dangerous: %{cmds}"
+    zh-CN: "危险:%{cmds}"
+    zh-TW: "危險:%{cmds}"
+  tag_writes:
+    en: "Writes: %{cmds}"
+    zh-CN: "写入:%{cmds}"
+    zh-TW: "寫入:%{cmds}"
+  tag_dynamic:
+    en: "May write (dynamic or unknown commands)"
+    zh-CN: "可能写入(动态或未知命令)"
+    zh-TW: "可能寫入(動態或未知指令)"
+  tag_read_only:
+    en: "Read-only"
+    zh-CN: "只读"
+    zh-TW: "唯讀"
+  snippets_tip:
+    en: "Saved Lua scripts"
+    zh-CN: "收藏的 Lua 脚本"
+    zh-TW: "收藏的 Lua 腳本"
+  kill_tip:
+    en: "Stop the script running on the server (another connection sends SCRIPT KILL; only scripts that haven't written anything can be stopped)"
+    zh-CN: "终止服务器上正在运行的脚本(另开一条连接发 SCRIPT KILL;只有还没写过数据的脚本能被终止)"
+    zh-TW: "終止伺服器上正在執行的腳本(另開一條連線送出 SCRIPT KILL;只有還沒寫過資料的腳本能被終止)"
+  abandon:
+    en: "Stop waiting"
+    zh-CN: "放弃等待"
+    zh-TW: "放棄等待"
+  abandon_tip:
+    en: "Close this tab's script connection and discard the result. The script keeps running on the server."
+    zh-CN: "关掉这个标签页执行脚本的连接,不要结果了。服务器上的脚本会继续运行。"
+    zh-TW: "關掉這個分頁執行腳本的連線,不要結果了。伺服器上的腳本會繼續執行。"
+  slow:
+    en: "The script has been running for %{s} s. While it runs, Redis serves no other client (they get BUSY errors)."
+    zh-CN: "脚本已运行 %{s} 秒。运行期间 Redis 不处理其他客户端的请求(会收到 BUSY 错误)。"
+    zh-TW: "腳本已執行 %{s} 秒。執行期間 Redis 不處理其他用戶端的請求(會收到 BUSY 錯誤)。"
+  kill_done:
+    en: "Script stopped"
+    zh-CN: "脚本已终止"
+    zh-TW: "腳本已終止"
+  kill_not_busy:
+    en: "No script is running on the server"
+    zh-CN: "服务器上没有正在运行的脚本"
+    zh-TW: "伺服器上沒有正在執行的腳本"
+  kill_unkillable:
+    en: "The script has already written data, so Redis refuses to stop it (UNKILLABLE). Wait for it to finish; the only way to stop it now is SHUTDOWN NOSAVE on the server, which loses data written since the last save. Datum doesn't offer that."
+    zh-CN: "脚本已经写过数据,Redis 拒绝终止它(UNKILLABLE)。只能等它跑完;此时唯一的办法是在服务器上 SHUTDOWN NOSAVE,会丢掉上次持久化之后写入的数据,Datum 不提供这个操作。"
+    zh-TW: "腳本已經寫過資料,Redis 拒絕終止它(UNKILLABLE)。只能等它跑完;此時唯一的辦法是在伺服器上 SHUTDOWN NOSAVE,會遺失上次持久化之後寫入的資料,Datum 不提供這個操作。"
+  kill_failed:
+    en: "SCRIPT KILL failed"
+    zh-CN: "SCRIPT KILL 失败"
+    zh-TW: "SCRIPT KILL 失敗"
+  running:
+    en: "Running… %{s} s"
+    zh-CN: "运行中… %{s} 秒"
+    zh-TW: "執行中… %{s} 秒"
+  elapsed:
+    en: "%{ms} ms"
+    zh-CN: "%{ms} 毫秒"
+    zh-TW: "%{ms} 毫秒"
+  truncated:
+    en: "Result too large: only part of it is shown"
+    zh-CN: "结果太大,只显示了一部分"
+    zh-TW: "結果太大,只顯示了一部分"
+  no_result:
+    en: "Run the script to see its result here"
+    zh-CN: "运行脚本后在这里查看结果"
+    zh-TW: "執行腳本後在這裡查看結果"
+  result:
+    en: "Result"
+    zh-CN: "结果"
+    zh-TW: "結果"
+  view:
+    en: "View"
+    zh-CN: "查看"
+    zh-TW: "檢視"
+  binary:
+    en: "(binary data)"
+    zh-CN: "(二进制数据)"
+    zh-TW: "(二進位資料)"
+  expand:
+    en: "Expand"
+    zh-CN: "展开"
+    zh-TW: "展開"
+  collapse:
+    en: "Collapse"
+    zh-CN: "收起"
+    zh-TW: "收合"
+  omitted:
+    en: "… %{n} more not shown"
+    zh-CN: "… 另有 %{n} 项未显示"
+    zh-TW: "… 另有 %{n} 項未顯示"
+  empty_array:
+    en: "(empty array)"
+    zh-CN: "(空数组)"
+    zh-TW: "(空陣列)"
+  array_items:
+    en: "array · items: %{n}"
+    zh-CN: "数组 · %{n} 项"
+    zh-TW: "陣列 · %{n} 項"
+  type_nil:
+    en: "nil"
+    zh-CN: "nil"
+    zh-TW: "nil"
+  type_int:
+    en: "Integer"
+    zh-CN: "整数"
+    zh-TW: "整數"
+  type_status:
+    en: "Status"
+    zh-CN: "状态"
+    zh-TW: "狀態"
+  type_error:
+    en: "Error"
+    zh-CN: "错误"
+    zh-TW: "錯誤"
+  type_str:
+    en: "String"
+    zh-CN: "字符串"
+    zh-TW: "字串"
+  type_array:
+    en: "Array"
+    zh-CN: "数组"
+    zh-TW: "陣列"
+  confirm_title:
+    en: "Run this script?"
+    zh-CN: "执行这个脚本?"
+    zh-TW: "執行這個腳本?"
+  confirm_prod:
+    en: "%{name} is a production instance."
+    zh-CN: "%{name} 是生产实例。"
+    zh-TW: "%{name} 是正式環境實例。"
+  confirm_danger:
+    en: "Dangerous commands: %{cmds}"
+    zh-CN: "危险命令:%{cmds}"
+    zh-TW: "危險指令:%{cmds}"
+  confirm_danger_note:
+    en: "FLUSHALL / FLUSHDB delete every key, SWAPDB swaps whole databases, KEYS walks the entire keyspace and blocks the instance on a large database."
+    zh-CN: "FLUSHALL / FLUSHDB 会删掉所有 key,SWAPDB 会交换整个库,KEYS 会遍历整个库、在大库上长时间阻塞实例。"
+    zh-TW: "FLUSHALL / FLUSHDB 會刪掉所有 key,SWAPDB 會交換整個庫,KEYS 會走訪整個庫、在大庫上長時間阻塞實例。"
+  confirm_writes:
+    en: "The script writes data: %{cmds}"
+    zh-CN: "脚本会写入数据:%{cmds}"
+    zh-TW: "腳本會寫入資料:%{cmds}"
+  confirm_unknown:
+    en: "Commands Datum can't classify (treated as writes): %{cmds}"
+    zh-CN: "Datum 认不出的命令(按写入处理):%{cmds}"
+    zh-TW: "Datum 認不出的指令(按寫入處理):%{cmds}"
+  confirm_dynamic:
+    en: "Some command names aren't literal strings (variables, concatenation, loadstring…), so they may write anything."
+    zh-CN: "有的命令名不是字面量(变量、拼接、loadstring…),可能写入任何数据。"
+    zh-TW: "有的指令名稱不是字面值(變數、串接、loadstring…),可能寫入任何資料。"
+  confirm_read_only:
+    en: "The script only calls read-only commands."
+    zh-CN: "脚本只调用只读命令。"
+    zh-TW: "腳本只呼叫唯讀指令。"
+  confirm_cross_slot:
+    en: "This is a cluster and the KEYS are in different hash slots: the server will reject the script with CROSSSLOT."
+    zh-CN: "这是集群,而 KEYS 不在同一个槽:服务器会以 CROSSSLOT 拒绝执行。"
+    zh-TW: "這是叢集,而 KEYS 不在同一個槽:伺服器會以 CROSSSLOT 拒絕執行。"
+  confirm_ack:
+    en: "I understand, run it"
+    zh-CN: "我已了解,确认执行"
+    zh-TW: "我已了解,確認執行"
+  confirm_run:
+    en: "Run"
+    zh-CN: "执行"
+    zh-TW: "執行"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  hint:
+    disabled:
+      en: "This server doesn't accept EVAL. Many hosted Redis services disable Lua scripting or rename the command; check the provider's documentation."
+      zh-CN: "服务器不接受 EVAL。很多托管 Redis 禁用了 Lua 脚本或改了命令名,请查看服务商的文档。"
+      zh-TW: "伺服器不接受 EVAL。很多託管 Redis 停用了 Lua 腳本或改了指令名稱,請查看服務商的文件。"
+    noPerm:
+      en: "This user isn't allowed to run scripts (ACL). Ask the administrator for the @scripting permission."
+      zh-CN: "当前用户没有执行脚本的权限(ACL),请联系管理员授予 @scripting 权限。"
+      zh-TW: "目前使用者沒有執行腳本的權限(ACL),請聯絡管理員授予 @scripting 權限。"
+    noScript:
+      en: "The server answered NOSCRIPT: the script isn't in its cache. Some proxies only support EVALSHA with preloaded scripts."
+      zh-CN: "服务器回了 NOSCRIPT:脚本不在它的缓存里。有些代理只支持对预先加载的脚本用 EVALSHA。"
+      zh-TW: "伺服器回了 NOSCRIPT:腳本不在它的快取裡。有些代理只支援對預先載入的腳本用 EVALSHA。"
+    compile:
+      en: "The script has a syntax error."
+      zh-CN: "脚本有语法错误。"
+      zh-TW: "腳本有語法錯誤。"
+    runtime:
+      en: "The script failed while running."
+      zh-CN: "脚本运行时出错。"
+      zh-TW: "腳本執行時出錯。"
+    killed:
+      en: "The script was stopped with SCRIPT KILL."
+      zh-CN: "脚本已被 SCRIPT KILL 终止。"
+      zh-TW: "腳本已被 SCRIPT KILL 終止。"
+    crossSlot:
+      en: "In cluster mode all KEYS must be in the same hash slot. Use a hash tag such as {user1}:a to keep them together."
+      zh-CN: "集群模式下所有 KEYS 必须在同一个槽,可以用 {user1}:a 这样的 hash tag 让它们落在一起。"
+      zh-TW: "叢集模式下所有 KEYS 必須在同一個槽,可以用 {user1}:a 這樣的 hash tag 讓它們落在一起。"
+    moved:
+      en: "The keys are on another cluster node. Connect to the node that owns their slot."
+      zh-CN: "这些 key 在集群的另一个节点上,请连接负责该槽的节点。"
+      zh-TW: "這些 key 在叢集的另一個節點上,請連線負責該槽的節點。"
+    readOnly:
+      en: "This is a read-only replica; scripts that write must run on the primary."
+      zh-CN: "这是只读副本,会写入的脚本要在主节点上执行。"
+      zh-TW: "這是唯讀副本,會寫入的腳本要在主節點上執行。"
+    busy:
+      en: "Another script is running on the server. Wait for it to finish, or stop it with SCRIPT KILL."
+      zh-CN: "服务器上有别的脚本正在运行,请等它结束或用 SCRIPT KILL 终止。"
+      zh-TW: "伺服器上有別的腳本正在執行,請等它結束或用 SCRIPT KILL 終止。"
+    oom:
+      en: "The server is out of memory (maxmemory) and refuses writes."
+      zh-CN: "服务器内存已满(maxmemory),拒绝写入。"
+      zh-TW: "伺服器記憶體已滿(maxmemory),拒絕寫入。"
+    notAllowed:
+      en: "The script calls a command that can't be used inside scripts."
+      zh-CN: "脚本调用了不允许在脚本中使用的命令。"
+      zh-TW: "腳本呼叫了不允許在腳本中使用的指令。"

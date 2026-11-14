@@ -32,6 +32,10 @@ workspace:
     en: "Redis Live (Pub/Sub, MONITOR)"
     zh-CN: "Redis 实时(Pub/Sub、MONITOR)"
     zh-TW: "Redis 即時(Pub/Sub、MONITOR)"
+  redis_lua:
+    en: "Lua Script (EVAL)"
+    zh-CN: "Lua 脚本(EVAL)"
+    zh-TW: "Lua 腳本(EVAL)"
   diagnostics:
     en: Database Diagnostics
     zh-CN: 数据库诊断

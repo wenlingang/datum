@@ -449,6 +449,37 @@ impl Db {
         spawn(async move { service::redis_live_close(&state(), &session).await }).await
     }
 
+    /// Redis:执行 Lua 脚本 `req = { script, keys, args }`(EVAL,专用连接,等到脚本结束)。
+    /// `run` 是界面生成的执行 id,用于 `redis_eval_abandon`。返回 `{ value, hint, elapsedMs, truncated, db }`;
+    /// 服务器回的错误也在 `value` 里(`type: "error"`),连不上等才是失败。
+    pub async fn redis_eval(id: String, run: String, req: JsonValue) -> Result<JsonValue, String> {
+        let r: datum_core::rds::lua::EvalRequest = from(req, "req")?;
+        spawn(async move { service::redis_eval(&state(), &id, &run, r).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis:放弃等待一次脚本执行(关掉它的专用连接;服务器上的脚本不会因此停下)。
+    pub async fn redis_eval_abandon(run: String) -> Result<(), String> {
+        spawn(async move { service::redis_eval_abandon(&state(), &run).await }).await
+    }
+
+    /// Redis:SCRIPT KILL(另开一条专用连接),返回 `{ status: "killed" | "notBusy" | "unkillable" | "failed", message }`。
+    pub async fn redis_script_kill(id: String) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_script_kill(&state(), &id).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis:是否集群模式。
+    pub async fn redis_cluster_enabled(id: String) -> Result<bool, String> {
+        spawn(async move { service::redis_cluster_enabled(&state(), &id).await })
+            .await?
+            .map_err(err)
+    }
+
     /// Redis:PUBLISH,返回收到消息的订阅者数。
     pub async fn redis_publish(id: String, channel: String, message: String) -> Result<i64, String> {
         spawn(async move { service::redis_publish(&state(), &id, &channel, &message).await })

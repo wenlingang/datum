@@ -74,6 +74,8 @@ pub struct RedisPool {
     live_params: Mutex<HashMap<String, super::live::LiveParams>>,
     /// 实时会话(Pub/Sub、MONITOR),按会话 id
     lives: Mutex<HashMap<String, std::sync::Arc<super::live::LiveSession>>>,
+    /// 进行中的 Lua 脚本执行:执行 id → (连接 id, 任务)。放弃等待 / 断开连接时中止任务、关掉它的专用连接
+    evals: Mutex<HashMap<String, (String, tokio::task::AbortHandle)>>,
 }
 
 pub(super) fn qerr(e: redis::RedisError) -> AppError {
@@ -581,6 +583,49 @@ impl RedisPool {
         for s in gone {
             s.stop().await;
         }
+    }
+
+    /// 执行 Lua 脚本(EVAL,专用连接,见 [`super::lua`])。`run` 是界面给的执行 id,用于 [`Self::eval_abandon`]。
+    pub async fn eval(&self, id: &str, run: &str, req: super::lua::EvalRequest) -> AppResult<super::lua::EvalOutcome> {
+        let p = self.live_params(id).await?;
+        let task = tokio::spawn(async move { super::lua::eval(&p, &req).await });
+        self.evals.lock().await.insert(run.to_string(), (id.to_string(), task.abort_handle()));
+        let r = task.await;
+        self.evals.lock().await.remove(run);
+        match r {
+            Ok(x) => x,
+            Err(e) if e.is_cancelled() => Err(AppError::new(ErrorKind::Query, t!("core.err.redis_eval_abandoned"))),
+            Err(e) => Err(AppError::new(ErrorKind::Query, t!("core.err.redis_command_failed")).with_detail(e.to_string())),
+        }
+    }
+
+    /// 放弃等待一次执行:关掉它的专用连接。服务器上的脚本不会因此停下(要停只能 SCRIPT KILL)。
+    pub async fn eval_abandon(&self, run: &str) {
+        if let Some((_, h)) = self.evals.lock().await.remove(run) {
+            h.abort();
+        }
+    }
+
+    /// 断开连接时:放弃它名下所有进行中的执行。
+    pub async fn abandon_evals(&self, id: &str) {
+        let mut evals = self.evals.lock().await;
+        evals.retain(|_, (conn, h)| {
+            if conn == id {
+                h.abort();
+            }
+            conn != id
+        });
+    }
+
+    /// 是否集群模式(INFO cluster 的 cluster_enabled);读不到(禁用了 INFO 等)按非集群。
+    pub async fn cluster_enabled(&self, id: &str) -> AppResult<bool> {
+        let text: String = redis::cmd("INFO").arg("cluster").query_async(&mut self.con(id).await?).await.unwrap_or_default();
+        Ok(text.lines().any(|l| l.trim() == "cluster_enabled:1"))
+    }
+
+    /// SCRIPT KILL(另开一条专用连接:EVAL 所在的连接正被脚本占着)。
+    pub async fn script_kill(&self, id: &str) -> AppResult<super::lua::KillResult> {
+        super::lua::script_kill(&self.live_params(id).await?).await
     }
 
     /// 执行任意命令(按空白拆分),返回可读文本。

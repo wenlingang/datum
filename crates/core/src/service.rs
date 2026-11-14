@@ -50,6 +50,7 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
         DbKind::Redis => {
             // 实时会话的专用连接可能经同一条隧道:先停掉它们(退订、关连接、结束后台任务)
             state.redis_pool.stop_lives(&id).await;
+            state.redis_pool.abandon_evals(&id).await;
             Ok(())
         }
         DbKind::Mongo => {
@@ -685,6 +686,25 @@ pub async fn redis_live_stop(state: &AppState, sid: &str) {
 /// 停止并移除会话,释放缓冲。
 pub async fn redis_live_close(state: &AppState, sid: &str) {
     state.redis_pool.close_live(sid).await
+}
+
+/// Redis:执行 Lua 脚本(EVAL,专用连接)。
+pub async fn redis_eval(state: &AppState, id: &str, run: &str, req: rds::lua::EvalRequest) -> AppResult<rds::lua::EvalOutcome> {
+    state.redis_pool.eval(id, run, req).await
+}
+
+pub async fn redis_eval_abandon(state: &AppState, run: &str) {
+    state.redis_pool.eval_abandon(run).await
+}
+
+/// Redis:是否集群模式(Lua 脚本执行前检查 KEYS 是否同槽用)。
+pub async fn redis_cluster_enabled(state: &AppState, id: &str) -> AppResult<bool> {
+    state.redis_pool.cluster_enabled(id).await
+}
+
+/// Redis:SCRIPT KILL(另开一条专用连接)。
+pub async fn redis_script_kill(state: &AppState, id: &str) -> AppResult<rds::lua::KillResult> {
+    state.redis_pool.script_kill(id).await
 }
 
 pub async fn redis_publish(state: &AppState, id: &str, channel: &str, message: &str) -> AppResult<i64> {

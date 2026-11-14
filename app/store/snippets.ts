@@ -13,6 +13,8 @@ export interface Snippet {
   name: string;
   sql: string;
   lang: SnippetLang;
+  /** Redis 分类下的 Lua 脚本(在 Lua 脚本标签页里用;查询标签页里选中时开 Lua 标签页) */
+  lua?: boolean;
   /** Unix 毫秒 */
   createdAt: number;
 }
@@ -27,7 +29,10 @@ function load(): Snippet[] {
     return list.filter(
       (s): s is Snippet =>
         !!s && typeof s.id === "string" && typeof s.name === "string" && typeof s.sql === "string",
-    ).map((s) => ({ ...s, lang: s.lang === "redis" ? "redis" : "sql", createdAt: Number(s.createdAt) || 0 }));
+    ).map((s) => {
+      const lang: SnippetLang = s.lang === "redis" ? "redis" : "sql";
+      return { ...s, lang, lua: lang === "redis" && s.lua === true ? true : undefined, createdAt: Number(s.createdAt) || 0 };
+    });
   } catch {
     return [];
   }
@@ -50,10 +55,11 @@ export const snippets = (lang: SnippetLang) =>
     .filter((s) => s.lang === lang)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-/** 按名称或内容筛选(不区分大小写,空格分隔的每个词都要命中)。 */
-export function searchSnippets(lang: SnippetLang, query: string): Snippet[] {
+/** 按名称或内容筛选(不区分大小写,空格分隔的每个词都要命中)。`luaOnly`:只要 Lua 脚本。 */
+export function searchSnippets(lang: SnippetLang, query: string, luaOnly = false): Snippet[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return snippets(lang).filter((s) => {
+    if (luaOnly && !s.lua) return false;
     const hay = `${s.name}\n${s.sql}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
@@ -70,15 +76,16 @@ export function defaultName(sql: string): string {
   return flat.length > 40 ? `${flat.slice(0, 39)}…` : flat;
 }
 
-/** 收藏一条;同语言下同名的覆盖内容。返回是否成功(空内容、超上限时为 false)。 */
-export function saveSnippet(lang: SnippetLang, name: string, sql: string): boolean {
+/** 收藏一条;同语言下同名的覆盖内容。返回是否成功(空内容、超上限时为 false)。
+ *  `lua`:Redis 分类下标记为 Lua 脚本。 */
+export function saveSnippet(lang: SnippetLang, name: string, sql: string, lua = false): boolean {
   const body = sql.trim();
   const title = name.trim() || defaultName(body);
   if (!body || !title) return false;
   const all = list();
   const same = all.find((s) => s.lang === lang && s.name === title);
   if (same) {
-    persist(all.map((s) => (s === same ? { ...s, sql: body } : s)));
+    persist(all.map((s) => (s === same ? { ...s, sql: body, lua: lua || undefined } : s)));
     return true;
   }
   if (all.length >= MAX_SNIPPETS) {
@@ -86,7 +93,7 @@ export function saveSnippet(lang: SnippetLang, name: string, sql: string): boole
     return false;
   }
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  persist([...all, { id, name: title, sql: body, lang, createdAt: Date.now() }]);
+  persist([...all, { id, name: title, sql: body, lang, ...(lua ? { lua: true } : {}), createdAt: Date.now() }]);
   return true;
 }
 

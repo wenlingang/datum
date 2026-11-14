@@ -77,6 +77,11 @@ function TabItem(props: { tab: () => WorkTab }) {
           <Icon name="radio" size={14} color={active() ? "data" : "fg-faint"} />
         </View>
       </If>
+      <If when={tab().kind === "rlua"}>
+        <View class="mr-1.5">
+          <Icon name="code-xml" size={14} color={active() ? "data" : "fg-faint"} />
+        </View>
+      </If>
       <If when={tab().kind === "diff"}>
         <View class="mr-1.5">
           <Icon name="chevrons-up-down" size={14} color={active() ? "data" : "fg-faint"} />

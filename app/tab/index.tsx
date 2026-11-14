@@ -28,6 +28,7 @@ import { TabStatusView } from "./TabStatus";
 import { TabBody } from "./TabView";
 
 export { modelOf, type TabModel } from "./model";
+export { openRedisLua } from "./luaModel";
 
 /** 标签页主体(编辑器 + 结果 / 表浏览网格 / ER 图占位)。换 tab 时整体重建。 */
 export function TabView(props: { tab: WorkTab }) {
