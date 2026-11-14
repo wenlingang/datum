@@ -245,7 +245,13 @@ pub fn analyze(script: &str) -> Analysis {
             a.dynamic = true;
             continue;
         }
-        if !punct(i + 1, b'.') || !matches!(ident(i + 2), Some("call" | "pcall")) {
+        if !punct(i + 1, b'.') {
+            // 当作值使用(`local r = redis`、`f(redis)`、`redis:call`):之后经别名调用的命令看不出来
+            a.dynamic = true;
+            continue;
+        }
+        if !matches!(ident(i + 2), Some("call" | "pcall")) {
+            // redis.log / redis.sha1hex 等不执行命令
             continue;
         }
         // redis.call('SET', …) 或 redis.call 'GET'(Lua 的单字符串实参调用)
@@ -521,9 +527,10 @@ pub const MAX_SCRIPT_BYTES: usize = 1 << 20;
 pub const MAX_PARAMS: usize = 1000;
 
 /// EVAL 的参数:`EVAL script numkeys key… arg…`,逐个作为 bulk 发出(二进制安全,不拼字符串)。
-pub fn eval_args(req: &EvalRequest) -> Vec<Vec<u8>> {
+/// `read_only` 时发 `EVAL_RO`(Redis 7+):服务器拒绝脚本里的写命令,静态检查之外再加一道保险。
+pub fn eval_args(req: &EvalRequest, read_only: bool) -> Vec<Vec<u8>> {
     let mut args: Vec<Vec<u8>> = Vec::with_capacity(3 + req.keys.len() + req.args.len());
-    args.push(b"EVAL".to_vec());
+    args.push(if read_only { b"EVAL_RO".to_vec() } else { b"EVAL".to_vec() });
     args.push(req.script.as_bytes().to_vec());
     args.push(req.keys.len().to_string().into_bytes());
     args.extend(req.keys.iter().map(|k| k.as_bytes().to_vec()));
@@ -561,11 +568,13 @@ pub async fn eval(p: &LiveParams, req: &EvalRequest) -> AppResult<EvalOutcome> {
     }
     let name = format!("datum-eval-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
     let (mut rd, mut w) = open(p, &name).await?;
-    let args = eval_args(req);
-    let refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
+    // 静态检查认为不写的脚本用 EVAL_RO,由服务器强制只读;老版本(< 7)不认 EVAL_RO 时退回 EVAL
+    let read_only = !analyze(&req.script).may_write;
     let started = Instant::now();
-    live::send(&mut w, &refs).await.map_err(|e| qfail(e.to_string()))?;
-    let frame = rd.read().await.map_err(|e| qfail(e.to_string()))?;
+    let mut frame = send_eval(&mut rd, &mut w, req, read_only).await?;
+    if read_only && matches!(&frame, Frame::Error(e) if is_unknown_command(e)) {
+        frame = send_eval(&mut rd, &mut w, req, false).await?;
+    }
     let elapsed_ms = started.elapsed().as_millis() as u64;
     let _ = tokio::time::timeout(Duration::from_secs(1), w.shutdown()).await;
     let hint = match &frame {
@@ -575,6 +584,18 @@ pub async fn eval(p: &LiveParams, req: &EvalRequest) -> AppResult<EvalOutcome> {
     let mut truncated = false;
     let value = to_value(frame, &mut truncated);
     Ok(EvalOutcome { value, hint, elapsed_ms, truncated, db: p.db })
+}
+
+async fn send_eval(rd: &mut live::Reader, w: &mut live::Writer, req: &EvalRequest, read_only: bool) -> AppResult<Frame> {
+    let args = eval_args(req, read_only);
+    let refs: Vec<&[u8]> = args.iter().map(|a| a.as_slice()).collect();
+    live::send(w, &refs).await.map_err(|e| qfail(e.to_string()))?;
+    rd.read().await.map_err(|e| qfail(e.to_string()))
+}
+
+/// 服务器不认这个命令(老版本没有 EVAL_RO)。
+fn is_unknown_command(e: &str) -> bool {
+    e.to_ascii_lowercase().contains("unknown command")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -658,6 +679,13 @@ mod tests {
     }
 
     #[test]
+    fn helper_fields_are_not_commands() {
+        let a = analyze("redis.log(redis.LOG_WARNING, 'x')\nreturn redis.sha1hex(redis.call('GET', KEYS[1]))");
+        assert_eq!(a.commands, vec!["GET"]);
+        assert!(!a.may_write && !a.dynamic, "{a:?}");
+    }
+
+    #[test]
     fn comments_and_strings_do_not_count() {
         let a = analyze("-- redis.call('FLUSHALL')\n--[[ redis.call('DEL', 'x') ]]\n--[==[ redis.call('SET') ]] ]==]\nlocal s = \"redis.call('DEL')\"\nlocal l = [[redis.call('SET')]]\nreturn redis.call('PING')");
         assert_eq!(a.commands, vec!["PING"]);
@@ -674,6 +702,11 @@ mod tests {
             "return loadstring(ARGV[1])()",
             "return redis.call('GE' .. 'T', 'x')",
             "return _G.redis.call('GET', 'x')",
+            // 别名 / 当作值传递:之后的调用看不出命令
+            "local r = redis\nr.call('SET', 'x', '1')\nreturn 1",
+            "local function f(x) return x.call('DEL', 'k') end\nreturn f(redis)",
+            "local t = {redis}\nreturn t[1].call('SET', 'x', '1')",
+            "local s = server\nreturn s.pcall('FLUSHALL')",
         ] {
             let a = analyze(src);
             assert!(a.dynamic && a.may_write, "{src}: {a:?}");
@@ -733,8 +766,9 @@ mod tests {
     #[test]
     fn eval_args_are_separate_bulks() {
         let req = EvalRequest { script: "return 1".into(), keys: vec!["k 1".into()], args: vec!["a b".into(), "".into()] };
-        let args = eval_args(&req);
+        let args = eval_args(&req, false);
         assert_eq!(args, vec![b"EVAL".to_vec(), b"return 1".to_vec(), b"1".to_vec(), b"k 1".to_vec(), b"a b".to_vec(), b"".to_vec()]);
+        assert_eq!(eval_args(&req, true)[0], b"EVAL_RO".to_vec());
     }
 
     #[test]

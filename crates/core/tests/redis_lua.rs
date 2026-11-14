@@ -228,3 +228,46 @@ async fn long_script_can_be_killed_from_another_connection() {
         std::panic::resume_unwind(e.into_panic());
     }
 }
+
+/// 服务器上某个命令被调用过的次数(INFO commandstats)。
+async fn calls(cmd: &str) -> u64 {
+    let mut c = raw().await;
+    let info: String = redis::cmd("INFO").arg("commandstats").query_async(&mut c).await.unwrap();
+    info.lines()
+        .find(|l| l.starts_with(&format!("cmdstat_{cmd}:")))
+        .and_then(|l| l.split("calls=").nth(1))
+        .and_then(|v| v.split(',').next())
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+}
+
+/// 判为只读的脚本用 EVAL_RO(Redis 7+ 由服务器拒绝写命令);老版本不认 EVAL_RO 时退回 EVAL。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn read_only_scripts_use_eval_ro_when_available() {
+    let _serial = SERIAL.lock().await;
+    let Some(st) = setup("lua-ro").await else { return };
+    let (ro_before, eval_before) = (calls("eval_ro").await, calls("eval").await);
+    let out = service::redis_eval(&st, "lua-ro", "run-ro", req("return redis.call('PING')", &[], &[])).await.unwrap();
+    assert_eq!(s(&out.value), "PONG");
+    let mut c = raw().await;
+    let version: String = redis::cmd("INFO").arg("server").query_async(&mut c).await.unwrap();
+    let major: u32 = version
+        .lines()
+        .find_map(|l| l.strip_prefix("redis_version:"))
+        .and_then(|v| v.split('.').next())
+        .and_then(|v| v.parse().ok())
+        .unwrap();
+    if major >= 7 {
+        assert_eq!(calls("eval_ro").await, ro_before + 1, "应走 EVAL_RO");
+        assert_eq!(calls("eval").await, eval_before);
+    } else {
+        assert_eq!(calls("eval").await, eval_before + 1, "老版本退回 EVAL");
+    }
+    // 会写的脚本照常用 EVAL
+    let k = uniq("datum:lua-ro");
+    service::redis_eval(&st, "lua-ro", "run-rw", req("return redis.call('SET', KEYS[1], '1')", &[&k], &[])).await.unwrap();
+    let v: Option<String> = redis::cmd("GET").arg(&k).query_async(&mut c).await.unwrap();
+    assert_eq!(v.as_deref(), Some("1"));
+    let _: i64 = redis::cmd("DEL").arg(&k).query_async(&mut c).await.unwrap();
+}
