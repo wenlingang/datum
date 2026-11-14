@@ -352,7 +352,7 @@ fn plain_number(v: &str) -> Option<f64> {
 }
 
 /// 重名列加 `_2`、`_3` 后缀,保证 JSON 对象的键不互相覆盖。
-fn unique_keys(columns: &[String]) -> Vec<String> {
+pub(crate) fn unique_keys(columns: &[String]) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     columns
         .iter()
@@ -370,35 +370,37 @@ fn unique_keys(columns: &[String]) -> Vec<String> {
 
 /// 查询结果 → JSON 对象数组(带缩进)。NULL 为 null;规范写法的数字写成数字,其余为字符串。
 pub fn to_json(columns: &[String], rows: &[&Vec<Cell>]) -> String {
-    use serde_json::{Map, Value};
     let keys = unique_keys(columns);
-    let items: Vec<Value> = rows
-        .iter()
-        .map(|row| {
-            let mut obj = Map::new();
-            for (key, cell) in keys.iter().zip(row.iter()) {
-                let v = match cell.as_deref() {
-                    None => Value::Null,
-                    Some(s) => plain_number(s)
-                        .and_then(|_| s.parse::<serde_json::Number>().ok())
-                        .map(Value::Number)
-                        .unwrap_or_else(|| Value::String(s.to_string())),
-                };
-                obj.insert(key.clone(), v);
-            }
-            Value::Object(obj)
-        })
-        .collect();
+    let items: Vec<serde_json::Value> = rows.iter().map(|row| json_object(&keys, row)).collect();
     serde_json::to_string_pretty(&items).unwrap_or_else(|_| "[]".into())
 }
+
+/// 一行 → JSON 对象(键为 [`unique_keys`] 处理过的列名)。
+pub(crate) fn json_object(keys: &[String], row: &[Cell]) -> serde_json::Value {
+    use serde_json::{Map, Value};
+    let mut obj = Map::new();
+    for (key, cell) in keys.iter().zip(row.iter()) {
+        let v = match cell.as_deref() {
+            None => Value::Null,
+            Some(s) => plain_number(s)
+                .and_then(|_| s.parse::<serde_json::Number>().ok())
+                .map(Value::Number)
+                .unwrap_or_else(|| Value::String(s.to_string())),
+        };
+        obj.insert(key.clone(), v);
+    }
+    Value::Object(obj)
+}
+
+/// Excel 一张工作表最多的数据行数(去掉表头一行)。
+pub const XLSX_MAX_ROWS: usize = 1_048_575;
 
 /// 查询结果 → Excel(.xlsx)文件内容。首行为加粗的列名并冻结;NULL 留空,
 /// 规范写法的数字写成数字,其余为文本;列宽按内容估算(上限 60 个字符)。
 pub fn to_xlsx(sheet: &str, columns: &[String], rows: &[&Vec<Cell>]) -> Result<Vec<u8>, String> {
     use rust_xlsxwriter::{Format, Workbook};
-    const MAX_ROWS: usize = 1_048_575;
-    if rows.len() > MAX_ROWS {
-        return Err(t!("core.err.xlsx_too_many_rows", max = MAX_ROWS).to_string());
+    if rows.len() > XLSX_MAX_ROWS {
+        return Err(t!("core.err.xlsx_too_many_rows", max = XLSX_MAX_ROWS).to_string());
     }
     let mut book = Workbook::new();
     let ws = book.add_worksheet();

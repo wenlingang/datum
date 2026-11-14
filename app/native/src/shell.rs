@@ -84,4 +84,52 @@ impl Shell {
     pub fn file_timestamp() -> String {
         file_timestamp()
     }
+
+    /// 导出整表:先弹保存对话框(同 `save_text`),再把查询结果逐行写进文件(数据不经过界面)。
+    /// `format`:`"csv"` / `"json"` / `"markdown"` / `"sql"` / `"xlsx"`。
+    /// 返回 `{ path, rows }`;用户取消时为 null。
+    pub async fn export_table(
+        kind: String,
+        id: String,
+        table: String,
+        format: String,
+        file_name: String,
+    ) -> Result<JsonValue, String> {
+        let k: DbKind = from(JsonValue::String(kind), "kind")?;
+        let f: datum_core::export::Format = from(JsonValue::String(format), "format")?;
+        let Some(path) = ask_path(file_name).await? else {
+            return Ok(JsonValue::Null);
+        };
+        let p = path.clone();
+        let rows = crate::runtime::spawn(async move {
+            datum_core::service::export_table_to_file(&crate::runtime::state(), &k, &id, &table, f, &p).await
+        })
+        .await?
+        .map_err(crate::runtime::err)?;
+        Ok(serde_json::json!({ "path": path.to_string_lossy(), "rows": rows }))
+    }
+
+    /// 导出整个数据库为一个 SQL 文件:先弹保存对话框,再逐表逐行写入。返回路径;用户取消时为 null。
+    pub async fn export_database(kind: String, id: String, tables: Vec<String>, file_name: String) -> Result<Option<String>, String> {
+        let k: DbKind = from(JsonValue::String(kind), "kind")?;
+        let Some(path) = ask_path(file_name).await? else {
+            return Ok(None);
+        };
+        let p = path.clone();
+        crate::runtime::spawn(async move {
+            datum_core::service::export_database_to_file(&crate::runtime::state(), &k, &id, &tables, &p).await
+        })
+        .await?
+        .map_err(crate::runtime::err)?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    }
+}
+
+/// 保存对话框(默认在下载目录,预填文件名);取消时为 None。
+async fn ask_path(file_name: String) -> Result<Option<std::path::PathBuf>, String> {
+    let mut dialog = SaveDialog::new().file_name(file_name);
+    if let Some(dir) = dirs::download_dir() {
+        dialog = dialog.directory(dir);
+    }
+    pick_save_path(dialog).await
 }

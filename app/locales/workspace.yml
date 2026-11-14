@@ -332,9 +332,13 @@ ops:
     zh-CN: "已导出 %{format}"
     zh-TW: "已匯出 %{format}"
   table_empty:
-    en: "Table is empty, nothing to export"
-    zh-CN: "表为空,无数据导出"
-    zh-TW: "資料表是空的,沒有資料可匯出"
+    en: "Table is empty, only the header was exported"
+    zh-CN: "表为空,只导出了表头"
+    zh-TW: "資料表是空的,只匯出了表頭"
+  exported_rows:
+    en: "Exported %{format} · %{count} rows"
+    zh-CN: "已导出 %{format} · %{count} 行"
+    zh-TW: "已匯出 %{format} · %{count} 列"
   export_busy:
     en: "An export is already in progress, please wait"
     zh-CN: "正在导出中,请稍候"
@@ -343,10 +347,6 @@ ops:
     en: No tables to export
     zh-CN: 没有可导出的表
     zh-TW: 沒有可匯出的資料表
-  exporting_n:
-    en: "Exporting %{count} tables…"
-    zh-CN: "正在导出 %{count} 张表…"
-    zh-TW: "正在匯出 %{count} 張資料表…"
   exported_db:
     en: "Database exported · %{count} tables"
     zh-CN: "已导出数据库 · %{count} 张表"

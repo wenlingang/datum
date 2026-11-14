@@ -69,6 +69,10 @@ core:
       en: Not connected. Please connect first
       zh-CN: 连接未建立,请先连接
       zh-TW: 尚未建立連線,請先連線
+    export_write_failed:
+      en: Failed to write the export file
+      zh-CN: 写入导出文件失败
+      zh-TW: 寫入匯出檔案失敗
     pg_txn_aborted:
       en: "The current transaction has failed; run ROLLBACK first"
       zh-CN: 当前事务已出错,请先执行 ROLLBACK

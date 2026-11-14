@@ -14,6 +14,7 @@ pub mod core;
 pub mod erd;
 pub mod error;
 pub mod explain;
+pub mod export;
 pub mod grid;
 pub mod json;
 pub mod mongo;

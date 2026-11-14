@@ -245,12 +245,6 @@ impl Db {
             .map_err(err)
     }
 
-    /// 导出整库(结构 + 数据)为 SQL 文本。
-    pub async fn export_database(kind: String, id: String, tables: Vec<String>) -> Result<String, String> {
-        let k = kind_of(&kind)?;
-        spawn(async move { service::export_database(&state(), &k, &id, &tables).await }).await
-    }
-
     /// Redis:读取一个 key 的值与详情 `[value, detail]`。
     pub async fn redis_get_key(id: String, key: String) -> Result<JsonValue, String> {
         spawn(async move { service::redis_get_key(&state(), &id, &key).await })

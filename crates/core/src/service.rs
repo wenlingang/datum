@@ -691,6 +691,80 @@ pub async fn export_database(
     parts.join("\n\n")
 }
 
+/// 把一条查询的结果逐行写进 `sink`(导出用;PG 走辅助会话、MySQL 走连接池,不挡编辑器)。
+/// sink 用完交还给调用方(收尾或丢弃由它决定)。
+pub async fn stream_query<S: crate::export::RowSink + 'static>(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    mut sink: S,
+) -> (S, AppResult<()>) {
+    let r = match kind {
+        DbKind::Pg => state.pg_pool.stream_meta(id, sql, &mut sink).await,
+        DbKind::Mysql => state.my_pool.stream_pool(id, sql, &mut sink).await,
+        DbKind::Sqlite => {
+            let (id, sql) = (id.to_string(), sql.to_string());
+            let pool = state.sqlite_pool.clone();
+            match tokio::task::spawn_blocking(move || {
+                let r = pool.stream(&id, &sql, &mut sink);
+                (sink, r)
+            })
+            .await
+            {
+                Ok(pair) => return pair,
+                Err(e) => panic!("导出线程异常结束: {e}"),
+            }
+        }
+        DbKind::Redis | DbKind::Mongo => Err(unsupported()),
+    };
+    (sink, r)
+}
+
+/// 整表导出到文件(流式);返回行数。出错时删掉写了一半的文件。
+pub async fn export_table_to_file(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    table: &str,
+    format: crate::export::Format,
+    path: &std::path::Path,
+) -> AppResult<u64> {
+    let dialect = Dialect::from_kind(kind).ok_or_else(unsupported)?;
+    let sink = crate::export::FileSink::create(path, format, table, dialect)?;
+    let sql = format!("SELECT * FROM {}", ident(table, dialect));
+    match stream_query(state, kind, id, &sql, sink).await {
+        (sink, Ok(())) => sink.finish(),
+        (sink, Err(e)) => {
+            sink.abandon();
+            Err(e)
+        }
+    }
+}
+
+/// 整库导出成 SQL 文件(流式):逐表 INSERT;单表失败写一段说明,不影响其他表。
+pub async fn export_database_to_file(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    tables: &[String],
+    path: &std::path::Path,
+) -> AppResult<()> {
+    let dialect = Dialect::from_kind(kind).ok_or_else(unsupported)?;
+    let mut sink = crate::export::DatabaseSink::create(path, dialect)?;
+    for t in tables {
+        sink.begin_table(t)?;
+        let sql = format!("SELECT * FROM {}", ident(t, dialect));
+        let (back, r) = stream_query(state, kind, id, &sql, sink).await;
+        sink = back;
+        match r {
+            Ok(()) => sink.end_table()?,
+            Err(e) => sink.failed_table(&e.display())?,
+        }
+    }
+    sink.finish()
+}
+
 pub async fn redis_get_key(
     state: &AppState,
     id: &str,

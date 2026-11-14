@@ -85,24 +85,29 @@ export async function exportFiltered(format: ExportFormat) {
   await saveRows(format, data.table, data.columns, data.rows, tab.dbKind);
 }
 
-/** 表右键「导出整表」:查询全部行(不受行数上限)。 */
+/** 整表 / 整库导出是长任务,防重入。 */
+let exportingDb = false;
+
+/** 表右键「导出整表」:全部行(不受行数上限)。先选文件,再由原生层逐行写入,数据不经过界面。 */
 export async function exportTable(connId: string, table: string, format: ExportFormat) {
   const conn = conns.get(connId);
   if (!conn || !supportsSql(conn.kind)) return;
+  if (exportingDb) {
+    toast.info(t("ops.export_busy"));
+    return;
+  }
+  exportingDb = true;
   try {
-    const result = await db.query(conn.kind, connId, `SELECT * FROM ${sql.ident(table, conn.kind)}`, null);
-    if (result.rows.length === 0) {
-      toast.info(t("ops.table_empty"));
-      return;
-    }
-    await saveRows(format, table, result.columns, result.rows, conn.kind);
+    const done = await shell.exportTable(conn.kind, connId, table, format, fileName(table, EXT[format]));
+    if (!done) return;
+    if (done.rows === 0) toast.info(t("ops.table_empty"));
+    else toast.success(t("ops.exported_rows", { format: SHORT[format], count: done.rows }));
   } catch (e) {
     toast.error(errorText(e));
+  } finally {
+    exportingDb = false;
   }
 }
-
-/** 整库导出是长任务,防重入。 */
-let exportingDb = false;
 
 /** 导出整个数据库:逐表查询全部行,合成一个 SQL 文件。`cleanup`:完成后删除的临时克隆连接。 */
 export async function exportDatabase(connId: string, cleanup?: string) {
@@ -125,9 +130,8 @@ export async function exportDatabase(connId: string, cleanup?: string) {
       return;
     }
     const n = tables.length;
-    toast.info(t("ops.exporting_n", { count: n }));
-    const text = await db.exportDatabase(conn.kind, connId, tables);
-    await saveText(`${conn.name}_${shell.fileTimestamp()}.sql`, text, t("ops.exported_db", { count: n }));
+    const path = await shell.exportDatabase(conn.kind, connId, tables, `${conn.name}_${shell.fileTimestamp()}.sql`);
+    if (path) toast.success(t("ops.exported_db", { count: n }));
   } catch (e) {
     toast.error(errorText(e));
   } finally {

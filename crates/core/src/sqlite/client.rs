@@ -232,6 +232,29 @@ impl SqlitePool {
     }
 }
 
+impl SqlitePool {
+    /// 逐行把结果交给 `sink`(整表 / 整库导出)。同步执行,调用方放进阻塞线程池。
+    pub fn stream(&self, id: &str, sql: &str, sink: &mut dyn crate::export::RowSink) -> AppResult<()> {
+        self.with_conn(id, |conn| {
+            let mut stmt = conn.prepare(sql).map_err(|e| {
+                AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(e.to_string())
+            })?;
+            let n = stmt.column_count();
+            let columns: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
+            sink.columns(&columns)?;
+            let mut rows = stmt.query([]).map_err(|e| {
+                AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(e.to_string())
+            })?;
+            while let Some(row) = rows.next().map_err(|e| {
+                AppError::new(ErrorKind::Query, t!("core.err.read_result_failed")).with_detail(e.to_string())
+            })? {
+                sink.row((0..n).map(|i| row.get_ref(i).ok().and_then(cell)).collect())?;
+            }
+            Ok(())
+        })
+    }
+}
+
 /// 进度回调的检查间隔(虚拟机指令数):足够细,超时后很快停下;又不至于拖慢查询。
 const PROGRESS_OPS: i32 = 10_000;
 

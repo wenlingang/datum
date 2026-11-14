@@ -120,7 +120,6 @@ export const db = {
   /** 取消导入:整体回滚。 */
   sqliteImportCancel: (id: string) => Db.sqliteImportCancel(id),
   createTableDdl: (kind: DbKind, id: string, table: string) => Db.createTableDdl(kind, id, table),
-  exportDatabase: (kind: DbKind, id: string, tables: string[]) => Db.exportDatabase(kind, id, tables),
   redisGetKey: async (id: string, key: string) => (await Db.redisGetKey(id, key)) as [unknown, unknown],
   redisExec: (id: string, command: string) => Db.redisExec(id, command),
   redisOverview: async (id: string) => (await Db.redisOverview(id)) as RedisOverview,
@@ -302,6 +301,12 @@ export const shell = {
     Shell.renderExport(format, table, columns, rows, kind),
   /** 文件名友好的时间戳 `YYYYMMDD_HHmmss`。 */
   fileTimestamp: () => Shell.fileTimestamp(),
+  /** 导出整表:先弹保存对话框,再由原生层逐行写文件(数据不经过界面)。取消时为 null。 */
+  exportTable: async (kind: DbKind, id: string, table: string, format: ExportFormat, fileName: string) =>
+    (await Shell.exportTable(kind, id, table, format, fileName)) as { path: string; rows: number } | null,
+  /** 导出整库为 SQL 文件(同上,逐表逐行写入);返回路径,取消为 null。 */
+  exportDatabase: (kind: DbKind, id: string, tables: string[], fileName: string) =>
+    Shell.exportDatabase(kind, id, tables, fileName) as Promise<string | null>,
 };
 
 // ==== dialogs ====

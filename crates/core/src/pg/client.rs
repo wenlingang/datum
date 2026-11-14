@@ -420,6 +420,30 @@ impl PgPool {
         Ok(r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_deref()) == Some("t"))
     }
 
+    /// 逐行把结果交给 `sink`(整表 / 整库导出,辅助会话):不收集全部行,不挡用户会话。
+    pub async fn stream_meta(&self, id: &str, sql: &str, sink: &mut dyn crate::export::RowSink) -> AppResult<()> {
+        use futures_util::StreamExt;
+        let conn = self.get(id)?;
+        let mut aux = conn.aux().await?;
+        let client = aux.as_mut().expect("aux 已建立");
+        let stream = client.simple_query_raw(sql).await.map_err(|e| {
+            AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(describe(&e))
+        })?;
+        let mut stream = std::pin::pin!(stream);
+        while let Some(m) = stream.next().await {
+            let m = m.map_err(|e| AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(describe(&e)))?;
+            match m {
+                SimpleQueryMessage::RowDescription(cols) => {
+                    let names: Vec<String> = cols.iter().map(|c| c.name().to_string()).collect();
+                    sink.columns(&names)?;
+                }
+                SimpleQueryMessage::Row(r) => sink.row((0..r.len()).map(|i| r.get(i).map(str::to_string)).collect())?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// 元数据查询(辅助会话):表清单、列与外键、诊断等。不受用户会话上的慢查询与事务影响。
     pub async fn query_meta(&self, id: &str, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
         let conn = self.get(id)?;

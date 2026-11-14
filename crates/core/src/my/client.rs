@@ -361,6 +361,22 @@ impl MyPool {
         Self::run_capped(&mut conn, sql, max_rows).await
     }
 
+    /// 逐行把结果交给 `sink`(整表 / 整库导出,连接池):不收集全部行,不挡编辑器会话。
+    pub async fn stream_pool(&self, id: &str, sql: &str, sink: &mut dyn crate::export::RowSink) -> AppResult<()> {
+        let pool = self.pool(id).await?;
+        let mut conn = pool.get_conn().await.map_err(qerr)?;
+        let mut result = conn.query_iter(sql).await.map_err(qerr)?;
+        let columns: Vec<String> = result
+            .columns()
+            .map(|cs| cs.iter().map(|c| c.name_str().to_string()).collect())
+            .unwrap_or_default();
+        sink.columns(&columns)?;
+        while let Some(row) = result.next().await.map_err(qerr)? {
+            sink.row(row_to_strings(&row))?;
+        }
+        Ok(())
+    }
+
     /// 在会话上执行(编辑器):结果行数不超过 max_rows(None = 不限)。
     /// 逐行流式读取:上限之内才转换存储,之后的行读完即丢(排空结果集保持协议干净、
     /// affected_rows 可靠),峰值内存 O(max_rows)。
