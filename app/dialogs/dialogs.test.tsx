@@ -192,6 +192,27 @@ describe("settings", () => {
     app.dispose();
   });
 
+  test("AI reading production data is off by default and the switch is saved", async () => {
+    const app = await start();
+    await app.press("id:dev-settings");
+    await app.press("id:settings-section-privacy");
+    await app.waitFor("text:Let AI read data from production connections");
+    // 同步读落盘文件(waitUntil 的条件必须是同步的)
+    const saved = () => {
+      try {
+        return JSON.parse(Store.readSqlFile(`${CONFIG}/ai_settings.json`)).allowProdData;
+      } catch {
+        return undefined;
+      }
+    };
+    expect(saved()).toBeFalsy();
+    await app.press("id:allow-prod-data");
+    await app.waitUntil(() => saved() === true, { timeout: 5000 });
+    await app.press("id:allow-prod-data");
+    await app.waitUntil(() => saved() === false, { timeout: 5000 });
+    app.dispose();
+  });
+
   test("about shows the version and the development-build state", async () => {
     const app = await start();
     await app.press("id:dev-settings-about");

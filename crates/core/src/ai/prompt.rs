@@ -289,6 +289,15 @@ pub fn agent_rules_in(locale: &str) -> String {
     }
 }
 
+/// 生产库未允许 AI 读数据时追加的一句。
+pub fn prod_data_off_rule() -> String {
+    match Lang::from_locale(&current_locale()) {
+        Lang::En => "- This is a production database and reading its data is turned off in Settings: run_query is unavailable. Work from the table structure; for questions about the data, write the SQL in a ```sql code block for the user to run.".into(),
+        Lang::ZhCn => "- 这是生产库,设置里未允许 AI 读取数据:run_query 不可用。根据表结构作答;关于数据的问题,把 SQL 写进 ```sql 代码块,由用户自己执行。".into(),
+        Lang::ZhTw => "- 這是正式環境資料庫,設定中未允許 AI 讀取資料:run_query 無法使用。根據資料表結構作答;關於資料的問題,把 SQL 寫進 ```sql 程式碼區塊,由使用者自行執行。".into(),
+    }
+}
+
 pub fn agent_rules() -> String {
     agent_rules_in(&current_locale())
 }

@@ -14,7 +14,7 @@ function load(): AiSettings {
   try {
     return ai.settings();
   } catch {
-    return { providers: [], current: null, knowledgeName: "", knowledgePath: "" };
+    return { providers: [], current: null, knowledgeName: "", knowledgePath: "", allowProdData: false };
   }
 }
 

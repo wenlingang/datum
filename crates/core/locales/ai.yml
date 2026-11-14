@@ -21,6 +21,10 @@ ai:
       en: "Missing argument: %{arg}"
       zh-CN: "缺少参数:%{arg}"
       zh-TW: "缺少參數:%{arg}"
+    prod_data_off:
+      en: Reading data from production is turned off in Settings
+      zh-CN: 设置里未允许 AI 读取生产库的数据
+      zh-TW: 設定中未允許 AI 讀取正式環境的資料
     not_read_only:
       en: Rejected — only read-only queries run automatically
       zh-CN: 已拒绝:只有只读查询会自动执行
@@ -122,6 +126,10 @@ ai:
       en: The current model's provider has been deleted; please select a model again
       zh-CN: 当前模型所属的服务商已被删除,请重新选择模型
       zh-TW: 目前模型所屬的服務商已被刪除,請重新選擇模型
+    https_required:
+      en: "\"%{name}\" uses plain http to a public address; switch the API URL to https (http is allowed only for local and private-network addresses)"
+      zh-CN: 「%{name}」的 API 地址是公网的明文 http,请改用 https(只有本机与内网地址允许 http)
+      zh-TW: 「%{name}」的 API 網址是公網的明文 http,請改用 https(只有本機與內網位址允許 http)
     missing_url_key:
       en: "Please enter the API URL and Key for \"%{name}\" in Settings"
       zh-CN: 请在设置中填写「%{name}」的 API 地址与 Key

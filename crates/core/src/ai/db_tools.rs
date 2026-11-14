@@ -99,6 +99,13 @@ pub struct DbTools<'a> {
     pub state: &'a AppState,
     pub kind: DbKind,
     pub id: String,
+    /// 能否读数据(run_query)。生产库在设置未允许时为 false:只给表结构,数据不发给服务商。
+    pub allow_data: bool,
+}
+
+/// 按是否允许读数据给出工具:不允许时不提供 run_query。
+pub fn specs_for(allow_data: bool) -> Vec<ToolSpec> {
+    specs().into_iter().filter(|s| allow_data || s.name != RUN_QUERY).collect()
 }
 
 fn fail(msg: String) -> ToolOutput {
@@ -218,7 +225,8 @@ impl ToolRunner for DbTools<'_> {
             match name {
                 LIST_TABLES => self.list_tables().await,
                 DESCRIBE_TABLE => self.describe_table(args).await,
-                RUN_QUERY => self.run_query(args).await,
+                RUN_QUERY if !self.allow_data => fail(t!("ai.tool.prod_data_off").to_string()),
+        RUN_QUERY => self.run_query(args).await,
                 other => fail(t!("ai.tool.unknown", name = other).to_string()),
             }
         })
@@ -260,6 +268,22 @@ mod tests {
     fn statements_without_columns_report_affected() {
         let r = QueryResult { columns: vec![], rows: vec![], affected: Some(2) };
         assert_eq!(result_for_model(&r, false), "OK, 2 rows affected");
+    }
+
+    #[test]
+    fn data_off_hides_and_refuses_run_query() {
+        let names: Vec<_> = specs_for(false).into_iter().map(|s| s.name).collect();
+        assert_eq!(names, [LIST_TABLES, DESCRIBE_TABLE]);
+        assert_eq!(specs_for(true).len(), 3);
+        // 模型硬调也拒绝,不碰数据库
+        let dir = std::env::temp_dir().join(format!("datum-dbtools-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let st = AppState::new(dir.clone());
+        let tools = DbTools { state: &st, kind: DbKind::Sqlite, id: "nope".into(), allow_data: false };
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let out = rt.block_on(tools.run(RUN_QUERY, &json!({ "sql": "SELECT 1" })));
+        assert!(!out.ok);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

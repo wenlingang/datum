@@ -284,6 +284,8 @@ export interface AiSettings {
   current?: ModelRef | null;
   knowledgeName: string;
   knowledgePath: string;
+  /** 允许 AI 读取生产连接的数据(查询结果、一句话筛选的样例行);默认不允许 */
+  allowProdData?: boolean;
 }
 
 export interface AiStatus {

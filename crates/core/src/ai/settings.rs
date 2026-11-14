@@ -88,6 +88,9 @@ pub struct AiSettings {
     /// 知识库文档的绝对路径。每次对话发起时现读现取(不缓存内容到本文件),
     /// 保证指南更新后无需重新导入即生效。
     pub knowledge_path: String,
+    /// 允许 AI 读取生产(prod)连接里的数据:查询结果、一句话筛选的样例行会发给服务商。
+    /// 默认不允许,生产库上 AI 只能看表结构。
+    pub allow_prod_data: bool,
 
     // 旧版单端点配置,只读不写:加载时迁移成一个「默认」服务商。
     #[serde(skip_serializing)]

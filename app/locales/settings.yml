@@ -140,6 +140,18 @@ settings:
     en: Knowledge Base
     zh-CN: 知识库
     zh-TW: 知識庫
+  section_privacy:
+    en: Data & Privacy
+    zh-CN: 数据与隐私
+    zh-TW: 資料與隱私
+  allow_prod_data:
+    en: Let AI read data from production connections
+    zh-CN: 允许 AI 读取生产库的数据
+    zh-TW: 允許 AI 讀取正式環境的資料
+  allow_prod_data_hint:
+    en: "Off by default: on connections marked prod, AI only sees table structure — it does not run queries itself, and natural-language filters send no sample rows. When on, query results are sent to your AI provider."
+    zh-CN: 默认关闭:标记为 prod 的连接上,AI 只能看表结构,不会自己执行查询,一句话筛选也不附带样例行。开启后,查询结果会发送给 AI 服务商。
+    zh-TW: 預設關閉:標記為 prod 的連線上,AI 只能看資料表結構,不會自行執行查詢,一句話篩選也不附帶樣例列。開啟後,查詢結果會傳送給 AI 服務商。
   section_appearance:
     en: Appearance
     zh-CN: 外观

@@ -1192,7 +1192,10 @@ export async function filterFromText(m: TabModel, text: string) {
   try {
     const types = columnTypes(m);
     const columns = result.columns.map((name) => ({ name, dataType: types[name] ?? null }));
-    const r = await ai.nlFilter(question, columns, result.rows.slice(0, NL_SAMPLE_ROWS));
+    // 生产库默认不把数据发给 AI:不带样例行,只按列名与类型翻译
+    const prodDataOff = conns.get(m.connId)?.env === "prod" && !ai.settings().allowProdData;
+    const samples = prodDataOff ? [] : result.rows.slice(0, NL_SAMPLE_ROWS);
+    const r = await ai.nlFilter(question, columns, samples);
     // 等待期间结果被换掉(翻页、刷新、重新执行):条件可能已不适用,丢弃
     if (token !== m.token) return;
     if (r.filters.length === 0) {

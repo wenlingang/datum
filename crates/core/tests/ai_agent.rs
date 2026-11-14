@@ -115,7 +115,7 @@ async fn run(ep: provider::Endpoint, st: &AppState, id: &str) -> (Vec<AgentEvent
         ChatMessage { role: "system".into(), content: "You are a SQL assistant".into() },
         ChatMessage { role: "user".into(), content: QUESTION.into() },
     ];
-    let runner = DbTools { state: st, kind: DbKind::Sqlite, id: id.into() };
+    let runner = DbTools { state: st, kind: DbKind::Sqlite, id: id.into(), allow_data: true };
     let full = agent::run(&ep, &messages, &db_tools::specs(), &runner, &agent::Cancel::default(), &|e| events.lock().unwrap().push(e))
         .await
         .unwrap();
@@ -225,7 +225,7 @@ async fn gemini_tool_round_trip_keeps_thought_signature() {
 #[tokio::test]
 async fn writes_are_refused_by_the_query_tool() {
     let (st, id) = sqlite_state().await;
-    let runner = DbTools { state: &st, kind: DbKind::Sqlite, id: id.clone() };
+    let runner = DbTools { state: &st, kind: DbKind::Sqlite, id: id.clone(), allow_data: true };
     let args = serde_json::json!({ "sql": "DELETE FROM orders" });
     let o: ToolOutput = runner.run("run_query", &args).await;
     assert!(!o.ok);
@@ -271,7 +271,7 @@ async fn cancel_interrupts_a_hanging_stream() {
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
     });
     let (st, id) = sqlite_state().await;
-    let runner = DbTools { state: &st, kind: DbKind::Sqlite, id };
+    let runner = DbTools { state: &st, kind: DbKind::Sqlite, id, allow_data: true };
     let cancel = agent::Cancel::default();
     let c = cancel.clone();
     tokio::spawn(async move {

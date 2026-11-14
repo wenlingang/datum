@@ -35,6 +35,7 @@ import { CopyButton, ErrorText } from "../ui/error";
 const SECTIONS: { id: SettingsSection; icon: IconName; key: string }[] = [
   { id: "ai", icon: "sparkles", key: "settings.section_ai" },
   { id: "knowledge", icon: "file-text", key: "settings.section_knowledge" },
+  { id: "privacy", icon: "lock", key: "settings.section_privacy" },
   { id: "appearance", icon: "type", key: "settings.section_appearance" },
   { id: "about", icon: "refresh-cw", key: "settings.section_about" },
 ];
@@ -95,6 +96,9 @@ function SettingsView(props: { section: SettingsSection }) {
             <Scroll class="flex-1" contentClass="pb-2">
               <If when={section() === "knowledge"}>
                 <KnowledgeSection ctx={ctx} />
+              </If>
+              <If when={section() === "privacy"}>
+                <PrivacySection ctx={ctx} />
               </If>
               <If when={section() === "appearance"}>
                 <AppearanceSection />
@@ -654,6 +658,27 @@ function KnowledgeSection(props: { ctx: Ctx }) {
       >
         {doc().warning ?? t("settings.knowledge_stats", { count: [...doc().content].length })}
       </Text>
+      <NoticeLine ctx={props.ctx} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- 数据与隐私
+
+function PrivacySection(props: { ctx: Ctx }) {
+  const { notice } = props.ctx;
+  const allowed = () => aiSettings().allowProdData === true;
+  function set(v: boolean) {
+    const err = mutateAi((s) => ({ ...s, allowProdData: v }));
+    notice.set(err ? { ok: false, text: err } : null);
+  }
+  return (
+    <View class="gap-3">
+      <View class="flex-row items-center gap-2">
+        <CheckBox testID="allow-prod-data" checked={allowed()} onChange={set} label={t("settings.allow_prod_data")} />
+        <Text class={`${FS.sm} text-foreground`}>{t("settings.allow_prod_data")}</Text>
+      </View>
+      <Hint>{t("settings.allow_prod_data_hint")}</Hint>
       <NoticeLine ctx={props.ctx} />
     </View>
   );

@@ -4,7 +4,7 @@
 import { signal } from "nsh";
 import type { Connection } from "../lib/types";
 
-export type SettingsSection = "ai" | "knowledge" | "appearance" | "about";
+export type SettingsSection = "ai" | "knowledge" | "privacy" | "appearance" | "about";
 
 export interface ConnFormRequest {
   key: number;

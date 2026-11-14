@@ -172,8 +172,19 @@ pub async fn ai_agent_chat(
     }
     let settings = repo(state).load();
     let ep = provider::resolve(&settings)?;
-    let tools = crate::ai::db_tools::specs();
-    let runner = crate::ai::db_tools::DbTools { state, kind, id };
+    // 生产库默认不让 AI 读数据(查询结果会发给服务商):只给表结构类工具,并告诉模型
+    let prod = crate::core::repository::ConnectionRepo::new(&state.config_dir)
+        .load()
+        .map(|cs| cs.iter().any(|c| c.id == id && c.env == crate::core::connection::Env::Prod))
+        .unwrap_or(true);
+    let allow_data = !prod || settings.allow_prod_data;
+    if !allow_data {
+        if let Some(m) = messages.iter_mut().find(|m| m.role == "system") {
+            m.content.push_str(&format!("\n{}", crate::ai::prompt::prod_data_off_rule()));
+        }
+    }
+    let tools = crate::ai::db_tools::specs_for(allow_data);
+    let runner = crate::ai::db_tools::DbTools { state, kind, id, allow_data };
     if let Err(e) = agent::run(&ep, &messages, &tools, &runner, &cancel, &on_event).await {
         on_event(AgentEvent::Error { message: e.clone() });
         return Err(e);

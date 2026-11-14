@@ -36,6 +36,9 @@ pub fn build(provider: &ProviderConfig, model: &str) -> Result<Endpoint, String>
     if model.is_empty() {
         return Err(t!("ai.err.select_model").to_string());
     }
+    if !transport_ok(base) {
+        return Err(t!("ai.err.https_required", name = provider.name).to_string());
+    }
     Ok(Endpoint {
         protocol: provider.protocol,
         base_url: normalize_base(provider.protocol, base),
@@ -65,6 +68,29 @@ fn normalize_base(protocol: Protocol, base: &str) -> String {
     }
 }
 
+/// API Key 与对话内容(可能含表结构、查询结果)不走明文公网:
+/// 公网地址必须 https;本机、局域网 / 内网地址(自建 Ollama、内部网关)允许 http。
+fn transport_ok(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("http://") else { return true };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    let host = if let Some(v6) = host_port.strip_prefix('[') {
+        v6.split(']').next().unwrap_or("")
+    } else {
+        host_port.split(':').next().unwrap_or("")
+    };
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") || host.ends_with(".internal") || host.ends_with(".lan") {
+        return true;
+    }
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        Ok(std::net::IpAddr::V6(ip)) => ip.is_loopback() || (ip.segments()[0] & 0xfe00) == 0xfc00,
+        // 没有点的主机名(内网短名)视为内网
+        Err(_) => !host.contains('.'),
+    }
+}
+
 fn is_site_root(url: &str) -> bool {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     !rest.contains('/')
@@ -73,6 +99,26 @@ fn is_site_root(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_http_only_for_local_and_private_hosts() {
+        for ok in [
+            "https://api.openai.com/v1",
+            "http://localhost:11434",
+            "http://127.0.0.1:8080/v1",
+            "http://192.168.1.20:11434",
+            "http://10.0.0.5/v1",
+            "http://[::1]:11434",
+            "http://ollama:11434",
+            "http://gpu.lan/v1",
+            "http://user@172.16.0.9:8000",
+        ] {
+            assert!(transport_ok(ok), "{ok}");
+        }
+        for bad in ["http://api.example.com/v1", "http://8.8.8.8/v1", "HTTP://gw.example.com", "http://172.32.0.1"] {
+            assert!(!transport_ok(bad), "{bad}");
+        }
+    }
     use crate::ai::settings::{ModelEntry, ModelRef};
 
     fn provider(protocol: Protocol, base: &str) -> ProviderConfig {
