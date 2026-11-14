@@ -53,9 +53,8 @@ export const store = {
   saveConnection: (conn: Connection, password: string | null) =>
     Store.saveConnection(conn, password) as Connection,
   deleteConnection: (id: string) => Store.deleteConnection(id),
-  savedPassword: (id: string) => Store.savedPassword(id),
   switchDatabase: (id: string, database: string) => Store.switchDatabase(id, database) as Connection,
-  testConnection: (conn: Connection, password: string) => Store.testConnection(conn, password),
+  testConnection: (conn: Connection, password: string | null) => Store.testConnection(conn, password),
   history: () => Store.history() as HistoryEntry[],
   recordHistory: (entry: Omit<HistoryEntry, "id">) =>
     Store.recordHistory({ ...entry, id: "" }) as HistoryEntry[] | null,
@@ -387,5 +386,5 @@ export async function redisKey(id: string, key: string) {
 }
 
 /** 用表单当前参数(不保存)列出实例下的库(新建/编辑连接时下拉选库)。 */
-export const probeDatabases = async (conn: import("./types").Connection, password: string) =>
+export const probeDatabases = async (conn: import("./types").Connection, password: string | null) =>
   (await NativeDialogs.probeDatabases(conn, password)) as string[];

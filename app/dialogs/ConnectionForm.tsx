@@ -99,14 +99,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
       test.set({ kind: "failed", error: errorText(e) });
       return;
     }
-    // 编辑时没改密码:用已保存的密码测试(连接串模式下密码框是隐藏的)
-    if (password == null) {
-      try {
-        password = store.savedPassword(props.id);
-      } catch {
-        password = "";
-      }
-    }
+    // 编辑时没改密码(null):由后端用已保存的密码测试,密码不经过界面
     test.set({ kind: "testing" });
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -115,7 +108,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
     });
     let result: TestStatus;
     try {
-      await Promise.race([store.testConnection(conn, password ?? ""), timeout]);
+      await Promise.race([store.testConnection(conn, password), timeout]);
       result = { kind: "success", ms: Date.now() - started };
     } catch (e) {
       result = { kind: "failed", error: errorText(e) };
@@ -235,16 +228,9 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
       dbList.set({ state: "error", items: [], error: errorText(e) });
       return;
     }
-    if (password == null) {
-      try {
-        password = store.savedPassword(props.id);
-      } catch {
-        password = "";
-      }
-    }
     dbList.set({ state: "loading", items: [] });
     try {
-      const items = await probeDatabases(conn, password ?? "");
+      const items = await probeDatabases(conn, password);
       if (mine === dbAttempt) dbList.set({ state: "ok", items });
     } catch (e) {
       if (mine === dbAttempt) dbList.set({ state: "error", items: [], error: errorText(e) });

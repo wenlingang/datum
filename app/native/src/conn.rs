@@ -33,10 +33,6 @@ impl Store {
     }
 
     /// 已保存连接的密码(编辑表单「测试连接」用)。
-    pub fn saved_password(id: String) -> Result<String, String> {
-        core_cmd::saved_password(&state(), &id).map_err(err)
-    }
-
     /// 切库:同实例已有该库的连接则复用,否则克隆一个。返回目标连接。
     pub fn switch_database(id: String, database: String) -> Result<JsonValue, String> {
         core_cmd::switch_database(&state(), id, database)
@@ -45,10 +41,12 @@ impl Store {
     }
 
     /// 用表单当前参数(而非已保存配置)测一次连通性。
-    /// `conn.ssh.secret` 为 null 时(编辑时没改 SSH 密钥)用已保存的。
-    pub async fn test_connection(conn: JsonValue, password: String) -> Result<(), String> {
+    /// `conn.ssh.secret` 为 null 时(编辑时没改 SSH 密钥)用已保存的;
+    /// `password` 为 null 时(编辑时没改密码)用已保存的 —— 已保存的密码不交给界面。
+    pub async fn test_connection(conn: JsonValue, password: Option<String>) -> Result<(), String> {
         let conn: Connection = from(conn, "connection")?;
         let ssh = ssh_context(&conn);
+        let password = password_or_saved(&conn, password);
         spawn(async move { service::test_connection(&conn, &password, &ssh).await })
             .await?
             .map_err(err)
@@ -81,9 +79,16 @@ impl Store {
         core_cmd::read_sql_file(path)
     }
 
-    /// 把文本写到文件(导出 CSV / SQL / Markdown)。
+    /// 把文本写到配置目录下的文件(测试准备导入用的数据文件)。只允许写配置目录,
+    /// 不给界面一个能写任意路径的入口;真正的导出走保存对话框。
     pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
-        std::fs::write(&path, contents).map_err(|e| e.to_string())
+        let path = std::path::PathBuf::from(path);
+        let dir = state().config_dir.canonicalize().map_err(|e| e.to_string())?;
+        let parent = path.parent().ok_or("invalid path")?.canonicalize().map_err(|e| e.to_string())?;
+        if !parent.starts_with(&dir) || path.file_name().is_none() {
+            return Err("only files in the config directory can be written".into());
+        }
+        std::fs::write(parent.join(path.file_name().unwrap()), contents).map_err(|e| e.to_string())
     }
 
     /// 配置目录(诊断用)。
@@ -152,6 +157,11 @@ fn load_json(name: &str) -> JsonValue {
 fn save_json(name: &str, value: &JsonValue) -> Result<(), String> {
     let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
     datum_core::core::fsutil::write_private(&state().config_dir.join(name), &bytes).map_err(|e| e.to_string())
+}
+
+/// 表单里没填密码(null)时用已保存的;读不到按空密码。
+pub fn password_or_saved(conn: &Connection, password: Option<String>) -> String {
+    password.unwrap_or_else(|| core_cmd::saved_password(&state(), &conn.id).unwrap_or_default())
 }
 
 /// 表单参数建隧道的上下文:SSH 密钥取表单里填的,没填(null)则用已保存的。
