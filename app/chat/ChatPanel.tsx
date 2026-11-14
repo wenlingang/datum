@@ -222,7 +222,11 @@ function ReplyText(props: { msgId: number; text: string; base: number; streaming
             else={
               <TextView
                 markdown={seg().text}
-                options={{ streaming: props.streaming }}
+                // 回复里可能夹着表数据里注入的内容:不解析 HTML,图片不加载(加载远程图片会把拼进 URL 的数据发出去)
+                options={{ streaming: props.streaming, html: false }}
+                renderImage={(img) => (
+                  <Text class={`${FS.sm} text-muted-foreground`}>{t("chat.image_blocked", { alt: img.alt || "" })}</Text>
+                )}
                 selectable
                 class={`${FS.sm} leading-5 text-foreground`}
               />

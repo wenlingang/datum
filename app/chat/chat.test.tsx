@@ -255,3 +255,15 @@ test("新对话保留历史:可从历史菜单切回;对话跨重启保留", asy
   await second.waitFor("label:/^第二段对话的问题/");
   second.dispose();
 });
+
+test("回复里的图片不加载、HTML 不解析(防止表数据注入的内容把数据带出去)", async () => {
+  const app = await open("./testing/hostile.tsx", SIZE);
+  await app.waitFor("text:Ask about this database");
+  await app.type("id:ai-input", "看看用户表");
+  await app.press("id:ai-send");
+  await app.waitFor("text:查到了。", { timeout: 10_000 });
+  await app.waitFor("text:[image not loaded: leak]", { timeout: 5_000 });
+  // HTML 原样显示成文字
+  await app.waitUntil(() => app.texts().some((s) => s.includes("<b>粗体标签</b>")), { timeout: 5_000 });
+  app.dispose();
+});

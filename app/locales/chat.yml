@@ -142,6 +142,10 @@ chat:
     en: "\"Seed the users table with 10 rows of test data\""
     zh-CN: 「给 users 表初始化 10 条测试数据」
     zh-TW: 「為 users 資料表建立 10 筆測試資料」
+  image_blocked:
+    en: "[image not loaded: %{alt}]"
+    zh-CN: "[图片未加载:%{alt}]"
+    zh-TW: "[圖片未載入:%{alt}]"
   empty_confirm:
     en: Generated SQL runs only after you confirm it.
     zh-CN: 生成的 SQL 需你确认后才会执行。
