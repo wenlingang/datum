@@ -31,9 +31,10 @@ pub struct TableDetail {
 /// 列出实例下的库名(排除模板库)。
 pub async fn list_databases(pool: &PgPool, id: &str) -> AppResult<Vec<String>> {
     let r = pool
-        .query(
+        .query_meta(
             id,
             "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY datname",
+            None,
         )
         .await?;
     Ok(r.rows
@@ -45,9 +46,10 @@ pub async fn list_databases(pool: &PgPool, id: &str) -> AppResult<Vec<String>> {
 /// 列出 public schema 下的表名。
 pub async fn list_tables(pool: &PgPool, id: &str) -> AppResult<Vec<String>> {
     let r = pool
-        .query(
+        .query_meta(
             id,
             "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename",
+            None,
         )
         .await?;
     Ok(r.rows
@@ -74,7 +76,7 @@ pub async fn table_detail(pool: &PgPool, id: &str, table: &str) -> AppResult<Tab
          LEFT JOIN pg_index i ON i.indrelid=a.attrelid AND a.attnum=ANY(i.indkey) AND i.indisprimary \
          WHERE a.attrelid={reg} AND a.attnum>0 AND NOT a.attisdropped \
          ORDER BY a.attnum");
-    let cr = pool.query(id, &cols_sql).await?;
+    let cr = pool.query_meta(id, &cols_sql, None).await?;
     let columns = cr
         .rows
         .into_iter()
@@ -98,7 +100,7 @@ pub async fn table_detail(pool: &PgPool, id: &str, table: &str) -> AppResult<Tab
          WHERE ix.indrelid={reg} \
          GROUP BY i.relname, ix.indisprimary, ix.indisunique \
          ORDER BY ix.indisprimary DESC, i.relname");
-    let ir = pool.query(id, &idx_sql).await?;
+    let ir = pool.query_meta(id, &idx_sql, None).await?;
     let indexes = ir
         .rows
         .into_iter()

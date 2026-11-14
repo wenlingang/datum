@@ -3,6 +3,7 @@ use crate::error::{AppError, AppResult, ErrorKind};
 use rust_i18n::t;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_postgres::config::SslMode as PgSslMode;
 use tokio_postgres::{Client, Config, SimpleQueryMessage};
@@ -69,9 +70,24 @@ async fn column_type(
     Ok(ty)
 }
 
+/// 已建立的连接。每个连接各有两条会话,各自一把锁:
+/// - `session`:用户会话。编辑器执行、改数据、导入,以及要看到会话状态(事务里未提交的改动、
+///   临时表、SET 过的 search_path)的只读查询(影响预估、撤销快照、免确认执行、AI)都在这里。
+/// - `aux`:辅助会话,首次用到时才建立。表清单、列与外键、诊断、补全取样这类元数据查询走这里,
+///   用户会话上跑着慢查询、或停在一个事务里时都不受影响;它从不处于事务中。
+///
+/// 连接表只在查找时短暂加锁(同步锁、不跨 await),一条连接上的慢查询不挡别的连接。
+pub struct PgConn {
+    session: Mutex<Client>,
+    aux: Mutex<Option<Client>>,
+    config: Config,
+    ssl: SslMode,
+    target: Target,
+}
+
 #[derive(Default)]
 pub struct PgPool {
-    clients: Mutex<HashMap<String, Client>>,
+    conns: std::sync::Mutex<HashMap<String, Arc<PgConn>>>,
 }
 
 /// tokio-postgres 的 Display 只输出错误类别(如 "db error"),服务器的真实报错
@@ -205,23 +221,45 @@ impl PgPool {
     }
 
     /// 同 [`connect`](Self::connect),经 SSH 通道时在通道上建连(见 `target`)。
+    /// 只建用户会话;辅助会话在第一次用到时再建。
     pub async fn connect_target(&self, id: &str, config: &Config, ssl: SslMode, target: &Target) -> AppResult<()> {
         let client = dial(config, target, ssl).await.map_err(|e| {
             AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
         })?;
-        self.clients.lock().await.insert(id.to_string(), client);
+        let conn = PgConn {
+            session: Mutex::new(client),
+            aux: Mutex::new(None),
+            config: config.clone(),
+            ssl,
+            target: target.clone(),
+        };
+        self.conns.lock().unwrap().insert(id.to_string(), Arc::new(conn));
         Ok(())
+    }
+
+    fn get(&self, id: &str) -> AppResult<Arc<PgConn>> {
+        self.conns
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))
     }
 
     #[allow(dead_code)] // 目前仅测试使用,保留备将来重连/状态显示
     pub async fn is_connected(&self, id: &str) -> bool {
-        self.clients.lock().await.contains_key(id)
+        self.conns.lock().unwrap().contains_key(id)
     }
 
-    /// 断开并移除缓存的连接(不存在时静默)。Client 被 drop 后其连接任务随之结束,
-    /// 服务器侧会话立即终止 —— 删库前强制断开残留连接用。
+    /// 断开并移除缓存的连接(不存在时静默)。两条会话的 Client 随最后一个引用释放,
+    /// 服务器侧会话随之终止(正在执行的语句先跑完)—— 删库前强制断开残留连接用。
     pub async fn disconnect(&self, id: &str) {
-        self.clients.lock().await.remove(id);
+        let conn = self.conns.lock().unwrap().remove(id);
+        if let Some(conn) = conn {
+            // 等手上的语句跑完再返回,调用方(删库)依赖返回时会话已经结束
+            let _session = conn.session.lock().await;
+            let _aux = conn.aux.lock().await;
+        }
     }
 
     /// 在一个事务里批量执行编辑与删除(全成功或全回滚)。返回受影响行数。先 UPDATE 后 DELETE。
@@ -231,10 +269,8 @@ impl PgPool {
         edits: &[crate::pg::edit::CellEdit],
         deletes: &[crate::pg::edit::RowDelete],
     ) -> AppResult<u64> {
-        let mut guard = self.clients.lock().await;
-        let client = guard
-            .get_mut(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
+        let conn = self.get(id)?;
+        let mut client = conn.session.lock().await;
         let txn = client.transaction().await.map_err(|e| {
             AppError::new(ErrorKind::Edit, t!("core.err.begin_tx_failed")).with_detail(describe(&e))
         })?;
@@ -282,10 +318,8 @@ impl PgPool {
 
     /// 在单事务里逐条执行导入 SQL:全成功提交,任一失败整体回滚(错误标注第几条)。
     pub async fn import_sql(&self, id: &str, statements: &[String]) -> AppResult<usize> {
-        let mut guard = self.clients.lock().await;
-        let client = guard
-            .get_mut(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
+        let conn = self.get(id)?;
+        let mut client = conn.session.lock().await;
         let txn = client.transaction().await.map_err(|e| {
             AppError::new(ErrorKind::Query, t!("core.err.begin_tx_failed"))
                 .with_detail(describe(&e))
@@ -320,15 +354,13 @@ impl PgPool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        let guard = self.clients.lock().await;
-        let client = guard
-            .get(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        run_capped(client, sql, max_rows).await
+        let conn = self.get(id)?;
+        let client = conn.session.lock().await;
+        run_capped(&client, sql, max_rows).await
     }
 
-    /// 只读执行:切只读、执行、恢复三步在同一把锁里完成,
-    /// 期间同一连接上的其他请求(包括另一次只读执行的「恢复」)插不进来。
+    /// 只读执行(用户会话上):切只读、执行、恢复在同一把锁里完成,
+    /// 期间同一会话上的其他请求(包括另一次只读执行的「恢复」)插不进来。
     pub async fn query_read_only(
         &self,
         id: &str,
@@ -340,6 +372,10 @@ impl PgPool {
 
     /// 同 [`Self::query_read_only`],`timeout_ms` 给定时由服务端限制执行时长(statement_timeout),
     /// 超时即中止,不会占着连接拖住后面的语句。
+    ///
+    /// 用户可能在编辑器里开着事务(`BEGIN` 之后还没提交):这时在保存点里执行,
+    /// 看得到事务里未提交的改动,结束后回到保存点,用户的事务原样保留;
+    /// 事务已出错(要先 ROLLBACK)时直接报错,不替用户结束事务。
     pub async fn query_read_only_bounded(
         &self,
         id: &str,
@@ -347,23 +383,114 @@ impl PgPool {
         max_rows: Option<u32>,
         timeout_ms: Option<u32>,
     ) -> AppResult<QueryResult> {
-        let guard = self.clients.lock().await;
-        let client = guard
-            .get(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        run_capped(client, "SET default_transaction_read_only = on", None).await?;
-        if let Some(ms) = timeout_ms {
-            run_capped(client, &format!("SET statement_timeout = {ms}"), None).await?;
-        }
-        let result = run_capped(client, sql, max_rows).await;
-        // 语句可能留下中止的事务,先回滚再恢复,否则 RESET 会因事务已中止而失败
-        let _ = client.batch_execute("ROLLBACK").await;
-        if timeout_ms.is_some() {
-            run_capped(client, "RESET statement_timeout", None).await?;
-        }
-        run_capped(client, "RESET default_transaction_read_only", None).await?;
-        result
+        let conn = self.get(id)?;
+        let client = conn.session.lock().await;
+        run_read_only(&client, sql, max_rows, timeout_ms).await
     }
+
+    /// 元数据查询(辅助会话):表清单、列与外键、诊断等。不受用户会话上的慢查询与事务影响。
+    pub async fn query_meta(&self, id: &str, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
+        let conn = self.get(id)?;
+        let mut aux = conn.aux().await?;
+        let client = aux.as_mut().expect("aux 已建立");
+        run_capped(client, sql, max_rows).await
+    }
+
+    /// 同 [`Self::query_meta`],只读 + 服务端限时(诊断、补全取样)。
+    pub async fn query_meta_read_only(
+        &self,
+        id: &str,
+        sql: &str,
+        max_rows: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> AppResult<QueryResult> {
+        let conn = self.get(id)?;
+        let mut aux = conn.aux().await?;
+        let client = aux.as_mut().expect("aux 已建立");
+        run_read_only(client, sql, max_rows, timeout_ms).await
+    }
+}
+
+impl PgConn {
+    /// 拿到辅助会话(没建或已断开时先建),返回时持有它的锁,保证 Some。
+    async fn aux(&self) -> AppResult<tokio::sync::MutexGuard<'_, Option<Client>>> {
+        let mut aux = self.aux.lock().await;
+        if aux.as_ref().is_none_or(|c| c.is_closed()) {
+            let client = dial(&self.config, &self.target, self.ssl).await.map_err(|e| {
+                AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
+            })?;
+            *aux = Some(client);
+        }
+        Ok(aux)
+    }
+}
+
+/// 会话当前是否处在事务块里(`BEGIN` 之后、提交 / 回滚之前)。
+/// 事务块里的语句,其开始时间晚于事务开始时间;不在事务块时每条语句自成事务,两者相等。
+/// 事务已出错时这条查询本身会失败,报「先 ROLLBACK」。
+async fn in_transaction(client: &Client) -> AppResult<bool> {
+    let msgs = client
+        .simple_query("SELECT statement_timestamp() <> transaction_timestamp()")
+        .await
+        .map_err(|e| {
+            // 按 SQLSTATE 判断(服务器报错文本可能是本地化的)
+            if e.code() == Some(&tokio_postgres::error::SqlState::IN_FAILED_SQL_TRANSACTION) {
+                AppError::new(ErrorKind::Query, t!("core.err.pg_txn_aborted"))
+            } else {
+                AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(describe(&e))
+            }
+        })?;
+    Ok(msgs.iter().any(|m| matches!(m, SimpleQueryMessage::Row(r) if r.get(0) == Some("t"))))
+}
+
+/// 在已拿到的会话上只读执行(调用方持有它的锁)。
+///
+/// 会话级的 `default_transaction_read_only` 让语句里即使先 COMMIT、后面的语句开的新事务仍是只读。
+/// - 不在事务块:切只读 → 执行 → 回滚语句可能留下的事务 → 恢复。
+/// - 在事务块:建保存点,`SET LOCAL transaction_read_only` 让当前事务只读;
+///   执行后回到保存点,这期间的设置随之撤销,用户事务里此前的改动保留。
+async fn run_read_only(
+    client: &Client,
+    sql: &str,
+    max_rows: Option<u32>,
+    timeout_ms: Option<u32>,
+) -> AppResult<QueryResult> {
+    let timeout = timeout_ms.map(|ms| format!("; SET statement_timeout = {ms}")).unwrap_or_default();
+    if in_transaction(client).await? {
+        run_capped(
+            client,
+            &format!(
+                "SAVEPOINT datum_ro; SET LOCAL transaction_read_only = on; \
+                 SET default_transaction_read_only = on{timeout}"
+            ),
+            None,
+        )
+        .await?;
+        let result = run_capped(client, sql, max_rows).await;
+        // 语句出错时保存点之后的部分已中止,回到保存点即恢复;语句里若结束了事务,保存点已不在,
+        // 这一步会失败,再单独恢复会话设置
+        let restored = client
+            .batch_execute("ROLLBACK TO SAVEPOINT datum_ro; RELEASE SAVEPOINT datum_ro")
+            .await;
+        if restored.is_err() {
+            reset_session(client, timeout_ms.is_some()).await?;
+        }
+        return result;
+    }
+    run_capped(client, &format!("SET default_transaction_read_only = on{timeout}"), None).await?;
+    let result = run_capped(client, sql, max_rows).await;
+    // 语句可能留下中止或未结束的事务(如以 BEGIN 开头),先回滚再恢复,否则 RESET 会因事务已中止而失败
+    let _ = client.batch_execute("ROLLBACK").await;
+    reset_session(client, timeout_ms.is_some()).await?;
+    result
+}
+
+async fn reset_session(client: &Client, timeout: bool) -> AppResult<()> {
+    if timeout {
+        run_capped(client, "RESET statement_timeout", None).await?;
+    }
+    run_capped(client, "RESET default_transaction_read_only", None).await?;
+    Ok(())
 }
 
 /// 在已拿到的连接上执行 SQL(调用方持有连接锁)。

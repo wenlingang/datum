@@ -151,6 +151,7 @@ async fn read_only_bounded(
 }
 
 /// 只读会话 + 服务端限时(PG / MySQL;SQLite 本地执行不限时),超时报 `impact_timeout` 文案。
+/// PG 在用户会话上执行(看得到会话里未提交的改动与临时表);元数据类查询用 [`query_meta_read_only_timeout`]。
 pub async fn query_read_only_timeout(
     state: &AppState,
     kind: &DbKind,
@@ -159,7 +160,33 @@ pub async fn query_read_only_timeout(
     max_rows: u32,
     timeout_ms: u32,
 ) -> AppResult<QueryResult> {
+    read_only_timeout(state, kind, id, sql, max_rows, timeout_ms, false).await
+}
+
+/// 同 [`query_read_only_timeout`],PG 走辅助会话:诊断、补全取样这类不依赖用户会话状态的查询,
+/// 用户会话上跑着慢查询或停在事务里时也能照常执行。
+pub async fn query_meta_read_only_timeout(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    max_rows: u32,
+    timeout_ms: u32,
+) -> AppResult<QueryResult> {
+    read_only_timeout(state, kind, id, sql, max_rows, timeout_ms, true).await
+}
+
+async fn read_only_timeout(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    max_rows: u32,
+    timeout_ms: u32,
+    meta: bool,
+) -> AppResult<QueryResult> {
     let r = match kind {
+        DbKind::Pg if meta => state.pg_pool.query_meta_read_only(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, Some(max_rows)),
@@ -173,6 +200,21 @@ pub async fn query_read_only_timeout(
             e
         }
     })
+}
+
+/// 元数据查询(表结构、外键、诊断操作等):PG 走辅助会话,不受用户会话上的慢查询与事务影响;
+/// 其他库同 [`query`]。
+pub async fn query_meta(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    sql: &str,
+    max_rows: Option<u32>,
+) -> AppResult<QueryResult> {
+    match kind {
+        DbKind::Pg => state.pg_pool.query_meta(id, sql, max_rows).await,
+        _ => query(state, kind, id, sql, max_rows).await,
+    }
 }
 
 /// 预估一条写语句的影响范围:改写成只读的 COUNT 与预览查询,在数据库强制只读的会话里执行。
@@ -462,15 +504,15 @@ pub async fn create_table_ddl(
 /// 整库列速览(补全与 AI 上下文用)。
 pub async fn fetch_columns(state: &AppState, kind: &DbKind, id: &str) -> AppResult<ColumnsByTable> {
     let dialect = Dialect::from_kind(kind).ok_or_else(unsupported)?;
-    let r = query(state, kind, id, schema::columns_sql(dialect), None).await?;
+    let r = query_meta(state, kind, id, schema::columns_sql(dialect), None).await?;
     Ok(schema::rows_to_column_map(&r.rows))
 }
 
 /// 整库外键 + 主键(ER 图用)。
 pub async fn fetch_erd_schema(state: &AppState, kind: &DbKind, id: &str) -> AppResult<ErdSchema> {
     let dialect = Dialect::from_kind(kind).ok_or_else(unsupported)?;
-    let fks = query(state, kind, id, schema::foreign_keys_sql(dialect), None).await?;
-    let pks = query(state, kind, id, schema::primary_keys_sql(dialect), None).await?;
+    let fks = query_meta(state, kind, id, schema::foreign_keys_sql(dialect), None).await?;
+    let pks = query_meta(state, kind, id, schema::primary_keys_sql(dialect), None).await?;
     Ok(ErdSchema {
         fks: schema::rows_to_fk_list(&fks.rows),
         pk_by_table: schema::rows_to_pk_map(&pks.rows),
@@ -523,7 +565,7 @@ pub async fn distinct_values(
         col = ident(column, dialect),
         table = ident(table, dialect),
     );
-    let r = query_read_only_timeout(state, kind, id, &sql, DISTINCT_MAX as u32 + 1, DISTINCT_TIMEOUT_MS).await?;
+    let r = query_meta_read_only_timeout(state, kind, id, &sql, DISTINCT_MAX as u32 + 1, DISTINCT_TIMEOUT_MS).await?;
     let mut values: Vec<String> = r.rows.into_iter().filter_map(|row| row.into_iter().next().flatten()).collect();
     if values.len() > DISTINCT_MAX || values.iter().any(|v| v.chars().count() > DISTINCT_MAX_CHARS || v.contains('\n')) {
         return Ok(None);
@@ -556,7 +598,7 @@ pub async fn json_key_tree(
         "SELECT {col}::text FROM {table} WHERE {col} IS NOT NULL AND pg_column_size({col}) <= {JSON_SAMPLE_MAX_BYTES} LIMIT {JSON_SAMPLE_ROWS}",
         table = ident(table, Dialect::Pg),
     );
-    let r = query_read_only_timeout(state, kind, id, &sql, JSON_SAMPLE_ROWS, JSON_TIMEOUT_MS).await?;
+    let r = query_meta_read_only_timeout(state, kind, id, &sql, JSON_SAMPLE_ROWS, JSON_TIMEOUT_MS).await?;
     let samples: Vec<String> = r.rows.into_iter().filter_map(|row| row.into_iter().next().flatten()).collect();
     Ok(Some(crate::json::infer_keys(samples.iter().map(String::as_str))))
 }

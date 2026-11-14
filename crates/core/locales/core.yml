@@ -69,6 +69,10 @@ core:
       en: Not connected. Please connect first
       zh-CN: 连接未建立,请先连接
       zh-TW: 尚未建立連線,請先連線
+    pg_txn_aborted:
+      en: "The current transaction has failed; run ROLLBACK first"
+      zh-CN: 当前事务已出错,请先执行 ROLLBACK
+      zh-TW: 目前交易已出錯,請先執行 ROLLBACK
     connect_failed:
       en: "Failed to connect to %{db}"
       zh-CN: "连接 %{db} 失败"

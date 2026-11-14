@@ -158,7 +158,7 @@ fn unknown_section(key: &str) -> AppError {
 }
 
 async fn ro(state: &AppState, kind: &DbKind, id: &str, sql: &str) -> AppResult<QueryResult> {
-    service::query_read_only_timeout(state, kind, id, sql, MAX_ROWS, DIAG_TIMEOUT_MS).await
+    service::query_meta_read_only_timeout(state, kind, id, sql, MAX_ROWS, DIAG_TIMEOUT_MS).await
 }
 
 /// 依次尝试几种写法(不同版本 / 分支的系统表不同),返回第一个成功的;都失败时返回最后一个错误。
@@ -543,7 +543,7 @@ fn charset_scope(db: Option<&str>) -> String {
 async fn my_charset(state: &AppState, id: &str) -> AppResult<DiagResult> {
     let kind = DbKind::Mysql;
     let scan = |sql: String| async move {
-        service::query_read_only_timeout(state, &kind, id, &sql, CHARSET_SCAN_ROWS, DIAG_TIMEOUT_MS).await
+        service::query_meta_read_only_timeout(state, &kind, id, &sql, CHARSET_SCAN_ROWS, DIAG_TIMEOUT_MS).await
     };
     let base = ro(state, &kind, id, "SELECT VERSION(), DATABASE()").await?;
     let row = base.rows.first().cloned().unwrap_or_default();
@@ -745,7 +745,7 @@ pub fn action_sql(kind: &DbKind, action: Action, args: &[String]) -> AppResult<S
 /// 执行一个诊断操作。PG 的取消 / 终止返回 false(会话已结束或无权限)时报错。
 pub async fn act(state: &AppState, kind: &DbKind, id: &str, action: Action, args: &[String]) -> AppResult<()> {
     let sql = action_sql(kind, action, args)?;
-    let r = service::query(state, kind, id, &sql, Some(20)).await?;
+    let r = service::query_meta(state, kind, id, &sql, Some(20)).await?;
     // OPTIMIZE TABLE 出错不抛异常,而是在结果里给一行 Msg_type = error
     if action == Action::OptimizeTable {
         let col = |name: &str| r.columns.iter().position(|c| c.eq_ignore_ascii_case(name));

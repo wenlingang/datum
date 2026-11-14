@@ -715,7 +715,7 @@ async fn snapshot(
 type Rows = Vec<Vec<Option<String>>>;
 
 async fn rows(state: &AppState, kind: &DbKind, id: &str, sql: &str) -> AppResult<Rows> {
-    Ok(service::query(state, kind, id, sql, None).await?.rows)
+    Ok(service::query_meta(state, kind, id, sql, None).await?.rows)
 }
 
 fn cell(row: &[Option<String>], i: usize) -> String {
