@@ -120,6 +120,22 @@ export const db = {
   redisAnalysisStart: (id: string) => Db.redisAnalysisStart(id) as Promise<void>,
   redisAnalysisReport: async (id: string) => (await Db.redisAnalysisReport(id)) as RedisReport | null,
   redisAnalysisCancel: (id: string) => Db.redisAnalysisCancel(id) as Promise<void>,
+  /** Redis 实时:开始 Pub/Sub 会话(专用连接),返回会话 id;关 tab 时务必 redisLiveClose。 */
+  redisPubsubStart: (id: string, subs: TabTypes.RedisSub[]) => Db.redisPubsubStart(id, subs) as Promise<string>,
+  /** Redis 实时:开始 MONITOR(专用连接,seconds 秒后自动停止)。 */
+  redisMonitorStart: (id: string, seconds: number, filter: TabTypes.RedisMonitorFilter) =>
+    Db.redisMonitorStart(id, seconds, filter) as Promise<string>,
+  redisLivePoll: async (session: string, since: number, limit: number) =>
+    (await Db.redisLivePoll(session, since, limit)) as TabTypes.RedisLivePoll,
+  redisLiveDetail: async (session: string, seq: number) =>
+    (await Db.redisLiveDetail(session, seq)) as TabTypes.RedisLiveDetail | null,
+  redisLiveSubscribe: (session: string, subs: TabTypes.RedisSub[]) => Db.redisLiveSubscribe(session, subs) as Promise<void>,
+  redisLiveUnsubscribe: (session: string, subs: TabTypes.RedisSub[]) => Db.redisLiveUnsubscribe(session, subs) as Promise<void>,
+  redisLiveFilter: (session: string, filter: TabTypes.RedisMonitorFilter) => Db.redisLiveFilter(session, filter) as Promise<void>,
+  redisLiveClear: (session: string) => Db.redisLiveClear(session) as Promise<void>,
+  redisLiveStop: (session: string) => Db.redisLiveStop(session) as Promise<void>,
+  redisLiveClose: (session: string) => Db.redisLiveClose(session) as Promise<void>,
+  redisPublish: (id: string, channel: string, message: string) => Db.redisPublish(id, channel, message) as Promise<number>,
   /** 分析排行榜里的 key 的值(集群模式传所在节点) */
   redisKeyOn: async (id: string, node: string | null, key: string) =>
     (await Db.redisKeyOn(id, node, key)) as TabTypes.RedisKeyValue,

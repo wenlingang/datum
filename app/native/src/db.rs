@@ -374,6 +374,88 @@ impl Db {
     pub async fn redis_analysis_cancel(id: String) -> Result<(), String> {
         spawn(async move { service::redis_analysis_cancel(&state(), &id).await }).await
     }
+    /// Redis 实时:开始 Pub/Sub 会话(专用连接),`subs` 为 `[{ pattern, name }]`(可以为空,之后再加)。
+    /// 返回会话 id,之后用 `redis_live_poll` 轮询消息;关 tab 时务必 `redis_live_close`。
+    pub async fn redis_pubsub_start(id: String, subs: JsonValue) -> Result<String, String> {
+        let s: Vec<datum_core::rds::live::Sub> = from(subs, "subs")?;
+        spawn(async move { service::redis_pubsub_start(&state(), &id, s).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:开始 MONITOR(专用连接),`seconds` 秒后自动停止(最长 600);`filter` 为 `{ command, key }`。
+    pub async fn redis_monitor_start(id: String, seconds: f64, filter: JsonValue) -> Result<String, String> {
+        let f: datum_core::rds::live::MonitorFilter = from(filter, "filter")?;
+        let secs = if seconds.is_finite() && seconds > 0.0 { seconds as u64 } else { datum_core::rds::live::MONITOR_DEFAULT_SECS };
+        spawn(async move { service::redis_monitor_start(&state(), &id, secs, f).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:序号大于 `since` 的消息(最多 `limit` 条)与会话状态。
+    pub async fn redis_live_poll(session: String, since: f64, limit: f64) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_live_poll(&state(), &session, since.max(0.0) as u64, limit.max(1.0) as usize).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis 实时:一条消息保存下来的完整内容(最多 1 MB);已被丢掉时为 null。
+    pub async fn redis_live_detail(session: String, seq: f64) -> Result<JsonValue, String> {
+        spawn(async move { service::redis_live_detail(&state(), &session, seq.max(0.0) as u64).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// Redis 实时:在进行中的 Pub/Sub 会话上增加订阅。
+    pub async fn redis_live_subscribe(session: String, subs: JsonValue) -> Result<(), String> {
+        let s: Vec<datum_core::rds::live::Sub> = from(subs, "subs")?;
+        spawn(async move { service::redis_live_subscribe(&state(), &session, &s).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:取消订阅。
+    pub async fn redis_live_unsubscribe(session: String, subs: JsonValue) -> Result<(), String> {
+        let s: Vec<datum_core::rds::live::Sub> = from(subs, "subs")?;
+        spawn(async move { service::redis_live_unsubscribe(&state(), &session, &s).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:换 MONITOR 的过滤条件 `{ command, key }`(本地过滤,缓冲里不符合的一并拿掉)。
+    pub async fn redis_live_filter(session: String, filter: JsonValue) -> Result<(), String> {
+        let f: datum_core::rds::live::MonitorFilter = from(filter, "filter")?;
+        spawn(async move { service::redis_live_filter(&state(), &session, f).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:清空缓冲。
+    pub async fn redis_live_clear(session: String) -> Result<(), String> {
+        spawn(async move { service::redis_live_clear(&state(), &session).await })
+            .await?
+            .map_err(err)
+    }
+
+    /// Redis 实时:停止接收(退订、关专用连接、结束后台任务);缓冲留着,还能看详情。
+    pub async fn redis_live_stop(session: String) -> Result<(), String> {
+        spawn(async move { service::redis_live_stop(&state(), &session).await }).await
+    }
+
+    /// Redis 实时:停止并移除会话,释放缓冲(关 tab、开始新会话时)。
+    pub async fn redis_live_close(session: String) -> Result<(), String> {
+        spawn(async move { service::redis_live_close(&state(), &session).await }).await
+    }
+
+    /// Redis:PUBLISH,返回收到消息的订阅者数。
+    pub async fn redis_publish(id: String, channel: String, message: String) -> Result<i64, String> {
+        spawn(async move { service::redis_publish(&state(), &id, &channel, &message).await })
+            .await?
+            .map_err(err)
+    }
+
     /// 诊断:某个库支持的分区(PG / MySQL / SQLite;其他类型为空数组)。
     pub fn diag_sections(kind: String) -> Result<JsonValue, String> {
         json(service::diag_sections(&kind_of(&kind)?))

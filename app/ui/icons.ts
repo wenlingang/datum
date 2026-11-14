@@ -50,15 +50,18 @@ import monitor from "../assets/icons/monitor.svg";
 import moon from "../assets/icons/moon.svg";
 import network from "../assets/icons/network.svg";
 import panelLeft from "../assets/icons/panel-left.svg";
+import pause from "../assets/icons/pause.svg";
 import pencil from "../assets/icons/pencil.svg";
 import play from "../assets/icons/play.svg";
 import plus from "../assets/icons/plus.svg";
 import quote from "../assets/icons/quote.svg";
+import radio from "../assets/icons/radio.svg";
 import refreshCw from "../assets/icons/refresh-cw.svg";
 import rotateCcwClock from "../assets/icons/rotate-ccw-clock.svg";
 import rotateCcw from "../assets/icons/rotate-ccw.svg";
 import scanSearch from "../assets/icons/scan-search.svg";
 import search from "../assets/icons/search.svg";
+import send from "../assets/icons/send.svg";
 import settings from "../assets/icons/settings.svg";
 import sparkles from "../assets/icons/sparkles.svg";
 import squarePlay from "../assets/icons/square-play.svg";
@@ -127,15 +130,18 @@ export const ICONS = {
   "moon": moon,
   "network": network,
   "panel-left": panelLeft,
+  "pause": pause,
   "pencil": pencil,
   "play": play,
   "plus": plus,
   "quote": quote,
+  "radio": radio,
   "refresh-cw": refreshCw,
   "rotate-ccw-clock": rotateCcwClock,
   "rotate-ccw": rotateCcw,
   "scan-search": scanSearch,
   "search": search,
+  "send": send,
   "settings": settings,
   "sparkles": sparkles,
   "square-play": squarePlay,

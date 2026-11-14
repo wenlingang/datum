@@ -47,7 +47,11 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
         DbKind::Pg => pg::commands::pg_disconnect(state, id).await,
         DbKind::Mysql => my::commands::my_disconnect(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_disconnect(state, id).await,
-        DbKind::Redis => Ok(()),
+        DbKind::Redis => {
+            // 实时会话的专用连接可能经同一条隧道:先停掉它们(退订、关连接、结束后台任务)
+            state.redis_pool.stop_lives(&id).await;
+            Ok(())
+        }
         DbKind::Mongo => {
             state.mongo_pool.disconnect(&id).await;
             Ok(())
@@ -636,6 +640,55 @@ pub async fn redis_analysis_report(state: &AppState, id: &str) -> Option<rds::an
 
 pub async fn redis_analysis_cancel(state: &AppState, id: &str) {
     state.redis_pool.cancel_analysis(id).await
+}
+
+pub async fn redis_pubsub_start(state: &AppState, id: &str, subs: Vec<rds::live::Sub>) -> AppResult<String> {
+    state.redis_pool.start_pubsub(id, subs, Default::default()).await
+}
+
+pub async fn redis_monitor_start(state: &AppState, id: &str, secs: u64, filter: rds::live::MonitorFilter) -> AppResult<String> {
+    state.redis_pool.start_monitor(id, secs, filter, Default::default()).await
+}
+
+pub async fn redis_live_poll(state: &AppState, sid: &str, since: u64, limit: usize) -> AppResult<rds::live::LivePoll> {
+    Ok(state.redis_pool.live(sid).await?.poll(since, limit))
+}
+
+/// 一条消息保存下来的完整内容;已被丢掉 / 清空时为 None。
+pub async fn redis_live_detail(state: &AppState, sid: &str, seq: u64) -> AppResult<Option<rds::live::LiveDetail>> {
+    Ok(state.redis_pool.live(sid).await?.detail(seq))
+}
+
+pub async fn redis_live_subscribe(state: &AppState, sid: &str, subs: &[rds::live::Sub]) -> AppResult<()> {
+    state.redis_pool.live(sid).await?.subscribe(subs).await
+}
+
+pub async fn redis_live_unsubscribe(state: &AppState, sid: &str, subs: &[rds::live::Sub]) -> AppResult<()> {
+    state.redis_pool.live(sid).await?.unsubscribe(subs).await
+}
+
+pub async fn redis_live_filter(state: &AppState, sid: &str, filter: rds::live::MonitorFilter) -> AppResult<()> {
+    state.redis_pool.live(sid).await?.set_filter(filter);
+    Ok(())
+}
+
+pub async fn redis_live_clear(state: &AppState, sid: &str) -> AppResult<()> {
+    state.redis_pool.live(sid).await?.clear();
+    Ok(())
+}
+
+/// 停止接收(缓冲留着,还能看详情)。
+pub async fn redis_live_stop(state: &AppState, sid: &str) {
+    state.redis_pool.stop_live(sid).await
+}
+
+/// 停止并移除会话,释放缓冲。
+pub async fn redis_live_close(state: &AppState, sid: &str) {
+    state.redis_pool.close_live(sid).await
+}
+
+pub async fn redis_publish(state: &AppState, id: &str, channel: &str, message: &str) -> AppResult<i64> {
+    state.redis_pool.publish(id, channel, message).await
 }
 
 /// SQLite:记下连接上 legacy_alter_table / foreign_keys 的当前值(编辑器多语句执行前)。

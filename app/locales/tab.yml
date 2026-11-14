@@ -2480,3 +2480,248 @@ json:
     en: "… %{n} more (see Text for all)"
     zh-CN: "… 还有 %{n} 项(完整内容看「文本」)"
     zh-TW: "… 還有 %{n} 項(完整內容看「文字」)"
+rlive:
+  title:
+    en: "Redis Live"
+    zh-CN: "Redis 实时"
+    zh-TW: "Redis 即時"
+  heading:
+    en: "Live · %{name}"
+    zh-CN: "实时 · %{name}"
+    zh-TW: "即時 · %{name}"
+  channel:
+    en: "Channel"
+    zh-CN: "频道"
+    zh-TW: "頻道"
+  pattern:
+    en: "Pattern"
+    zh-CN: "模式"
+    zh-TW: "模式"
+  sub_kind:
+    en: "Subscribe to a channel or a pattern"
+    zh-CN: "订阅频道还是模式"
+    zh-TW: "訂閱頻道還是模式"
+  channel_placeholder:
+    en: "Channel name, e.g. orders:created"
+    zh-CN: "频道名,如 orders:created"
+    zh-TW: "頻道名稱,如 orders:created"
+  pattern_placeholder:
+    en: "Pattern (PSUBSCRIBE), e.g. orders:*"
+    zh-CN: "模式(PSUBSCRIBE),如 orders:*"
+    zh-TW: "模式(PSUBSCRIBE),如 orders:*"
+  subscribe:
+    en: "Subscribe"
+    zh-CN: "订阅"
+    zh-TW: "訂閱"
+  unsubscribe:
+    en: "Unsubscribe"
+    zh-CN: "退订"
+    zh-TW: "取消訂閱"
+  stop:
+    en: "Stop"
+    zh-CN: "停止"
+    zh-TW: "停止"
+  pause:
+    en: "Pause"
+    zh-CN: "暂停"
+    zh-TW: "暫停"
+  resume:
+    en: "Resume"
+    zh-CN: "继续"
+    zh-TW: "繼續"
+  pause_tip:
+    en: "Pausing only freezes the list: messages keep arriving in the background buffer (newest 5000 kept) and show up when you resume. Use Stop to stop receiving."
+    zh-CN: "暂停只是不刷新列表:后台照常接收进缓冲(保留最近 5000 条),继续时一次补上。要停止接收请用「停止」。"
+    zh-TW: "暫停只是不重新整理列表:背景照常接收進緩衝(保留最近 5000 則),繼續時一次補上。要停止接收請用「停止」。"
+  clear:
+    en: "Clear"
+    zh-CN: "清空"
+    zh-TW: "清空"
+  publish_to:
+    en: "Publish"
+    zh-CN: "发布"
+    zh-TW: "發佈"
+  message_placeholder:
+    en: "Message"
+    zh-CN: "消息内容"
+    zh-TW: "訊息內容"
+  publish:
+    en: "Publish"
+    zh-CN: "发布"
+    zh-TW: "發佈"
+  published:
+    en: "Published; subscribers that received it: %{n}"
+    zh-CN: "已发布,收到的订阅者:%{n}"
+    zh-TW: "已發佈,收到的訂閱者:%{n}"
+  pubsub_hint:
+    en: "Subscriptions use a dedicated connection. In cluster mode messages are broadcast to every node, so connecting to any node is enough; sharded channels (SSUBSCRIBE) aren't supported."
+    zh-CN: "订阅使用专用连接。集群模式下消息会广播到所有节点,连任一节点即可收到;分片频道(SSUBSCRIBE)暂不支持。"
+    zh-TW: "訂閱使用專用連線。叢集模式下訊息會廣播到所有節點,連任一節點即可收到;分片頻道(SSUBSCRIBE)暫不支援。"
+  publish_confirm_title:
+    en: "Publish to a production instance?"
+    zh-CN: "要在生产实例上发布消息吗?"
+    zh-TW: "要在正式環境實例上發佈訊息嗎?"
+  publish_confirm_body:
+    en: "Every subscriber of %{channel} will receive this message right away."
+    zh-CN: "%{channel} 的所有订阅者都会立即收到这条消息。"
+    zh-TW: "%{channel} 的所有訂閱者都會立即收到這則訊息。"
+  prod_note:
+    en: "This is a PROD connection."
+    zh-CN: "这是生产(PROD)连接。"
+    zh-TW: "這是正式環境(PROD)連線。"
+  monitor_warning:
+    en: "MONITOR makes the server stream every command it executes to this client, which can noticeably slow down a busy instance (often by half or more). Keep it short; it stops automatically after the chosen duration."
+    zh-CN: "MONITOR 会让服务器把执行的每条命令都发给本客户端,繁忙的实例上可能明显变慢(吞吐常下降一半以上)。请尽量短时间使用,到所选时长会自动停止。"
+    zh-TW: "MONITOR 會讓伺服器把執行的每條指令都傳給本用戶端,繁忙的實例上可能明顯變慢(吞吐常下降一半以上)。請盡量短時間使用,到所選時長會自動停止。"
+  duration:
+    en: "Stop automatically after"
+    zh-CN: "自动停止的时长"
+    zh-TW: "自動停止的時長"
+  seconds:
+    en: "%{n} s"
+    zh-CN: "%{n} 秒"
+    zh-TW: "%{n} 秒"
+  minutes:
+    en: "%{n} min"
+    zh-CN: "%{n} 分钟"
+    zh-TW: "%{n} 分鐘"
+  filter_command:
+    en: "Commands, e.g. get set"
+    zh-CN: "命令名,如 get set"
+    zh-TW: "指令名稱,如 get set"
+  filter_key:
+    en: "Key or argument contains…"
+    zh-CN: "key / 参数包含…"
+    zh-TW: "key / 參數包含…"
+  filter_hint:
+    en: "Filtering happens here in Datum: the server still sends every command over the MONITOR connection, so the load on the server is the same."
+    zh-CN: "过滤在 Datum 本地进行:服务器仍会经 MONITOR 连接输出全部命令,对服务器的压力不变。"
+    zh-TW: "過濾在 Datum 本機進行:伺服器仍會經 MONITOR 連線輸出全部指令,對伺服器的壓力不變。"
+  monitor_start:
+    en: "Start MONITOR"
+    zh-CN: "开始 MONITOR"
+    zh-TW: "開始 MONITOR"
+  monitor_confirm_title:
+    en: "Start MONITOR?"
+    zh-CN: "要开始 MONITOR 吗?"
+    zh-TW: "要開始 MONITOR 嗎?"
+  monitor_confirm_body:
+    en: "The server will send every command it executes to Datum for %{duration}, which can slow it down noticeably while it runs."
+    zh-CN: "接下来 %{duration} 内服务器会把执行的每条命令都发给 Datum,期间可能明显变慢。"
+    zh-TW: "接下來 %{duration} 內伺服器會把執行的每條指令都傳給 Datum,期間可能明顯變慢。"
+  monitor_prod_note:
+    en: "This is a PROD connection: MONITOR affects live traffic."
+    zh-CN: "这是生产(PROD)连接:MONITOR 会影响线上流量。"
+    zh-TW: "這是正式環境(PROD)連線:MONITOR 會影響線上流量。"
+  monitor_prod_ack:
+    en: "I understand the performance impact on production"
+    zh-CN: "我了解这会影响生产实例的性能"
+    zh-TW: "我了解這會影響正式環境實例的效能"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  receiving:
+    en: "Receiving"
+    zh-CN: "接收中"
+    zh-TW: "接收中"
+  monitoring:
+    en: "Monitoring, stops in %{s} s"
+    zh-CN: "监视中,%{s} 秒后停止"
+    zh-TW: "監看中,%{s} 秒後停止"
+  paused:
+    en: "Paused (still buffering)"
+    zh-CN: "已暂停(仍在缓冲)"
+    zh-TW: "已暫停(仍在緩衝)"
+  ended_stopped:
+    en: "Stopped"
+    zh-CN: "已停止"
+    zh-TW: "已停止"
+  ended_timeout:
+    en: "Stopped automatically (time limit reached)"
+    zh-CN: "已到时自动停止"
+    zh-TW: "已到時自動停止"
+  ended_closed:
+    en: "The server closed the connection"
+    zh-CN: "服务器关闭了连接"
+    zh-TW: "伺服器關閉了連線"
+  ended_error:
+    en: "Stopped because of an error"
+    zh-CN: "出错停止"
+    zh-TW: "出錯停止"
+  count:
+    en: "Showing %{shown} · received %{received}"
+    zh-CN: "显示 %{shown} 条 · 共收到 %{received} 条"
+    zh-TW: "顯示 %{shown} 則 · 共收到 %{received} 則"
+  missed:
+    en: "Dropped %{n} (only the newest %{max} are kept)"
+    zh-CN: "丢弃了 %{n} 条(只保留最近 %{max} 条)"
+    zh-TW: "捨棄了 %{n} 則(只保留最近 %{max} 則)"
+  col_time:
+    en: "Time"
+    zh-CN: "时间"
+    zh-TW: "時間"
+  col_channel:
+    en: "Channel / pattern"
+    zh-CN: "频道 / 模式"
+    zh-TW: "頻道 / 模式"
+  col_message:
+    en: "Message"
+    zh-CN: "内容"
+    zh-TW: "內容"
+  col_size:
+    en: "Size"
+    zh-CN: "大小"
+    zh-TW: "大小"
+  col_client:
+    en: "Client"
+    zh-CN: "客户端"
+    zh-TW: "用戶端"
+  col_db:
+    en: "DB"
+    zh-CN: "库"
+    zh-TW: "庫"
+  col_command:
+    en: "Command and arguments"
+    zh-CN: "命令及参数"
+    zh-TW: "指令及參數"
+  binary:
+    en: "(binary, open to view)"
+    zh-CN: "(二进制,点开查看)"
+    zh-TW: "(二進位,點開檢視)"
+  view:
+    en: "View message"
+    zh-CN: "查看消息"
+    zh-TW: "檢視訊息"
+  empty_pubsub:
+    en: "Subscribe to a channel or pattern to see messages here"
+    zh-CN: "订阅频道或模式后,消息会显示在这里"
+    zh-TW: "訂閱頻道或模式後,訊息會顯示在這裡"
+  empty_monitor:
+    en: "Start MONITOR to see the commands the server executes"
+    zh-CN: "开始 MONITOR 后,这里会显示服务器执行的命令"
+    zh-TW: "開始 MONITOR 後,這裡會顯示伺服器執行的指令"
+  empty_waiting:
+    en: "Nothing received yet"
+    zh-CN: "还没有收到内容"
+    zh-TW: "還沒有收到內容"
+  detail_title:
+    en: "Message"
+    zh-CN: "消息详情"
+    zh-TW: "訊息詳情"
+  detail_gone:
+    en: "This message is no longer in the buffer"
+    zh-CN: "这条消息已不在缓冲里"
+    zh-TW: "這則訊息已不在緩衝中"
+  detail_truncated:
+    en: "Too large: only the first %{kept} was kept"
+    zh-CN: "内容过大:只保存了前 %{kept}"
+    zh-TW: "內容過大:只保存了前 %{kept}"
+  size:
+    en: "Size %{size}"
+    zh-CN: "大小 %{size}"
+    zh-TW: "大小 %{size}"
+  via_pattern:
+    en: "matched %{pattern}"
+    zh-CN: "匹配模式 %{pattern}"
+    zh-TW: "符合模式 %{pattern}"

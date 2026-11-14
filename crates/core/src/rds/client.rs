@@ -70,6 +70,10 @@ pub struct RedisPool {
     infos: Mutex<HashMap<String, redis::ConnectionInfo>>,
     /// 各连接最近一次的分析(进行中或已结束)
     analyses: Mutex<HashMap<String, std::sync::Arc<super::analysis::Analysis>>>,
+    /// 建实时会话专用连接的参数(与普通连接同一目标 / 认证 / TLS,含 SSH 隧道)
+    live_params: Mutex<HashMap<String, super::live::LiveParams>>,
+    /// 实时会话(Pub/Sub、MONITOR),按会话 id
+    lives: Mutex<HashMap<String, std::sync::Arc<super::live::LiveSession>>>,
 }
 
 pub(super) fn qerr(e: redis::RedisError) -> AppError {
@@ -322,6 +326,9 @@ impl RedisPool {
         let con = open(url).await?;
         self.conns.lock().await.insert(id.to_string(), con);
         self.remember_info(id, url, false).await;
+        if let Some(p) = super::live::LiveParams::from_plain_url(url) {
+            self.live_params.lock().await.insert(id.to_string(), p);
+        }
         Ok(())
     }
 
@@ -330,6 +337,9 @@ impl RedisPool {
         let con = open_target(target, url, ssl).await?;
         self.conns.lock().await.insert(id.to_string(), con);
         self.remember_info(id, url, target.tunneled()).await;
+        if let Some(p) = super::live::LiveParams::from_url(target.clone(), url, ssl) {
+            self.live_params.lock().await.insert(id.to_string(), p);
+        }
         Ok(())
     }
 
@@ -490,6 +500,87 @@ impl RedisPool {
 
     pub async fn stream_groups(&self, id: &str, node: Option<&str>, key: &str) -> AppResult<Vec<super::edit::StreamGroup>> {
         super::edit::stream_groups(&mut self.con_for(id, node).await?, key).await
+    }
+
+    /// PUBLISH(走共享连接,发布不需要专用连接),返回收到的订阅者数。
+    pub async fn publish(&self, id: &str, channel: &str, message: &str) -> AppResult<i64> {
+        redis::cmd("PUBLISH").arg(channel).arg(message).query_async(&mut self.con(id).await?).await.map_err(qerr)
+    }
+
+    async fn live_params(&self, id: &str) -> AppResult<super::live::LiveParams> {
+        self.live_params
+            .lock()
+            .await
+            .get(id)
+            .cloned()
+            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))
+    }
+
+    /// 登记新会话。会话数到上限时先清掉已结束的;仍满则拒绝(并关掉刚建的连接)。
+    async fn add_live(&self, s: std::sync::Arc<super::live::LiveSession>) -> AppResult<String> {
+        let mut lives = self.lives.lock().await;
+        if lives.len() >= super::live::MAX_SESSIONS {
+            lives.retain(|_, x| x.running());
+        }
+        if lives.len() >= super::live::MAX_SESSIONS {
+            drop(lives);
+            s.stop().await;
+            return Err(AppError::new(ErrorKind::Connection, t!("core.err.redis_live_too_many", max = super::live::MAX_SESSIONS)));
+        }
+        let sid = uuid::Uuid::new_v4().to_string();
+        lives.insert(sid.clone(), s);
+        Ok(sid)
+    }
+
+    /// 开始 Pub/Sub 会话(专用连接),返回会话 id。
+    pub async fn start_pubsub(&self, id: &str, subs: Vec<super::live::Sub>, limits: super::live::Limits) -> AppResult<String> {
+        let p = self.live_params(id).await?;
+        let s = super::live::start_pubsub(id, &p, subs, limits).await?;
+        self.add_live(s).await
+    }
+
+    /// 开始 MONITOR(专用连接,`secs` 秒后自动停止),返回会话 id。
+    pub async fn start_monitor(&self, id: &str, secs: u64, filter: super::live::MonitorFilter, limits: super::live::Limits) -> AppResult<String> {
+        let p = self.live_params(id).await?;
+        let s = super::live::start_monitor(id, &p, secs, filter, limits).await?;
+        self.add_live(s).await
+    }
+
+    pub async fn live(&self, sid: &str) -> AppResult<std::sync::Arc<super::live::LiveSession>> {
+        self.lives
+            .lock()
+            .await
+            .get(sid)
+            .cloned()
+            .ok_or_else(|| AppError::new(ErrorKind::NotFound, t!("core.err.redis_live_ended")))
+    }
+
+    /// 停止一个会话(退订、关专用连接、结束后台任务);缓冲留着,界面还能看已收到的消息的详情。
+    pub async fn stop_live(&self, sid: &str) {
+        let s = self.lives.lock().await.get(sid).cloned();
+        if let Some(s) = s {
+            s.stop().await;
+        }
+    }
+
+    /// 停止并移除一个会话(关 tab、开始新会话时),缓冲随之释放;不存在也不报错。
+    pub async fn close_live(&self, sid: &str) {
+        let s = self.lives.lock().await.remove(sid);
+        if let Some(s) = s {
+            s.stop().await;
+        }
+    }
+
+    /// 断开连接时:停掉它名下的所有实时会话。
+    pub async fn stop_lives(&self, id: &str) {
+        let gone: Vec<_> = {
+            let mut lives = self.lives.lock().await;
+            let ids: Vec<String> = lives.iter().filter(|(_, s)| s.conn_id == id).map(|(k, _)| k.clone()).collect();
+            ids.iter().filter_map(|k| lives.remove(k)).collect()
+        };
+        for s in gone {
+            s.stop().await;
+        }
     }
 
     /// 执行任意命令(按空白拆分),返回可读文本。

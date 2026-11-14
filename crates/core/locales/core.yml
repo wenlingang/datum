@@ -13,6 +13,22 @@ core:
       en: "Connected through an SSH tunnel, which only reaches the current node"
       zh-CN: "经 SSH 隧道连接,隧道只通当前节点"
       zh-TW: "經 SSH 通道連線,通道只通到目前節點"
+    redis_live_ended:
+      en: "This live session has ended"
+      zh-CN: "实时会话已结束"
+      zh-TW: "即時工作階段已結束"
+    redis_live_too_many:
+      en: "Too many live sessions are open (max %{max}); close some Redis Live tabs first"
+      zh-CN: "打开的实时会话太多(最多 %{max} 个),请先关掉一些 Redis 实时标签页"
+      zh-TW: "開啟的即時工作階段太多(最多 %{max} 個),請先關掉一些 Redis 即時分頁"
+    redis_live_too_many_subs:
+      en: "Subscribe to at most %{max} channels and patterns in one session"
+      zh-CN: "一个会话最多订阅 %{max} 个频道和模式"
+      zh-TW: "一個工作階段最多訂閱 %{max} 個頻道和模式"
+    redis_live_bad_channel:
+      en: "Channel or pattern can't be empty or longer than 1024 bytes"
+      zh-CN: "频道或模式不能为空,也不能超过 1024 字节"
+      zh-TW: "頻道或模式不能為空,也不能超過 1024 位元組"
     xlsx_too_many_rows:
       en: "Too many rows for one Excel sheet (max %{max})"
       zh-CN: "行数超过 Excel 单个工作表的上限(%{max} 行)"

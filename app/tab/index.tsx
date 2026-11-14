@@ -158,6 +158,26 @@ export function openRedisInsight(connId: string) {
   });
 }
 
+/** 打开 Redis 实时 tab(Pub/Sub、MONITOR;每个连接一个,已开则切过去)。 */
+export function openRedisLive(connId: string) {
+  const conn = conns.get(connId);
+  if (!conn || conn.kind !== "redis") return;
+  const existing = workspace.tabs().find((x) => x.kind === "rlive" && x.connId === connId);
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "rlive",
+    connId,
+    dbKind: conn.kind,
+    table: null,
+    title: signal(t("rlive.title")),
+    state: null,
+  });
+}
+
 /** 打开数据库诊断 tab(PG / MySQL / SQLite,每个连接一个,已开则切过去)。 */
 export function openDiagnostics(connId: string) {
   const conn = conns.get(connId);

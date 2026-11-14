@@ -543,6 +543,75 @@ export interface RedisOverview {
   expires: number | null;
 }
 
+/** Redis 实时的一个订阅:频道或模式(PSUBSCRIBE);`active` 为服务器已确认。 */
+export interface RedisSub {
+  pattern: boolean;
+  name: string;
+  active?: boolean;
+}
+
+/** MONITOR 的过滤(本地过滤,服务器仍输出全部命令):命令名(空格 / 逗号分隔)与参数子串。 */
+export interface RedisMonitorFilter {
+  command: string;
+  key: string;
+}
+
+/** 实时消息列表里的一条(core 的 `rds::live::LiveItem`;内容只带前 4 KB)。 */
+export interface RedisLiveItem {
+  seq: number;
+  /** 毫秒时间戳:Pub/Sub 为收到的时间,MONITOR 为服务器记录的时间 */
+  time: number;
+  channel: string;
+  pattern?: string;
+  text: string;
+  size: number;
+  /** 列表里的内容不完整 */
+  truncated: boolean;
+  binary: boolean;
+  /** 粗略识别的格式(列表标签);详情里另做完整识别 */
+  format: RedisViewFormat;
+  client?: string;
+  db?: number;
+  command?: string;
+}
+
+/** 一次轮询(core 的 `rds::live::LivePoll`)。 */
+export interface RedisLivePoll {
+  kind: "pubsub" | "monitor";
+  running: boolean;
+  ended: "stopped" | "timeout" | "closed" | "error" | null;
+  error: string | null;
+  items: RedisLiveItem[];
+  more: boolean;
+  /** 缓冲里最旧一条的序号:比上次拿到的序号大 1 以上说明中间的被丢了 */
+  firstSeq: number;
+  count: number;
+  dropped: number;
+  received: number;
+  filtered: number;
+  subs: RedisSub[];
+  filter: RedisMonitorFilter;
+  started: number;
+  deadline: number | null;
+  maxMessages: number;
+}
+
+/** 一条消息保存下来的完整内容(最多 1 MB)。 */
+export interface RedisLiveDetail {
+  seq: number;
+  time: number;
+  channel: string;
+  pattern: string | null;
+  text: string;
+  b64: string | null;
+  size: number;
+  /** 保存下来的字节数;小于 size 说明只保存了开头 */
+  stored: number;
+  client: string;
+  db: number | null;
+  command: string;
+}
+
 export interface RedisSlowEntry {
   id: number;
   /** Unix 秒 */

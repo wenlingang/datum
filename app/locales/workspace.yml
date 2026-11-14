@@ -28,6 +28,10 @@ workspace:
     en: Redis Analysis
     zh-CN: Redis 分析
     zh-TW: Redis 分析
+  redis_live:
+    en: "Redis Live (Pub/Sub, MONITOR)"
+    zh-CN: "Redis 实时(Pub/Sub、MONITOR)"
+    zh-TW: "Redis 即時(Pub/Sub、MONITOR)"
   diagnostics:
     en: Database Diagnostics
     zh-CN: 数据库诊断
