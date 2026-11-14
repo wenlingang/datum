@@ -152,6 +152,30 @@ pub async fn ai_chat(
     Ok(())
 }
 
+/// 能否把连接 `conn_id` 里的数据(查询结果、样例行)发给 AI:生产库要在设置里允许;
+/// 读不到连接配置时按生产库处理。
+pub fn data_allowed(state: &AppState, settings: &crate::ai::settings::AiSettings, conn_id: &str) -> bool {
+    if settings.allow_prod_data {
+        return true;
+    }
+    crate::core::repository::ConnectionRepo::new(&state.config_dir)
+        .load()
+        .map(|cs| cs.iter().any(|c| c.id == conn_id && c.env != crate::core::connection::Env::Prod))
+        .unwrap_or(false)
+}
+
+/// 一句话筛选:生产库未允许发数据时丢掉样例行,只按列名与类型翻译。
+pub async fn ai_nl_filter(
+    state: &AppState,
+    conn_id: &str,
+    question: &str,
+    columns: &[crate::ai::nl_filter::ColumnInfo],
+    samples: Vec<Vec<Option<String>>>,
+) -> Result<crate::ai::nl_filter::NlFilter, String> {
+    let samples = if data_allowed(state, &repo(state).load(), conn_id) { samples } else { vec![] };
+    crate::ai::nl_filter::translate(state, question, columns, &samples).await
+}
+
 /// 带工具的对话:模型可自行列表、看表结构、跑只读查询(在 `id` 这个连接上),
 /// 直到给出回答。事件依次推给 `on_event`;出错时同时推 Error 并返回。
 pub async fn ai_agent_chat(
@@ -173,11 +197,7 @@ pub async fn ai_agent_chat(
     let settings = repo(state).load();
     let ep = provider::resolve(&settings)?;
     // 生产库默认不让 AI 读数据(查询结果会发给服务商):只给表结构类工具,并告诉模型
-    let prod = crate::core::repository::ConnectionRepo::new(&state.config_dir)
-        .load()
-        .map(|cs| cs.iter().any(|c| c.id == id && c.env == crate::core::connection::Env::Prod))
-        .unwrap_or(true);
-    let allow_data = !prod || settings.allow_prod_data;
+    let allow_data = data_allowed(state, &settings, &id);
     if !allow_data {
         if let Some(m) = messages.iter_mut().find(|m| m.role == "system") {
             m.content.push_str(&format!("\n{}", crate::ai::prompt::prod_data_off_rule()));

@@ -292,3 +292,41 @@ async fn cancel_interrupts_a_hanging_stream() {
     assert_eq!(full, "");
     assert!(*done.lock().unwrap());
 }
+
+/// 生产库的数据默认不发给 AI;设置里允许后才发。读不到的连接按生产库处理。
+#[test]
+fn prod_data_needs_permission() {
+    use datum_core::ai::commands::data_allowed;
+    use datum_core::ai::settings::AiSettings;
+    let dir = std::env::temp_dir().join(format!("datum-prod-data-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let st = AppState::new(dir.clone());
+    for (id, env) in [("p", Env::Prod), ("l", Env::Local), ("s", Env::Staging)] {
+        let c = Connection {
+            id: id.into(),
+            name: id.into(),
+            kind: DbKind::Sqlite,
+            env,
+            host: String::new(),
+            port: 0,
+            user: String::new(),
+            database: String::new(),
+            plaintext_password: None,
+            file_path: Some(dir.join(format!("{id}.db")).to_string_lossy().into_owned()),
+            ssl_mode: SslMode::Disable,
+            uri: None,
+            auth_source: None,
+            ssh: None,
+        };
+        commands::save_connection(&st, c, None).unwrap();
+    }
+    let off = AiSettings::default();
+    assert!(!data_allowed(&st, &off, "p"));
+    assert!(data_allowed(&st, &off, "l"));
+    assert!(data_allowed(&st, &off, "s"));
+    assert!(!data_allowed(&st, &off, "missing"));
+    let mut on = AiSettings::default();
+    on.allow_prod_data = true;
+    assert!(data_allowed(&st, &on, "p"));
+    std::fs::remove_dir_all(dir).ok();
+}

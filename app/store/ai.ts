@@ -294,13 +294,13 @@ function patchMessage(key: string, id: number, content: string, parts?: readonly
 const HISTORY_ROWS = 10;
 
 /** 工具步骤 → 历史里的一段文字摘要。 */
-export function stepText(s: ToolStep): string {
+export function stepText(s: ToolStep, withData = true): string {
   const d = s.detail;
   const head =
     s.name === "run_query" && d?.sql ? `[run_query] ${d.sql}` : `[${s.name}] ${JSON.stringify(s.args)}`;
   if (s.state === "error") return `${head}\n→ ${s.summary}`;
   const lines = [`${head}\n→ ${s.summary}`];
-  if (d?.columns && d.rows) {
+  if (withData && d?.columns && d.rows) {
     lines.push((d.columns as string[]).join("\t"));
     for (const r of d.rows.slice(0, HISTORY_ROWS)) lines.push(r.map((v) => v ?? "NULL").join("\t"));
     if (d.rows.length > HISTORY_ROWS) lines.push(`… ${d.rows.length - HISTORY_ROWS} more`);
@@ -309,21 +309,35 @@ export function stepText(s: ToolStep): string {
 }
 
 /** 发给 AI 的正文:带工具步骤的回复把步骤摘要按顺序嵌进去。 */
-function historyContent(m: AiMessage): string {
-  // 用户在卡片上执行的查询:把前几行也带给 AI,追问时它知道结果
+function historyContent(m: AiMessage, withData: boolean): string {
+  // 用户在卡片上执行的查询:把前几行也带给 AI,追问时它知道结果(不允许发数据时只带正文)
+  if (!withData && m.table) return m.content;
   if (m.table?.columns && m.table.rows) {
     const rows = m.table.rows.slice(0, HISTORY_ROWS).map((r) => r.map((v) => v ?? "NULL").join("\t"));
     const more = m.table.rows.length > HISTORY_ROWS ? [`… ${m.table.rows.length - HISTORY_ROWS} more`] : [];
     return [m.content, (m.table.columns as string[]).join("\t"), ...rows, ...more].join("\n");
   }
   if (!m.parts) return m.content;
-  return m.parts.map((p) => (p.kind === "text" ? p.text : stepText(p))).join("\n\n");
+  return m.parts.map((p) => (p.kind === "text" ? p.text : stepText(p, withData))).join("\n\n");
+}
+
+/** 能否把这个连接的数据(查询结果行)发给 AI:生产库要在设置里允许。读不到连接时按不允许处理。 */
+export function dataAllowed(connId: string): boolean {
+  if (settings()?.allowProdData) return true;
+  try {
+    return store.connections().find((c) => c.id === connId)?.env !== "prod";
+  } catch {
+    return false;
+  }
 }
 
 /** 发给 AI 的报文:system + 最近 MAX_HISTORY 条历史(不含正在生成的空回复)。 */
-export function wireMessages(systemPrompt: string, history: readonly AiMessage[]): WireMessage[] {
+export function wireMessages(systemPrompt: string, history: readonly AiMessage[], withData = true): WireMessage[] {
   const tail = history.slice(Math.max(0, history.length - MAX_HISTORY));
-  return [{ role: "system", content: systemPrompt }, ...tail.map((m) => ({ role: m.role, content: historyContent(m) }))];
+  return [
+    { role: "system", content: systemPrompt },
+    ...tail.map((m) => ({ role: m.role, content: historyContent(m, withData) })),
+  ];
 }
 
 /** 让 AI 自己查数据的连接(关系库);不给时走普通对话。 */
@@ -350,7 +364,8 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
     stopRequested = false;
   });
   const history = (convos()[key]?.messages ?? []).filter((m) => m.id !== assistantId);
-  const wire = wireMessages(systemPrompt, history);
+  // 生产库未允许发数据时,历史里的查询结果行不发给 AI(Rust 侧另有工具层的拦截)
+  const wire = wireMessages(systemPrompt, history, dataAllowed(agent?.connId ?? convoConn(key)));
   const model = modelKey();
   const useAgent = !!agent && !noTools.has(model);
 

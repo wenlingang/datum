@@ -65,8 +65,15 @@ if want tab; then
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$D/port" ] && break; sleep 0.2; done
   printf '{"providers":[{"id":"mock","name":"Mock","protocol":"openai","baseUrl":"http://127.0.0.1:%s","apiKey":"sk-test","enabled":true,"models":[{"id":"mock-model","enabled":true}]}],"current":{"providerId":"mock","model":"mock-model"}}' "$(cat "$D/port")" > "$D/ai_settings.json"
   run tab-nl "$D" tab/nl.test.tsx
-  kill $MOCK 2>/dev/null; wait $MOCK 2>/dev/null || true
   grep -q 'Request: Kenya medium' "$D/requests.log" || { echo "nl filter: 请求里没有用户原话"; FAILED=1; }
+  grep -q 'Coffee 1' "$D/requests.log" || { echo "nl filter: 本地连接应附带样例行"; FAILED=1; }
+  # 同一个库标成 prod:默认不允许 AI 读生产库数据,请求里不能有样例行
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db" | sed 's/"env":"local"/"env":"prod"/')" > "$D/connections.json"
+  : > "$D/requests.log"
+  run tab-nl-prod "$D" tab/nl.test.tsx
+  grep -q 'Request: Kenya medium' "$D/requests.log" || { echo "nl filter(prod): 请求里没有用户原话"; FAILED=1; }
+  if grep -q 'Coffee 1' "$D/requests.log"; then echo "nl filter(prod): 不应附带样例行"; FAILED=1; fi
+  kill $MOCK 2>/dev/null; wait $MOCK 2>/dev/null || true
 fi
 
 if want erd; then
