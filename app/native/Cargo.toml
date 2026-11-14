@@ -9,8 +9,8 @@ description = "Datum 的原生模块:把 datum-core 暴露给 TSX 界面(datum/n
 [workspace]
 
 [dependencies]
-nsh-core = { git = "https://github.com/longbridge/nsh", rev = "f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1" }
-nsh-base = { git = "https://github.com/longbridge/nsh", rev = "f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1" }
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "224d9a795c7ac9d10d75750de9351adac5549675" }
+nsh-base = { git = "https://github.com/longbridge/nsh", rev = "224d9a795c7ac9d10d75750de9351adac5549675" }
 datum-core = { path = "../../crates/core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -18,6 +18,3 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 rust-i18n = "4"
 uuid = { version = "1", features = ["v4"] }
 dirs = "5"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFBase", "CFString", "CFNumber", "CFPreferences", "CFPropertyList"] }

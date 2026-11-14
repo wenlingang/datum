@@ -8,32 +8,10 @@
 
 import { effect, untracked } from "nsh";
 import type { EditorRef } from "nsh/base";
-import { rangeOf } from "../tab/textpos";
-
-const SMART_QUOTES: Record<string, string> = { "\u2018": "'", "\u2019": "'", "\u201C": '"', "\u201D": '"' };
-
-/** macOS 开着「智能引号」时,编辑器跟随系统把刚敲的 ' " 换成弯引号,SQL 里会被当成标识符而出错。
- *  `prev` → `value` 恰好多了一个弯引号(逐键输入,不是粘贴)时,返回它的位置与要换成的直引号。 */
-export function typedSmartQuote(prev: string, value: string): { at: number; text: string } | null {
-  if (value.length !== prev.length + 1) return null;
-  let i = 0;
-  while (i < prev.length && prev.charCodeAt(i) === value.charCodeAt(i)) i++;
-  const straight = SMART_QUOTES[value[i] ?? ""];
-  if (!straight || value.slice(i + 1) !== prev.slice(i)) return null;
-  return { at: i, text: straight };
-}
-
-/** 把刚敲进编辑器的弯引号改回直引号(只改这一个字符,光标不动)。改了返回 true。 */
-export function straightenTypedQuote(editor: EditorRef | undefined, prev: string, value: string): boolean {
-  const q = typedSmartQuote(prev, value);
-  if (!q || !editor) return false;
-  editor.edit([{ range: rangeOf(value, q.at, q.at + 1), text: q.text }]);
-  return true;
-}
 
 /** 在组件里调用,把返回的 `ref` / `defaultValue` / `onChange` 交给 `<Editor>`。
- *  `sql`:编辑的是 SQL,刚敲进去的弯引号改回直引号。 */
-export function editorText(value: () => string, onChange: (value: string) => void, opts: { sql?: boolean } = {}) {
+ *  macOS 智能引号 / 破折号:nsh 0.5.1 起 Editor(autoCorrect 关闭)不再替换敲入的 ' " --,这里不用再纠正。 */
+export function editorText(value: () => string, onChange: (value: string) => void) {
   let ref: EditorRef | undefined;
   let reported = untracked(value);
   effect(() => {
@@ -49,10 +27,8 @@ export function editorText(value: () => string, onChange: (value: string) => voi
     },
     defaultValue: reported,
     onChange: ({ value: v }: { value: string }) => {
-      const prev = reported;
       reported = v;
       onChange(v);
-      if (opts.sql) straightenTypedQuote(ref, prev, v);
     },
   };
 }

@@ -258,21 +258,10 @@ test("自然语言筛选:没配置 AI 时提示去设置", async () => {
   await app.waitUntil(() => app.texts().includes("AI provider not configured. Add one in Settings."), { timeout: 5000 });
 });
 
-test("系统智能引号:编辑器里敲出的弯引号改回直引号,SQL 照常执行;报错可一键复制", async () => {
+test("报错可一键复制:报错原文可选中,旁边有复制按钮", async () => {
   const app = await start();
-  // 模拟 macOS 智能引号把 ' 换成 ’ ‘
-  await replaceSql(app, "SELECT name FROM categories WHERE name = \u2018Single Origin\u2019");
-  // \u6539\u56de\u76f4\u5f15\u53f7\u8d70 editor.edit,\u6539\u52a8\u8981\u7ecf onChange \u56de\u4f20\u624d\u8fdb\u5230\u8981\u6267\u884c\u7684\u6587\u672c;
-  // \u6162\u673a\u5668\u4e0a(CI)\u8f93\u5b8c\u7acb\u523b\u8fd0\u884c\u4f1a\u8d76\u5728\u56de\u4f20\u4e4b\u524d,\u5148\u7b49\u7f16\u8f91\u5668\u6539\u5b8c\u3001\u518d\u7ed9\u56de\u4f20\u7559\u51fa\u65f6\u95f4
-  await app.waitUntil(() => !app.texts().some((s) => s.includes("\u2018") || s.includes("\u2019")), { timeout: 5000 });
-  await app.wait(500);
-  await app.press("id:run");
-  await app.waitUntil(() => hasText(app, "Query succeeded · 1 rows returned") || hasText(app, "Query succeeded · 1 row"), { timeout: 15000 });
-  expect(app.texts().some((s) => s.includes("\u2018") || s.includes("\u2019"))).toBe(false);
+  await replaceSql(app, "SELECT nope FROM categories");
   // 报错区:可选中的报错原文 + 复制按钮
-  await app.press("text:SELECT name FROM categories WHERE name = 'Single Origin'");
-  await app.keyboard.press("mod+a");
-  await app.type("id:sql-editor", "SELECT nope FROM categories");
   await app.press("id:run");
   await app.waitFor("id:query-error", { timeout: 15000 });
   expect(app.shows("id:query-error-copy")).toBe(true);

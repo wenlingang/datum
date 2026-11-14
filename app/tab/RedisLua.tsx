@@ -439,8 +439,6 @@ export function RedisLua(props: { m: LuaModel }) {
   const text = editorText(
     () => m.script(),
     (v) => m.script.set(v),
-    // 弯引号在 Lua 里同样是语法错误:刚敲的改回直引号
-    { sql: true },
   );
 
   // 编辑时的提示:写命令 / 危险命令(纯本地计算)

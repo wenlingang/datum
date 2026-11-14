@@ -99,7 +99,6 @@ function SqlEditor(props: {
   const text = editorText(
     () => props.value,
     (v) => props.onChange?.(v),
-    { sql: true },
   );
   return (
     <Editor

@@ -1242,7 +1242,6 @@ dependencies = [
  "dirs",
  "nsh-base",
  "nsh-core",
- "objc2-core-foundation",
  "rust-i18n",
  "serde",
  "serde_json",
@@ -3315,8 +3314,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-base"
-version = "0.5.0"
-source = "git+https://github.com/longbridge/nsh?rev=f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1#f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1"
+version = "0.5.1"
+source = "git+https://github.com/longbridge/nsh?rev=224d9a795c7ac9d10d75750de9351adac5549675#224d9a795c7ac9d10d75750de9351adac5549675"
 dependencies = [
  "chrono",
  "html5ever",
@@ -3339,8 +3338,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-core"
-version = "0.5.0"
-source = "git+https://github.com/longbridge/nsh?rev=f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1#f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1"
+version = "0.5.1"
+source = "git+https://github.com/longbridge/nsh?rev=224d9a795c7ac9d10d75750de9351adac5549675#224d9a795c7ac9d10d75750de9351adac5549675"
 dependencies = [
  "cap-std",
  "crc32fast",
@@ -3374,8 +3373,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-macros"
-version = "0.5.0"
-source = "git+https://github.com/longbridge/nsh?rev=f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1#f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1"
+version = "0.5.1"
+source = "git+https://github.com/longbridge/nsh?rev=224d9a795c7ac9d10d75750de9351adac5549675#224d9a795c7ac9d10d75750de9351adac5549675"
 dependencies = [
  "imagesize",
  "proc-macro2",
@@ -3387,8 +3386,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-updater"
-version = "0.5.0"
-source = "git+https://github.com/longbridge/nsh?rev=f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1#f4d68f7f9f31eb7b3ecc8a4cbc31096d5c6238a1"
+version = "0.5.1"
+source = "git+https://github.com/longbridge/nsh?rev=224d9a795c7ac9d10d75750de9351adac5549675#224d9a795c7ac9d10d75750de9351adac5549675"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek 2.2.0",
@@ -4082,7 +4081,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -4120,7 +4119,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -4926,7 +4925,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8050abb251097357e24aff63ba2c52a6309ecb7d23a5474023df960a02694d8"
 dependencies = [
  "annotate-snippets",
- "base64 0.23.1",
+ "base64 0.21.7",
  "encoding_rs_io",
  "granit-parser",
  "nohash-hasher",
@@ -6420,7 +6419,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

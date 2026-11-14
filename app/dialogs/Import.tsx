@@ -73,7 +73,6 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
       text.set(v);
       report.set(null);
     },
-    { sql: true },
   );
   let alive = true;
   cleanup(() => (alive = false));
