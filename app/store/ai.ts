@@ -290,6 +290,9 @@ function patchMessage(key: string, id: number, content: string, parts?: readonly
   });
 }
 
+/** 流式回复的界面刷新间隔(毫秒)。 */
+const FLUSH_MS = 50;
+
 /** 历史里每次查询带给 AI 的行数(之后的轮次还记得查到过什么)。 */
 const HISTORY_ROWS = 10;
 
@@ -376,6 +379,22 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
   let errored = false;
   let agentMode = useAgent;
   const flush = () => patchMessage(key, assistantId, acc, agentMode ? parts : undefined);
+  // 文本片段每来一个就整份更新会话(复制消息数组、重新切分全文),长回复的开销随长度平方增长:
+  // 片段合并起来最多每 FLUSH_MS 刷新一次;工具开始 / 结束、结束、出错时立即刷新
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  const flushNow = () => {
+    if (flushTimer !== null) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    flush();
+  };
+  const flushSoon = () => {
+    flushTimer ??= setTimeout(() => {
+      flushTimer = null;
+      if (!finished) flush();
+    }, FLUSH_MS);
+  };
   const appendText = (t: string) => {
     acc += t;
     const last = parts[parts.length - 1];
@@ -387,12 +406,12 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
       case "delta":
         produced = true;
         appendText(e.text);
-        flush();
+        flushSoon();
         break;
       case "toolStart":
         produced = true;
         parts = [...parts, { kind: "tool", id: e.id, name: e.name, args: e.args, state: "running", summary: "", detail: null }];
-        flush();
+        flushNow();
         break;
       case "toolEnd":
         parts = parts.map((p) =>
@@ -400,19 +419,19 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
             ? { ...p, state: e.ok ? "ok" : "error", summary: e.summary, detail: e.detail }
             : p,
         );
-        flush();
+        flushNow();
         break;
       case "done":
         // 全文兜底:个别 Delta 丢失也能校正最终文本(工具模式下以分段为准)
         if (!agentMode) acc = e.full || acc;
         if (!acc && !parts.some((p) => p.kind === "tool") && !stopRequested) acc = t("store.ai_empty_reply");
         if (agentMode && !parts.length) parts = [{ kind: "text", text: acc }];
-        flush();
+        flushNow();
         finished = true;
         break;
       case "error":
         errored = true;
-        flush();
+        flushNow();
         markMessage(key, assistantId, { error: e.message });
         finished = true;
         break;
