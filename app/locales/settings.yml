@@ -684,9 +684,9 @@ conn_form:
     zh-CN: 加密并校验证书
     zh-TW: 加密並驗證憑證
   ssl_hint:
-    en: "Prefer: encrypt when the server supports it. Require: always encrypt, no certificate check. Verify: also check the certificate and host name"
-    zh-CN: "优先:服务器支持就加密;必须加密:不加密就不连,不校验证书;校验证书:同时校验证书与主机名"
-    zh-TW: "優先:伺服器支援就加密;必須加密:不加密就不連線,不驗證憑證;驗證憑證:同時驗證憑證與主機名稱"
+    en: "Prefer: encrypt when the server supports it, otherwise plain text, no certificate check. Require: always encrypt, no certificate check. Verify: also check the certificate and host name against the system certificate store — add a private CA (e.g. a cloud provider's) to Keychain / the system store first"
+    zh-CN: "优先:服务器支持就加密,否则明文,不校验证书;必须加密:不加密就不连,不校验证书;校验证书:按系统证书库校验证书与主机名,私有 CA(如云厂商的)请先加入钥匙串 / 系统证书库"
+    zh-TW: "優先:伺服器支援就加密,否則明文,不驗證憑證;必須加密:不加密就不連線,不驗證憑證;驗證憑證:依系統憑證庫驗證憑證與主機名稱,私有 CA(如雲端廠商的)請先加入鑰匙圈 / 系統憑證庫"
   ssl_redis_hint:
     en: "Redis cannot negotiate encryption on the same port: Prefer means no encryption. Require / Verify connect over TLS (rediss://)"
     zh-CN: "Redis 无法在同一端口协商加密:「优先」等同不加密;「必须加密」「校验证书」走 TLS(rediss://)"
