@@ -90,6 +90,17 @@ export function draftFrom(conn: Connection | undefined, database?: string): Conn
   };
 }
 
+/** SSL 的默认档:staging / prod 上的 PG、MySQL 默认校验证书(防中间人;「优先」在握手失败时会退回明文),
+ *  本地库用「优先」。Redis 不能在同一端口协商加密,保持「优先」(即不加密),由用户按实例选择。 */
+export function defaultSsl(kind: DbKind, env: Env): SslMode {
+  return env !== "local" && (kind === "pg" || kind === "mysql") ? "verifyFull" : "prefer";
+}
+
+/** 切换环境 / 类型后的草稿:用户没手动选过 SSL 时跟着换成该组合的默认档。 */
+export function withSslDefault(d: ConnDraft, sslTouched: boolean): ConnDraft {
+  return sslTouched || d.kind === "sqlite" ? d : { ...d, ssl: defaultSsl(d.kind, d.env) };
+}
+
 /** 切换类型:按类型填入惯用默认值(SQLite 只能是本地)。 */
 export function withKind(d: ConnDraft, kind: DbKind): ConnDraft {
   if (kind === "sqlite") return { ...d, kind, env: "local" };

@@ -9,7 +9,7 @@ import { activate, loadTables, saveConnection } from "../store/conns";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, envLabel, envToken, Hint, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
-import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, type ConnDraft } from "./connection";
+import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, withSslDefault, type ConnDraft } from "./connection";
 import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField, Toggle } from "./controls";
 import { ErrorText } from "../ui/error";
 
@@ -56,6 +56,8 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
 
   const d = () => draft();
   const set = (patch: Partial<ConnDraft>) => draft.update((v) => ({ ...v, ...patch }));
+  // 编辑已有连接时不自动改 SSL;新建时用户手动选过也不再跟着环境 / 类型变
+  let sslTouched = props.editing;
   const sqlite = () => d().kind === "sqlite";
   const preview = () => {
     try {
@@ -263,7 +265,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
               label={KIND_LABEL[d().kind]}
               accessibilityLabel={t("conn_form.type")}
               leading={<Icon name={`db-${d().kind}`} size={16} color="primary" />}
-              onChange={(k) => set(withKind(d(), k as ConnDraft["kind"]))}
+              onChange={(k) => draft.set(withSslDefault(withKind(d(), k as ConnDraft["kind"]), sslTouched))}
             />
           </Field>
           <Field label={t("conn_form.name")}>
@@ -304,7 +306,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
               testID="conn-env"
               options={ENVS.map((e) => ({ value: e, label: envLabel(e), color: envToken(e) }))}
               value={d().env}
-              onChange={(env) => set({ env })}
+              onChange={(env) => draft.set(withSslDefault({ ...d(), env }, sslTouched))}
             />
           </Field>
         </If>
@@ -363,7 +365,10 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
                 accessibilityLabel={t("conn_form.ssl_mode")}
                 tooltip={d().kind === "redis" ? t("conn_form.ssl_redis_hint") : t("conn_form.ssl_hint")}
                 leading={<Icon name={d().ssl === "disable" ? "lock-open" : "lock"} size={15} color="foreground" />}
-                onChange={(m) => set({ ssl: m as ConnDraft["ssl"] })}
+                onChange={(m) => {
+                  sslTouched = true;
+                  set({ ssl: m as ConnDraft["ssl"] });
+                }}
               />
             </Field>
           </View>

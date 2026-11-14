@@ -38,6 +38,30 @@ describe("connection form", () => {
     app.dispose();
   });
 
+  test("staging / prod PG and MySQL default to verifying the certificate unless SSL was picked", async () => {
+    const app = await start();
+    await app.press("id:dev-new-conn");
+    await app.waitFor("text:/sslmode=prefer/");
+    await app.press("text:PROD");
+    await app.waitFor("text:/sslmode=verify-full/");
+    // Redis 不能协商加密:仍是「优先」(不加密)
+    await app.press("label:Type");
+    await app.press("text:Redis");
+    await app.waitFor("text:/^redis:\\/\\//");
+    await app.press("label:Type");
+    await app.press("text:MySQL");
+    await app.waitFor("text:/mysql:.*sslmode=verify-full/");
+    // 回到本地:回到「优先」
+    await app.press("text:LOCAL");
+    await app.waitFor("text:/sslmode=prefer/");
+    // 手动选过之后不再跟着环境变
+    await app.press("label:SSL");
+    await app.press("text:Require");
+    await app.press("text:STAGING");
+    await app.waitFor("text:/sslmode=require/");
+    app.dispose();
+  });
+
   test("previews the connection string as fields change", async () => {
     const app = await start();
     await app.press("id:dev-new-conn");
