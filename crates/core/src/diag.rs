@@ -694,9 +694,10 @@ async fn sqlite_run(state: &AppState, id: &str, key: &str) -> AppResult<DiagResu
             Err(e) if e.display().contains("dbstat") => Ok(unavailable("dbstat_missing", Some(e.display()))),
             Err(e) => Err(e),
         },
-        // 最多报 100 条问题;健康时只有一行 ok
+        // 最多报 100 条问题(integrity_check 的默认上限);健康时只有一行 ok。
+        // 不传参数:新版 SQLite 把表值函数的参数当成表名(`pragma_integrity_check(100)` 会报 no such table)
         "integrity" => {
-            let r = ro(state, &kind, id, "SELECT integrity_check AS message FROM pragma_integrity_check(100)").await?;
+            let r = ro(state, &kind, id, "SELECT integrity_check AS message FROM pragma_integrity_check").await?;
             Ok(r.into())
         }
         _ => Err(unknown_section(key)),

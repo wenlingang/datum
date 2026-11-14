@@ -1,0 +1,40 @@
+# 依赖漏洞扫描(RustSec 公告库):两个 Cargo.lock(core 工作区与 app/native)都查,有漏洞即失败;
+# 「不再维护」之类的警告只列出、不算失败。新漏洞随时公布,所以每周一也定时跑一次。
+name: Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - "app/native/Cargo.lock"
+      - "**/Cargo.toml"
+      - ".github/workflows/audit.yml"
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "app/native/Cargo.lock"
+      - "**/Cargo.toml"
+      - ".github/workflows/audit.yml"
+  schedule:
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: core 工作区
+        run: cargo audit
+      - name: app/native
+        working-directory: app/native
+        run: cargo audit

@@ -228,15 +228,15 @@ impl SqlitePool {
         max_rows: Option<u32>,
         timeout_ms: Option<u32>,
     ) -> AppResult<QueryResult> {
-        self.with_conn(id, |conn| read_only(conn, sql, max_rows, timeout_ms))
+        self.with_conn_mut(id, |conn| read_only(conn, sql, max_rows, timeout_ms))
     }
 }
 
 /// 进度回调的检查间隔(虚拟机指令数):足够细,超时后很快停下;又不至于拖慢查询。
 const PROGRESS_OPS: i32 = 10_000;
 
-fn read_only(conn: &SqliteConn, sql: &str, max_rows: Option<u32>, timeout_ms: Option<u32>) -> AppResult<QueryResult> {
-    let set = |on: bool| {
+fn read_only(conn: &mut SqliteConn, sql: &str, max_rows: Option<u32>, timeout_ms: Option<u32>) -> AppResult<QueryResult> {
+    let set = |conn: &SqliteConn, on: bool| {
         conn.execute_batch(if on {
             "PRAGMA query_only = ON"
         } else {
@@ -247,19 +247,22 @@ fn read_only(conn: &SqliteConn, sql: &str, max_rows: Option<u32>, timeout_ms: Op
                 .with_detail(e.to_string())
         })
     };
-    set(true)?;
+    set(conn, true)?;
     let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms as u64));
     if let Some(deadline) = deadline {
-        conn.progress_handler(PROGRESS_OPS, Some(move || Instant::now() >= deadline));
+        if let Err(e) = conn.progress_handler(PROGRESS_OPS, Some(move || Instant::now() >= deadline)) {
+            set(conn, false)?;
+            return Err(AppError::new(ErrorKind::Query, t!("core.err.exec_failed")).with_detail(e.to_string()));
+        }
     }
     let mut result = run_capped(conn, sql, max_rows);
     if let (Some(deadline), Some(ms)) = (deadline, timeout_ms) {
-        conn.progress_handler(0, None::<fn() -> bool>);
+        let _ = conn.progress_handler(0, None::<fn() -> bool>);
         if result.is_err() && Instant::now() >= deadline {
             result = Err(AppError::new(ErrorKind::Query, t!("core.err.impact_timeout", secs = ms.div_ceil(1000))));
         }
     }
-    set(false)?;
+    set(conn, false)?;
     result
 }
 
@@ -291,7 +294,7 @@ fn run_capped(
             });
         }
 
-        let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        let columns: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
         let mut out: Vec<Vec<Option<String>>> = vec![];
         let mut rows = stmt.query([]).map_err(|e| {
             AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(e.to_string())
