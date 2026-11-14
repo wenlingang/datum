@@ -869,7 +869,8 @@ pub async fn compare(state: &AppState, kind: &DbKind, source_id: &str, target_id
     let target = snapshot(state, kind, target_id, &dx.views).await?;
     if d == Dialect::Sqlite {
         for name in target.keys().filter(|n| source.contains_key(*n)) {
-            let snap = state.sqlite_pool.with_conn(target_id, |c| sqlite_alter::snapshot(c, name))?;
+            let (id, table) = (target_id.to_string(), name.clone());
+            let snap = state.sqlite_pool.blocking(move |p| p.with_conn(&id, |c| sqlite_alter::snapshot(c, &table))).await?;
             dx.sqlite_tables.insert(name.clone(), snap);
         }
     }

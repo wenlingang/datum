@@ -4,13 +4,22 @@ use rusqlite::types::ValueRef;
 use rusqlite::Connection as SqliteConn;
 use rust_i18n::t;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-/// rusqlite::Connection 是 Send 但非 Sync;操作均为同步,放进 std Mutex 即可,
-/// 命令侧不会跨 await 持锁,因此 Pool 满足 Send + Sync(Tauri State 要求)。
-#[derive(Default)]
+/// 一个已打开的库:连接各自一把锁(rusqlite::Connection 是 Send 但非 Sync),
+/// 另存一个可跨线程使用的中断句柄,停止查询时不用拿连接锁。
+struct Entry {
+    conn: Mutex<SqliteConn>,
+    interrupt: rusqlite::InterruptHandle,
+}
+
+/// SQLite 的操作都是同步的。连接表只在查找时短暂加锁,一个库上的长查询不挡别的库;
+/// 异步调用方经 [`SqlitePool::blocking`] 放到阻塞线程池执行,不占 tokio 工作线程。
+/// 克隆共享同一张连接表(给 `spawn_blocking` 带走)。
+#[derive(Default, Clone)]
 pub struct SqlitePool {
-    conns: Mutex<HashMap<String, SqliteConn>>,
+    conns: Arc<Mutex<HashMap<String, Arc<Entry>>>>,
 }
 
 /// 连接级设置的快照(见 [`SqlitePool::session_flags`])。
@@ -60,8 +69,44 @@ impl SqlitePool {
             AppError::new(ErrorKind::Connection, t!("core.err.sqlite_open_failed"))
                 .with_detail(e.to_string())
         })?;
-        self.conns.lock().unwrap().insert(id.to_string(), conn);
+        let interrupt = conn.get_interrupt_handle();
+        self.conns
+            .lock()
+            .unwrap()
+            .insert(id.to_string(), Arc::new(Entry { conn: Mutex::new(conn), interrupt }));
         Ok(())
+    }
+
+    fn entry(&self, id: &str) -> AppResult<Arc<Entry>> {
+        self.conns
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))
+    }
+
+    /// 在阻塞线程池里执行一段同步操作(SQLite 的查询可能很久,不能占着 tokio 工作线程)。
+    pub async fn blocking<R: Send + 'static>(
+        &self,
+        f: impl FnOnce(&SqlitePool) -> AppResult<R> + Send + 'static,
+    ) -> AppResult<R> {
+        let pool = self.clone();
+        tokio::task::spawn_blocking(move || f(&pool)).await.map_err(|e| {
+            AppError::new(ErrorKind::Query, t!("core.err.query_failed")).with_detail(e.to_string())
+        })?
+    }
+
+    /// 停止该库上正在执行的语句(sqlite3_interrupt):语句以 interrupted 报错结束,
+    /// 事务里的语句会让事务回滚。库空闲时什么都不做,返回 false。
+    pub fn cancel(&self, id: &str) -> bool {
+        let Ok(entry) = self.entry(id) else { return false };
+        // 拿不到锁说明有语句在执行
+        let busy = matches!(entry.conn.try_lock(), Err(std::sync::TryLockError::WouldBlock));
+        if busy {
+            entry.interrupt.interrupt();
+        }
+        busy
     }
 
     #[allow(dead_code)] // 目前仅测试使用,保留备将来重连/状态显示
@@ -76,11 +121,15 @@ impl SqlitePool {
 
     /// 持有连接锁执行一段同步操作(读结构 + 执行要在同一把锁里完成,中间插不进别的请求)。
     pub fn with_conn<R>(&self, id: &str, f: impl FnOnce(&SqliteConn) -> AppResult<R>) -> AppResult<R> {
-        let guard = self.conns.lock().unwrap();
-        let conn = guard
-            .get(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        f(conn)
+        let entry = self.entry(id)?;
+        let conn = entry.conn.lock().unwrap_or_else(|e| e.into_inner());
+        f(&conn)
+    }
+
+    fn with_conn_mut<R>(&self, id: &str, f: impl FnOnce(&mut SqliteConn) -> AppResult<R>) -> AppResult<R> {
+        let entry = self.entry(id)?;
+        let mut conn = entry.conn.lock().unwrap_or_else(|e| e.into_inner());
+        f(&mut conn)
     }
 
     /// 连接上会被脚本改动、需要在出错后恢复的设置(编辑器多语句执行前记下)。
@@ -119,29 +168,27 @@ impl SqlitePool {
 
     /// 在单事务里逐条执行导入 SQL:全成功提交,任一失败整体回滚(错误标注第几条)。
     pub fn import_sql(&self, id: &str, statements: &[String]) -> AppResult<usize> {
-        let mut guard = self.conns.lock().unwrap();
-        let conn = guard
-            .get_mut(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        let tx = conn.transaction().map_err(|e| {
-            AppError::new(ErrorKind::Query, t!("core.err.begin_tx_failed"))
-                .with_detail(e.to_string())
-        })?;
-        for (i, sql) in statements.iter().enumerate() {
-            // 出错直接返回:tx 被 drop 时自动回滚
-            tx.execute_batch(sql).map_err(|e| {
-                AppError::new(
-                    ErrorKind::Query,
-                    t!("core.err.stmt_failed_all_rolled_back", n = i + 1),
-                )
-                .with_detail(e.to_string())
+        self.with_conn_mut(id, |conn| {
+            let tx = conn.transaction().map_err(|e| {
+                AppError::new(ErrorKind::Query, t!("core.err.begin_tx_failed"))
+                    .with_detail(e.to_string())
             })?;
-        }
-        tx.commit().map_err(|e| {
-            AppError::new(ErrorKind::Query, t!("core.err.commit_tx_failed"))
-                .with_detail(e.to_string())
-        })?;
-        Ok(statements.len())
+            for (i, sql) in statements.iter().enumerate() {
+                // 出错直接返回:tx 被 drop 时自动回滚
+                tx.execute_batch(sql).map_err(|e| {
+                    AppError::new(
+                        ErrorKind::Query,
+                        t!("core.err.stmt_failed_all_rolled_back", n = i + 1),
+                    )
+                    .with_detail(e.to_string())
+                })?;
+            }
+            tx.commit().map_err(|e| {
+                AppError::new(ErrorKind::Query, t!("core.err.commit_tx_failed"))
+                    .with_detail(e.to_string())
+            })?;
+            Ok(statements.len())
+        })
     }
 
     /// 执行任意 SQL。返回行的语句(SELECT/PRAGMA/RETURNING)给出列+行;
@@ -158,11 +205,7 @@ impl SqlitePool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        let guard = self.conns.lock().unwrap();
-        let conn = guard
-            .get(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        run_capped(conn, sql, max_rows)
+        self.with_conn(id, |conn| run_capped(conn, sql, max_rows))
     }
 
     /// 只读执行:query_only 开启、执行、关闭三步在同一把锁里完成,
@@ -173,26 +216,51 @@ impl SqlitePool {
         sql: &str,
         max_rows: Option<u32>,
     ) -> AppResult<QueryResult> {
-        let guard = self.conns.lock().unwrap();
-        let conn = guard
-            .get(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        let set = |on: bool| {
-            conn.execute_batch(if on {
-                "PRAGMA query_only = ON"
-            } else {
-                "PRAGMA query_only = OFF"
-            })
-            .map_err(|e| {
-                AppError::new(ErrorKind::Query, t!("core.err.exec_failed"))
-                    .with_detail(e.to_string())
-            })
-        };
-        set(true)?;
-        let result = run_capped(conn, sql, max_rows);
-        set(false)?;
-        result
+        self.query_read_only_bounded(id, sql, max_rows, None)
     }
+
+    /// 同 [`Self::query_read_only`],`timeout_ms` 给定时超时即中止(进度回调里检查期限),
+    /// 报 `impact_timeout`。递归 CTE 之类跑不完的只读语句不会一直占着连接。
+    pub fn query_read_only_bounded(
+        &self,
+        id: &str,
+        sql: &str,
+        max_rows: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> AppResult<QueryResult> {
+        self.with_conn(id, |conn| read_only(conn, sql, max_rows, timeout_ms))
+    }
+}
+
+/// 进度回调的检查间隔(虚拟机指令数):足够细,超时后很快停下;又不至于拖慢查询。
+const PROGRESS_OPS: i32 = 10_000;
+
+fn read_only(conn: &SqliteConn, sql: &str, max_rows: Option<u32>, timeout_ms: Option<u32>) -> AppResult<QueryResult> {
+    let set = |on: bool| {
+        conn.execute_batch(if on {
+            "PRAGMA query_only = ON"
+        } else {
+            "PRAGMA query_only = OFF"
+        })
+        .map_err(|e| {
+            AppError::new(ErrorKind::Query, t!("core.err.exec_failed"))
+                .with_detail(e.to_string())
+        })
+    };
+    set(true)?;
+    let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms as u64));
+    if let Some(deadline) = deadline {
+        conn.progress_handler(PROGRESS_OPS, Some(move || Instant::now() >= deadline));
+    }
+    let mut result = run_capped(conn, sql, max_rows);
+    if let (Some(deadline), Some(ms)) = (deadline, timeout_ms) {
+        conn.progress_handler(0, None::<fn() -> bool>);
+        if result.is_err() && Instant::now() >= deadline {
+            result = Err(AppError::new(ErrorKind::Query, t!("core.err.impact_timeout", secs = ms.div_ceil(1000))));
+        }
+    }
+    set(false)?;
+    result
 }
 
 /// 在已拿到的连接上执行 SQL(调用方持有连接锁)。
@@ -260,49 +328,47 @@ impl SqlitePool {
         edits: &[crate::sqlite::edit::CellEdit],
         deletes: &[crate::sqlite::edit::RowDelete],
     ) -> AppResult<u64> {
-        let mut guard = self.conns.lock().unwrap();
-        let conn = guard
-            .get_mut(id)
-            .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))?;
-        let tx = conn.transaction().map_err(|e| {
-            AppError::new(ErrorKind::Edit, t!("core.err.begin_tx_failed"))
-                .with_detail(e.to_string())
-        })?;
-        let mut n = 0u64;
-        for e in edits {
-            let sql = format!(
-                "UPDATE \"{}\" SET \"{}\" = ? WHERE \"{}\" = ?",
-                e.table.replace('"', "\"\""),
-                e.column.replace('"', "\"\""),
-                e.pk_col.replace('"', "\"\"")
-            );
-            let affected = tx
-                .execute(&sql, rusqlite::params![e.new_value, e.pk_value])
-                .map_err(|err| {
-                    AppError::new(ErrorKind::Edit, t!("core.err.update_failed"))
-                        .with_detail(err.to_string())
-                })?;
-            n += affected as u64;
-        }
-        for d in deletes {
-            let sql = format!(
-                "DELETE FROM \"{}\" WHERE \"{}\" = ?",
-                d.table.replace('"', "\"\""),
-                d.pk_col.replace('"', "\"\"")
-            );
-            let affected = tx
-                .execute(&sql, rusqlite::params![d.pk_value])
-                .map_err(|err| {
-                    AppError::new(ErrorKind::Edit, t!("core.err.delete_failed"))
-                        .with_detail(err.to_string())
-                })?;
-            n += affected as u64;
-        }
-        tx.commit().map_err(|e| {
-            AppError::new(ErrorKind::Edit, t!("core.err.commit_tx_failed"))
-                .with_detail(e.to_string())
-        })?;
-        Ok(n)
+        self.with_conn_mut(id, |conn| {
+            let tx = conn.transaction().map_err(|e| {
+                AppError::new(ErrorKind::Edit, t!("core.err.begin_tx_failed"))
+                    .with_detail(e.to_string())
+            })?;
+            let mut n = 0u64;
+            for e in edits {
+                let sql = format!(
+                    "UPDATE \"{}\" SET \"{}\" = ? WHERE \"{}\" = ?",
+                    e.table.replace('"', "\"\""),
+                    e.column.replace('"', "\"\""),
+                    e.pk_col.replace('"', "\"\"")
+                );
+                let affected = tx
+                    .execute(&sql, rusqlite::params![e.new_value, e.pk_value])
+                    .map_err(|err| {
+                        AppError::new(ErrorKind::Edit, t!("core.err.update_failed"))
+                            .with_detail(err.to_string())
+                    })?;
+                n += affected as u64;
+            }
+            for d in deletes {
+                let sql = format!(
+                    "DELETE FROM \"{}\" WHERE \"{}\" = ?",
+                    d.table.replace('"', "\"\""),
+                    d.pk_col.replace('"', "\"\"")
+                );
+                let affected = tx
+                    .execute(&sql, rusqlite::params![d.pk_value])
+                    .map_err(|err| {
+                        AppError::new(ErrorKind::Edit, t!("core.err.delete_failed"))
+                            .with_detail(err.to_string())
+                    })?;
+                n += affected as u64;
+            }
+            tx.commit().map_err(|e| {
+                AppError::new(ErrorKind::Edit, t!("core.err.commit_tx_failed"))
+                    .with_detail(e.to_string())
+            })?;
+            Ok(n)
+        })
     }
 }
 

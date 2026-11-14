@@ -120,7 +120,10 @@ pub async fn query_read_only(
     match kind {
         DbKind::Pg => state.pg_pool.query_read_only(id, sql, max_rows).await,
         DbKind::Mysql => state.my_pool.query_read_only(id, sql, max_rows).await,
-        DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, max_rows),
+        DbKind::Sqlite => {
+            let (id, sql) = (id.to_string(), sql.to_string());
+            state.sqlite_pool.blocking(move |p| p.query_read_only(&id, &sql, max_rows)).await
+        }
         DbKind::Redis => Err(unsupported()),
         DbKind::Mongo => Err(mongo_unsupported()),
     }
@@ -150,7 +153,7 @@ async fn read_only_bounded(
     query_read_only_timeout(state, kind, id, sql, max_rows, IMPACT_TIMEOUT_MS).await
 }
 
-/// 只读会话 + 服务端限时(PG / MySQL;SQLite 本地执行不限时),超时报 `impact_timeout` 文案。
+/// 只读会话 + 限时(PG / MySQL 由服务端限时;SQLite 在进度回调里检查期限),超时报 `impact_timeout` 文案。
 /// PG 在用户会话上执行(看得到会话里未提交的改动与临时表);元数据类查询用 [`query_meta_read_only_timeout`]。
 pub async fn query_read_only_timeout(
     state: &AppState,
@@ -189,7 +192,13 @@ async fn read_only_timeout(
         DbKind::Pg if meta => state.pg_pool.query_meta_read_only(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Pg => state.pg_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
         DbKind::Mysql => state.my_pool.query_read_only_bounded(id, sql, Some(max_rows), Some(timeout_ms)).await,
-        DbKind::Sqlite => state.sqlite_pool.query_read_only(id, sql, Some(max_rows)),
+        DbKind::Sqlite => {
+            let (id, sql) = (id.to_string(), sql.to_string());
+            return state
+                .sqlite_pool
+                .blocking(move |p| p.query_read_only_bounded(&id, &sql, Some(max_rows), Some(timeout_ms)))
+                .await;
+        }
         DbKind::Redis | DbKind::Mongo => return Err(unsupported()),
     };
     r.map_err(|e| {
@@ -218,11 +227,12 @@ pub async fn query_meta(
 }
 
 /// 停止该连接上编辑器正在执行的语句(PG 取消用户会话上的语句;MySQL 对执行中的线程 KILL QUERY)。
-/// 返回是否发出了有效的取消。SQLite / Redis 暂不支持,返回 false。
+/// 返回是否发出了有效的取消。SQLite 中断正在执行的语句;Redis 不支持,返回 false。
 pub async fn cancel_query(state: &AppState, kind: &DbKind, id: &str) -> AppResult<bool> {
     match kind {
         DbKind::Pg => state.pg_pool.cancel(id).await,
         DbKind::Mysql => state.my_pool.cancel(id).await,
+        DbKind::Sqlite => Ok(state.sqlite_pool.cancel(id)),
         _ => Ok(false),
     }
 }
@@ -764,33 +774,44 @@ pub async fn redis_publish(state: &AppState, id: &str, channel: &str, message: &
 }
 
 /// SQLite:记下连接上 legacy_alter_table / foreign_keys 的当前值(编辑器多语句执行前)。
-pub fn sqlite_session_flags(state: &AppState, id: &str) -> AppResult<sqlite::client::SessionFlags> {
-    state.sqlite_pool.session_flags(id)
+pub async fn sqlite_session_flags(state: &AppState, id: &str) -> AppResult<sqlite::client::SessionFlags> {
+    let id = id.to_string();
+    state.sqlite_pool.blocking(move |p| p.session_flags(&id)).await
 }
 
 /// SQLite:多语句执行出错停下后,回滚未结束的事务并恢复执行前的设置;返回是否回滚了事务。
-pub fn sqlite_recover(state: &AppState, id: &str, before: &sqlite::client::SessionFlags) -> AppResult<bool> {
-    state.sqlite_pool.recover(id, before)
+pub async fn sqlite_recover(state: &AppState, id: &str, before: &sqlite::client::SessionFlags) -> AppResult<bool> {
+    let (id, before) = (id.to_string(), *before);
+    state.sqlite_pool.blocking(move |p| p.recover(&id, &before)).await
 }
 
 /// SQLite 改表结构:读出表的现状(列、外键、相关对象),界面据此填表单。
-pub fn sqlite_alter_load(state: &AppState, id: &str, table: &str) -> AppResult<sqlite::alter::TableSnapshot> {
-    state.sqlite_pool.with_conn(id, |c| sqlite::alter::snapshot(c, table))
+pub async fn sqlite_alter_load(state: &AppState, id: &str, table: &str) -> AppResult<sqlite::alter::TableSnapshot> {
+    let (id, table) = (id.to_string(), table.to_string());
+    state.sqlite_pool.blocking(move |p| p.with_conn(&id, |c| sqlite::alter::snapshot(c, &table))).await
 }
 
 /// SQLite 改表结构:按当前结构生成脚本(预览)。
-pub fn sqlite_alter_preview(state: &AppState, id: &str, plan: &sqlite::alter::AlterPlan) -> AppResult<sqlite::alter::AlterScript> {
-    state.sqlite_pool.with_conn(id, |c| sqlite::alter::generate(&sqlite::alter::snapshot(c, &plan.table)?, plan))
+pub async fn sqlite_alter_preview(state: &AppState, id: &str, plan: &sqlite::alter::AlterPlan) -> AppResult<sqlite::alter::AlterScript> {
+    let (id, plan) = (id.to_string(), plan.clone());
+    state
+        .sqlite_pool
+        .blocking(move |p| p.with_conn(&id, |c| sqlite::alter::generate(&sqlite::alter::snapshot(c, &plan.table)?, &plan)))
+        .await
 }
 
 /// SQLite 改表结构:重新生成并核对与预览一致后,在一个事务里执行。
-pub fn sqlite_alter_apply(
+pub async fn sqlite_alter_apply(
     state: &AppState,
     id: &str,
     plan: &sqlite::alter::AlterPlan,
     expected_sql: &str,
 ) -> AppResult<sqlite::alter::ApplyOutcome> {
-    state.sqlite_pool.with_conn(id, |c| sqlite::alter::preview_and_apply(c, plan, expected_sql))
+    let (id, plan, expected_sql) = (id.to_string(), plan.clone(), expected_sql.to_string());
+    state
+        .sqlite_pool
+        .blocking(move |p| p.with_conn(&id, |c| sqlite::alter::preview_and_apply(c, &plan, &expected_sql)))
+        .await
 }
 
 /// SQLite 导入 CSV / JSON:预览文件开头(列、推断类型、样例行)。

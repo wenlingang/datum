@@ -449,3 +449,19 @@ test("SQLite 的 JSON 文本也展开成树(只是显示):可复制 $ 路径,不
   expect(app.shows("id:json-filter")).toBe(false);
   app.dispose();
 });
+
+test("SQLite 长查询可停止:中断后照常执行", async () => {
+  const app = await start();
+  await replaceSql(app, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c");
+  await app.press("id:run");
+  await app.waitFor("id:stop", { timeout: 10000 });
+  await app.press("id:stop");
+  await app.waitUntil(() => app.texts().some((s) => s.includes("interrupted")), { timeout: 5000 });
+  await app.waitUntil(() => !app.shows("id:stop"), { timeout: 5000 });
+  await app.press("text:WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c");
+  await app.keyboard.press("mod+a");
+  await app.type("id:sql-editor", "SELECT id, name FROM categories");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 4 rows returned"), { timeout: 15000 });
+  app.dispose();
+});

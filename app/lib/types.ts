@@ -30,8 +30,8 @@ export const KIND_SCHEME: Record<DbKind, string> = {
 /** 关系库:支持 SQL、有列信息。 */
 export const supportsSql = (k: DbKind) => k === "pg" || k === "mysql" || k === "sqlite";
 
-/** 能在服务器端停止正在执行的语句(PG 取消会话上的语句、MySQL KILL QUERY)。 */
-export const supportsCancel = (k: DbKind) => k === "pg" || k === "mysql";
+/** 能停止正在执行的语句(PG 取消会话上的语句、MySQL KILL QUERY、SQLite 中断)。 */
+export const supportsCancel = (k: DbKind) => supportsSql(k);
 
 export interface Connection {
   id: string;

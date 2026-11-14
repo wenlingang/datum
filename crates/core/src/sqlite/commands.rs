@@ -24,7 +24,7 @@ pub async fn sqlite_connect(state: &AppState, id: String) -> AppResult<()> {
 }
 
 pub async fn sqlite_list_objects(state: &AppState, id: String) -> AppResult<Vec<String>> {
-    browse::list_tables(&state.sqlite_pool, &id)
+    state.sqlite_pool.blocking(move |p| browse::list_tables(p, &id)).await
 }
 
 pub async fn sqlite_query(
@@ -33,7 +33,7 @@ pub async fn sqlite_query(
     sql: String,
     max_rows: Option<u32>,
 ) -> AppResult<QueryResult> {
-    state.sqlite_pool.query_capped(&id, &sql, max_rows)
+    state.sqlite_pool.blocking(move |p| p.query_capped(&id, &sql, max_rows)).await
 }
 
 pub async fn sqlite_disconnect(state: &AppState, id: String) -> AppResult<()> {
@@ -46,7 +46,7 @@ pub async fn sqlite_import_sql(
     id: String,
     statements: Vec<String>,
 ) -> AppResult<usize> {
-    state.sqlite_pool.import_sql(&id, &statements)
+    state.sqlite_pool.blocking(move |p| p.import_sql(&id, &statements)).await
 }
 
 pub async fn sqlite_table_detail(
@@ -54,7 +54,7 @@ pub async fn sqlite_table_detail(
     id: String,
     table: String,
 ) -> AppResult<TableDetail> {
-    browse::table_detail(&state.sqlite_pool, &id, &table)
+    state.sqlite_pool.blocking(move |p| browse::table_detail(p, &id, &table)).await
 }
 
 pub async fn sqlite_commit_edits(
@@ -63,5 +63,5 @@ pub async fn sqlite_commit_edits(
     edits: Vec<CellEdit>,
     deletes: Vec<RowDelete>,
 ) -> AppResult<u64> {
-    edit::commit_edits(&state.sqlite_pool, &id, &edits, &deletes)
+    state.sqlite_pool.blocking(move |p| edit::commit_edits(p, &id, &edits, &deletes)).await
 }

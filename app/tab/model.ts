@@ -534,7 +534,7 @@ function resetFilter(m: TabModel) {
   });
 }
 
-/** 停止编辑器正在执行的语句:服务器端中止(PG / MySQL),被停的那次执行以「已取消」报错结束,
+/** 停止编辑器正在执行的语句:服务器端中止(PG / MySQL;SQLite 中断本地执行),被停的那次执行以「已取消」报错结束,
  *  多语句执行随之停在这一条。只发请求,结果仍由原来的执行流程落到结果区。 */
 export function stop(m: TabModel) {
   if (!m.running() || !supportsCancel(m.dbKind)) return;
