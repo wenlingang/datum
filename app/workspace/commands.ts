@@ -41,7 +41,7 @@ export function refresh() {
   if (id && conns.tables(id)) void loadTables(id);
 }
 
-/** 打开当前连接的关系图(Redis / Mongo 没有关系图)。 */
+/** 打开当前连接的关系图(Redis 没有关系图)。 */
 export function openErdForActive() {
   const conn = conns.active();
   if (!conn || !supportsSql(conn.kind)) {

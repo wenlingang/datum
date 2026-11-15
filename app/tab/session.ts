@@ -6,7 +6,7 @@
 import { effect, signal } from "nsh";
 import { t } from "nsh/i18n";
 import { store } from "../lib/native";
-import { isSupportedKind, supportsSql } from "../lib/types";
+import { supportsSql } from "../lib/types";
 import { activate, conns, loadTables } from "../store/conns";
 import { activeTabIds, newTabId, restoreTabs, type TabKind, type WorkTab, workspace } from "../store/workspace";
 import { createLuaModel, luaModelOf } from "./luaModel";
@@ -66,17 +66,16 @@ function snapshot(): Session {
 /** 由保存的一项重建 tab;连接已删除或类型不再支持时跳过。 */
 function rebuild(s: SessionTab): WorkTab | null {
   const conn = conns.get(s.connId);
-  if (!conn || !isSupportedKind(conn.kind)) return null;
+  if (!conn) return null;
   const base = { id: newTabId(), kind: s.kind, connId: conn.id, dbKind: conn.kind, table: s.table, title: signal(s.title) };
   switch (s.kind) {
     case "query": {
-      if (conn.kind === "mongo") return null;
       const m = createModel("query", conn.id, conn.kind, null);
       if (s.sql) setSql(m, s.sql);
       return { ...base, table: null, state: m };
     }
     case "table": {
-      if (!s.table || conn.kind === "mongo") return null;
+      if (!s.table) return null;
       const m = createModel("table", conn.id, conn.kind, s.table);
       m.pendingLoad = true;
       return { ...base, state: m };

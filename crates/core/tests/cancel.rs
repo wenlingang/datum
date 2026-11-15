@@ -31,8 +31,6 @@ async fn connect(st: &AppState, kind: DbKind, env: &str, user: &str, db: &str) -
         plaintext_password: None,
         file_path: None,
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(st, c, Some(String::new())).unwrap();

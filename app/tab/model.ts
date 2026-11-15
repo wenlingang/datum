@@ -550,10 +550,6 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
   }
   // `:name` 参数:先填值,代入后再走风险审查与执行
   if (askParams(m, sql, (bound) => run(m, bound, skipHistory, skipRisk))) return;
-  if (m.dbKind === "mongo") {
-    toast.info(t("tab.mongo_unsupported"));
-    return;
-  }
   if (!skipRisk) {
     const conn = conns.get(m.connId);
     // prod 连接从严:带 WHERE 的 UPDATE / DELETE 也先确认,并预估影响范围;

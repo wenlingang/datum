@@ -19,8 +19,6 @@ fn conn(kind: DbKind, port: u16, user: &str, database: &str, file: Option<String
         plaintext_password: None,
         file_path: file,
         ssl_mode: Default::default(),
-        uri: None,
-        auth_source: None,
         ssh: None,
     }
 }

@@ -4,7 +4,7 @@
 import { batch, signal } from "nsh";
 import { t } from "nsh/i18n";
 import { db, errorText, store } from "../lib/native";
-import { type ColumnsByTable, type Connection, type ForeignKey, isSupportedKind, supportsSql } from "../lib/types";
+import { type ColumnsByTable, type Connection, type ForeignKey, supportsSql } from "../lib/types";
 import { forgetConnConvos } from "./ai";
 import { toast } from "./toast";
 
@@ -19,8 +19,7 @@ const loading = signal<Record<string, true>>({});
 
 export const conns = {
   /** 全部连接。 */
-  /** 界面显示的连接(nsh 版不支持 MongoDB,已存的 Mongo 连接保留在配置里但不显示)。 */
-  list: () => connections().filter((c) => isSupportedKind(c.kind)),
+  list: () => connections(),
   get: (id: string | null | undefined) => (id ? connections().find((c) => c.id === id) : undefined),
   /** 侧栏聚焦的连接 id。 */
   activeId: () => activeId(),

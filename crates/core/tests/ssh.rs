@@ -94,8 +94,6 @@ fn conn(kind: DbKind, db_port: u16, ssh: SshTunnel) -> Connection {
         plaintext_password: None,
         file_path: None,
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: Some(ssh),
     }
 }

@@ -7,17 +7,15 @@ pub enum DbKind {
     Mysql,
     Redis,
     Sqlite,
-    Mongo,
 }
 
 impl DbKind {
-    pub const ALL: [DbKind; 5] = [
-        DbKind::Pg,
-        DbKind::Mysql,
-        DbKind::Sqlite,
-        DbKind::Redis,
-        DbKind::Mongo,
-    ];
+    pub const ALL: [DbKind; 4] = [DbKind::Pg, DbKind::Mysql, DbKind::Sqlite, DbKind::Redis];
+
+    /// 认得的类型名(配置文件里的 `kind`)。
+    pub fn is_known(kind: &str) -> bool {
+        Self::ALL.iter().any(|k| serde_json::to_value(k).ok().and_then(|v| v.as_str().map(|s| s == kind)) == Some(true))
+    }
 
     /// 展示名(状态栏、类型选择)。
     pub fn label(&self) -> &'static str {
@@ -26,7 +24,6 @@ impl DbKind {
             DbKind::Mysql => "MySQL",
             DbKind::Sqlite => "SQLite",
             DbKind::Redis => "Redis",
-            DbKind::Mongo => "MongoDB",
         }
     }
 
@@ -37,7 +34,6 @@ impl DbKind {
             DbKind::Mysql => "mysql",
             DbKind::Sqlite => "sqlite",
             DbKind::Redis => "redis",
-            DbKind::Mongo => "mongodb",
         }
     }
 
@@ -49,11 +45,6 @@ impl DbKind {
     /// 是否加载列 schema(补全与 AI 上下文)。
     pub fn has_columns(&self) -> bool {
         self.supports_sql()
-    }
-
-    /// 是否提供文档级的编辑 / 新增 / 删除。
-    pub fn supports_doc_edit(&self) -> bool {
-        matches!(self, DbKind::Mongo)
     }
 }
 
@@ -160,23 +151,17 @@ pub struct Connection {
     /// 加密方式;旧配置没有这一项时取默认的「优先」
     #[serde(default)]
     pub ssl_mode: SslMode,
-    /// 仅 Mongo:连接串模式下的 URI(已去除密码与库名)。Some 即为连接串模式。
-    #[serde(default)]
-    pub uri: Option<String>,
-    /// 仅 Mongo 表单模式:认证库,None 等同 "admin"。
-    #[serde(default)]
-    pub auth_source: Option<String>,
     /// 经 SSH 隧道连接;None 为直连。SQLite 忽略。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh: Option<SshTunnel>,
 }
 
 impl Connection {
-    /// 需要走的 SSH 隧道(SQLite / Mongo 不走)。
+    /// 需要走的 SSH 隧道(SQLite 不走)。
     pub fn tunnel(&self) -> Option<&SshTunnel> {
         match self.kind {
             DbKind::Pg | DbKind::Mysql | DbKind::Redis => self.ssh.as_ref(),
-            DbKind::Sqlite | DbKind::Mongo => None,
+            DbKind::Sqlite => None,
         }
     }
 
@@ -212,8 +197,6 @@ mod tests {
             plaintext_password: None,
             file_path: None,
             ssl_mode: Default::default(),
-            uri: None,
-            auth_source: None,
             ssh: None,
         };
         let json = serde_json::to_string(&c).unwrap();
@@ -236,33 +219,19 @@ mod tests {
     #[test]
     fn capability_truth_table() {
         use DbKind::*;
-        let rows = [
-            (Pg, true, true, false),
-            (Mysql, true, true, false),
-            (Sqlite, true, true, false),
-            (Redis, false, false, false),
-            (Mongo, false, false, true),
-        ];
-        for (k, sql, cols, doc) in rows {
+        for (k, sql, cols) in [(Pg, true, true), (Mysql, true, true), (Sqlite, true, true), (Redis, false, false)] {
             assert_eq!(k.supports_sql(), sql, "{k:?} supports_sql");
             assert_eq!(k.has_columns(), cols, "{k:?} has_columns");
-            assert_eq!(k.supports_doc_edit(), doc, "{k:?} supports_doc_edit");
         }
-        assert_eq!(DbKind::ALL.len(), 5);
-        assert_eq!(Mongo.label(), "MongoDB");
-        assert_eq!(Mongo.scheme(), "mongodb");
+        assert_eq!(DbKind::ALL.len(), 4);
+        assert!(DbKind::is_known("pg") && DbKind::is_known("redis") && !DbKind::is_known("cassandra"));
     }
 
+    /// 旧配置里已不用的字段(如 uri、authSource)不影响读取。
     #[test]
-    fn mongo_kind_serializes_camel_case() {
-        assert_eq!(serde_json::to_string(&DbKind::Mongo).unwrap(), "\"mongo\"");
-    }
-
-    #[test]
-    fn old_config_without_mongo_fields_deserializes() {
-        let json = r#"{"id":"c1","name":"n","kind":"pg","env":"local","host":"h","port":5432,"user":"u","database":"d"}"#;
+    fn old_config_with_retired_fields_deserializes() {
+        let json = r#"{"id":"c1","name":"n","kind":"pg","env":"local","host":"h","port":5432,"user":"u","database":"d","uri":null,"authSource":"admin"}"#;
         let c: Connection = serde_json::from_str(json).unwrap();
-        assert_eq!(c.uri, None);
-        assert_eq!(c.auth_source, None);
+        assert_eq!(c.kind, DbKind::Pg);
     }
 }

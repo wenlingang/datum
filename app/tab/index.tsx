@@ -64,12 +64,8 @@ function makeTab(kind: "table" | "query", connId: string, table: string | null, 
   };
 }
 
-/** 打开(或聚焦已打开的)表浏览 tab;Redis 为 key。MongoDB 不支持:提示并返回 undefined。 */
+/** 打开(或聚焦已打开的)表浏览 tab;Redis 为 key。 */
 export function openTable(connId: string, table: string): WorkTab | undefined {
-  if (conns.get(connId)?.kind === "mongo") {
-    toast.info(t("tab.mongo_unsupported"));
-    return undefined;
-  }
   const existing = workspace
     .tabs()
     .find((x) => x.kind === "table" && x.connId === connId && x.table === table);
@@ -99,10 +95,6 @@ export function newQueryTab(sql?: string): WorkTab | undefined {
     return undefined;
   }
   const n = workspace.tabs().filter((x) => x.kind === "query" && x.connId === conn.id).length;
-  if (conn.kind === "mongo") {
-    toast.info(t("tab.mongo_unsupported"));
-    return undefined;
-  }
   const base = "SQL Query";
   const tab = makeTab("query", conn.id, null, n === 0 ? base : `${base} ${n + 1}`);
   if (!tab) return undefined;
@@ -111,13 +103,6 @@ export function newQueryTab(sql?: string): WorkTab | undefined {
   const model = modelOf(tab);
   if (sql && model) setSql(model, sql);
   return tab;
-}
-
-/** 集合右键「插入文档」:打开集合 tab 并弹出新增文档编辑器。 */
-export function insertDocument(connId: string, coll: string) {
-  void connId;
-  void coll;
-  toast.info(t("tab.mongo_unsupported"));
 }
 
 /** 打开 ER 图 tab:整库,或以 `focus` 表为中心(只看它与直接邻居)。同连接同焦点复用已开的 tab。 */

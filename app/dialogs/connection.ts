@@ -133,8 +133,6 @@ export function buildConnection(d: ConnDraft, id: string): Connection {
     plaintextPassword: null,
     filePath: sqlite ? d.filePath.trim() : null,
     sslMode: d.ssl,
-    uri: null,
-    authSource: null,
     ssh:
       sqlite || !d.ssh
         ? null

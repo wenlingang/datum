@@ -10,9 +10,9 @@ import type { DbKind } from "../lib/types";
 import { activate, conns } from "./conns";
 
 export type TabKind =
-  /** 表浏览(纯网格,分页);Redis 的 key、Mongo 的集合也走这里 */
+  /** 表浏览(纯网格,分页);Redis 的 key 也走这里 */
   | "table"
-  /** SQL / Mongo / Redis 查询工作区(编辑器 + 结果) */
+  /** SQL / Redis 查询工作区(编辑器 + 结果) */
   | "query"
   /** ER 图(整库,或 table 为聚焦表) */
   | "erd"
@@ -33,7 +33,7 @@ export interface WorkTab {
   readonly kind: TabKind;
   readonly connId: string;
   readonly dbKind: DbKind;
-  /** 表浏览的表名(Redis 为 key 名,Mongo 为集合名) */
+  /** 表浏览的表名(Redis 为 key 名) */
   readonly table: string | null;
   /** 标签标题(双击可重命名) */
   readonly title: Signal<string>;

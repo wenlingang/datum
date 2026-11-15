@@ -92,7 +92,7 @@ impl SectionInfo {
     }
 }
 
-/// 某个库支持的诊断分区(按显示顺序)。Redis / Mongo 没有。
+/// 某个库支持的诊断分区(按显示顺序)。Redis 没有。
 pub fn sections(kind: &DbKind) -> Vec<SectionInfo> {
     use Action::*;
     match kind {
@@ -121,7 +121,7 @@ pub fn sections(kind: &DbKind) -> Vec<SectionInfo> {
             SectionInfo::table("tables"),
             SectionInfo::table("integrity").manual(),
         ],
-        DbKind::Redis | DbKind::Mongo => vec![],
+        DbKind::Redis => vec![],
     }
 }
 
@@ -179,7 +179,7 @@ pub async fn run(state: &AppState, kind: &DbKind, id: &str, key: &str) -> AppRes
         DbKind::Pg => pg_run(state, id, key).await,
         DbKind::Mysql => my_run(state, id, key).await,
         DbKind::Sqlite => sqlite_run(state, id, key).await,
-        DbKind::Redis | DbKind::Mongo => Err(unknown_section(key)),
+        DbKind::Redis => Err(unknown_section(key)),
     }
 }
 

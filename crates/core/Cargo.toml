@@ -6,8 +6,7 @@ publish.workspace = true
 
 [dependencies]
 serde.workspace = true
-# preserve_order:JSON 对象保持键的插入顺序(导入 JSON 推断的列顺序、导出 JSON 的键顺序依赖它;
-# 以前由 mongodb 依赖间接打开,删掉 mongodb 后要显式声明)
+# preserve_order:JSON 对象保持键的插入顺序(导入 JSON 推断的列顺序、导出 JSON 的键顺序依赖它)
 serde_json = { workspace = true, features = ["preserve_order"] }
 tokio.workspace = true
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }

@@ -516,7 +516,6 @@ fn run_completions(kind: &str, text: &str, caret: u32, schema: &CompletionSchema
     let offset = utf16_to_byte(text, caret as usize);
     let result = match k {
         DbKind::Redis => completion::redis_completions(text, offset, &schema.tables, explicit),
-        DbKind::Mongo => None,
         _ => completion::sql_completions_with(text, offset, &schema.tables, &schema.columns, &schema.fks, explicit),
     };
     let Some(r) = result else {

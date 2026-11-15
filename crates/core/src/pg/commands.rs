@@ -99,8 +99,6 @@ mod tests {
             plaintext_password: None,
             file_path: None,
             ssl_mode: Default::default(),
-            uri: None,
-            auth_source: None,
             ssh: None,
         }
     }

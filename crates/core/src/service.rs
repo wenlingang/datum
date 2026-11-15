@@ -19,10 +19,6 @@ fn unsupported() -> AppError {
     AppError::new(ErrorKind::Connection, t!("core.err.redis_unsupported"))
 }
 
-fn mongo_unsupported() -> AppError {
-    AppError::new(ErrorKind::Mongo, t!("core.err.mongo_unsupported"))
-}
-
 /// 建立连接(读取已保存配置与密码)。
 pub async fn connect(state: &AppState, kind: &DbKind, id: &str) -> AppResult<()> {
     let id = id.to_string();
@@ -31,8 +27,6 @@ pub async fn connect(state: &AppState, kind: &DbKind, id: &str) -> AppResult<()>
         DbKind::Mysql => my::commands::my_connect(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_connect(state, id).await,
         DbKind::Redis => rds::commands::redis_connect(state, id).await,
-        // nsh 版不支持 MongoDB(旧配置里的 Mongo 连接保留但不能连接)
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -50,7 +44,6 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
             state.redis_pool.abandon_evals(&id).await;
             Ok(())
         }
-        DbKind::Mongo => Ok(()),
     };
     // 驱动断开后再关隧道
     state.tunnels.close(tunnel_id).await;
@@ -64,7 +57,6 @@ pub async fn list_objects(state: &AppState, kind: &DbKind, id: &str) -> AppResul
         DbKind::Mysql => my::commands::my_list_objects(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_list_objects(state, id).await,
         DbKind::Redis => rds::commands::redis_scan(state, id, "*".into()).await,
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -75,7 +67,6 @@ pub async fn list_databases(state: &AppState, kind: &DbKind, id: &str) -> AppRes
         DbKind::Pg => pg::commands::pg_list_databases(state, id).await,
         DbKind::Mysql => my::commands::my_list_databases(state, id).await,
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
-        DbKind::Mongo => Err(mongo_unsupported()),
         DbKind::Sqlite => Ok(vec![]),
     }
 }
@@ -94,7 +85,6 @@ pub async fn query(
         DbKind::Mysql => my::commands::my_query(state, id, sql, max_rows).await,
         DbKind::Sqlite => sqlite::commands::sqlite_query(state, id, sql, max_rows).await,
         DbKind::Redis => Err(unsupported()),
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -119,7 +109,6 @@ pub async fn query_read_only(
             state.sqlite_pool.blocking(move |p| p.query_read_only(&id, &sql, max_rows)).await
         }
         DbKind::Redis => Err(unsupported()),
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -194,7 +183,7 @@ async fn read_only_timeout(
                 .blocking(move |p| p.query_read_only_bounded(&id, &sql, Some(max_rows), Some(timeout_ms)))
                 .await;
         }
-        DbKind::Redis | DbKind::Mongo => return Err(unsupported()),
+        DbKind::Redis => return Err(unsupported()),
     };
     r.map_err(|e| {
         let text = e.display().to_ascii_lowercase();
@@ -452,7 +441,6 @@ pub async fn table_detail(
         DbKind::Mysql => my::commands::my_table_detail(state, id, table).await,
         DbKind::Sqlite => sqlite::commands::sqlite_table_detail(state, id, table).await,
         DbKind::Redis => Err(unsupported()),
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -470,7 +458,6 @@ pub async fn commit_edits(
         DbKind::Mysql => my::commands::my_commit_edits(state, id, edits, deletes).await,
         DbKind::Sqlite => sqlite::commands::sqlite_commit_edits(state, id, edits, deletes).await,
         DbKind::Redis => Err(unsupported()),
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -487,7 +474,6 @@ pub async fn import_sql(
         DbKind::Mysql => my::commands::my_import_sql(state, id, statements).await,
         DbKind::Sqlite => sqlite::commands::sqlite_import_sql(state, id, statements).await,
         DbKind::Redis => Err(unsupported()),
-        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -710,7 +696,7 @@ pub async fn stream_query<S: crate::export::RowSink + 'static>(
                 Err(e) => panic!("导出线程异常结束: {e}"),
             }
         }
-        DbKind::Redis | DbKind::Mongo => Err(unsupported()),
+        DbKind::Redis => Err(unsupported()),
     };
     (sink, r)
 }
@@ -996,16 +982,12 @@ pub async fn test_connection(
     password: &str,
     ssh: &SshContext,
 ) -> AppResult<()> {
-    if conn.kind == DbKind::Mongo {
-        return Err(mongo_unsupported());
-    }
     let (target, _tunnel) = crate::ssh::resolve(conn, ssh).await?;
     let kind = match conn.kind {
         DbKind::Pg => "pg",
         DbKind::Mysql => "mysql",
         DbKind::Redis => "redis",
         DbKind::Sqlite => "sqlite",
-        DbKind::Mongo => "mongo",
     };
     crate::commands::test_connection(
         kind.into(),
@@ -1036,7 +1018,7 @@ pub async fn probe_databases(
             my::client::probe_databases(&target, &conn.user, password, conn.ssl_mode).await
         }
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
-        DbKind::Sqlite | DbKind::Mongo => Ok(vec![]),
+        DbKind::Sqlite => Ok(vec![]),
     }
 }
 

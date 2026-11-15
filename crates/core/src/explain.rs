@@ -272,7 +272,7 @@ pub async fn explain(state: &AppState, kind: &DbKind, id: &str, sql: &str, analy
             let raw = run(format!("EXPLAIN QUERY PLAN {sql}")).await?;
             Ok(Plan { tree: parse_sqlite_rows(&raw.rows), raw, analyzed: false, total_ms: None })
         }
-        DbKind::Redis | DbKind::Mongo => Err(AppError::new(ErrorKind::Query, t!("core.err.analyze_unsupported"))),
+        DbKind::Redis => Err(AppError::new(ErrorKind::Query, t!("core.err.analyze_unsupported"))),
     }
 }
 

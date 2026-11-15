@@ -21,7 +21,6 @@ import copy from "../assets/icons/copy.svg";
 import cpu from "../assets/icons/cpu.svg";
 import crosshair from "../assets/icons/crosshair.svg";
 import database from "../assets/icons/database.svg";
-import dbMongo from "../assets/icons/db-mongo.svg";
 import dbMysql from "../assets/icons/db-mysql.svg";
 import dbPg from "../assets/icons/db-pg.svg";
 import dbRedis from "../assets/icons/db-redis.svg";
@@ -37,7 +36,6 @@ import folderOpen from "../assets/icons/folder-open.svg";
 import funnel from "../assets/icons/funnel.svg";
 import imageDown from "../assets/icons/image-down.svg";
 import importIcon from "../assets/icons/import.svg";
-import inbox from "../assets/icons/inbox.svg";
 import info from "../assets/icons/info.svg";
 import keyRound from "../assets/icons/key-round.svg";
 import link2 from "../assets/icons/link-2.svg";
@@ -102,7 +100,6 @@ export const ICONS = {
   "cpu": cpu,
   "crosshair": crosshair,
   "database": database,
-  "db-mongo": dbMongo,
   "db-mysql": dbMysql,
   "db-pg": dbPg,
   "db-redis": dbRedis,
@@ -118,7 +115,6 @@ export const ICONS = {
   "funnel": funnel,
   "image-down": imageDown,
   "import": importIcon,
-  "inbox": inbox,
   "info": info,
   "key-round": keyRound,
   "link-2": link2,

@@ -1,13 +1,12 @@
 // 跨原生边界的数据形状:与 datum-core 的 serde(camelCase)输出一一对应。
 // 原生模块返回的是 `unknown`,经 lib/native.ts 的封装断言成这里的类型。
 
-export type DbKind = "pg" | "mysql" | "redis" | "sqlite" | "mongo";
+export type DbKind = "pg" | "mysql" | "redis" | "sqlite";
 export type Env = "local" | "staging" | "prod";
 export type SslMode = "disable" | "prefer" | "require" | "verifyFull";
 
-/** nsh 版支持的连接类型(不含 MongoDB:已存的 Mongo 连接保留在配置里,但界面不显示)。 */
+/** 支持的连接类型(新建连接的类型菜单顺序)。 */
 export const DB_KINDS: DbKind[] = ["pg", "mysql", "sqlite", "redis"];
-export const isSupportedKind = (k: DbKind) => DB_KINDS.includes(k);
 export const ENVS: Env[] = ["local", "staging", "prod"];
 export const SSL_MODES: SslMode[] = ["disable", "prefer", "require", "verifyFull"];
 
@@ -16,7 +15,6 @@ export const KIND_LABEL: Record<DbKind, string> = {
   mysql: "MySQL",
   sqlite: "SQLite",
   redis: "Redis",
-  mongo: "MongoDB",
 };
 
 export const KIND_SCHEME: Record<DbKind, string> = {
@@ -24,7 +22,6 @@ export const KIND_SCHEME: Record<DbKind, string> = {
   mysql: "mysql",
   sqlite: "sqlite",
   redis: "redis",
-  mongo: "mongodb",
 };
 
 /** 关系库:支持 SQL、有列信息。 */
@@ -45,8 +42,6 @@ export interface Connection {
   plaintextPassword?: string | null;
   filePath?: string | null;
   sslMode: SslMode;
-  uri?: string | null;
-  authSource?: string | null;
   /** 经 SSH 跳板机连接;缺省 / null 为直连 */
   ssh?: SshTunnel | null;
 }

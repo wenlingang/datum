@@ -61,10 +61,6 @@ core:
       en: This operation is not supported for Redis
       zh-CN: Redis 不支持该操作
       zh-TW: Redis 不支援此操作
-    mongo_unsupported:
-      en: This operation is not supported for MongoDB
-      zh-CN: MongoDB 不支持该操作
-      zh-TW: MongoDB 不支援此操作
     not_connected:
       en: Not connected. Please connect first
       zh-CN: 连接未建立,请先连接

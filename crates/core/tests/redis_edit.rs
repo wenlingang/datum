@@ -34,8 +34,6 @@ async fn setup_db(id: &str, db: &str) -> Option<AppState> {
         plaintext_password: None,
         file_path: None,
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(&st, c, Some(String::new())).unwrap();

@@ -37,8 +37,6 @@ async fn times_out(kind: DbKind, ssl: SslMode) {
         plaintext_password: None,
         file_path: None,
         ssl_mode: ssl,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(&st, c, Some(String::new())).unwrap();

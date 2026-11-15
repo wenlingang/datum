@@ -60,7 +60,7 @@ export interface SegmentOption<T extends string> {
   color?: string;
 }
 
-/** 胶囊分段选择(环境、Mongo 连接方式)。 */
+/** 胶囊分段选择(如环境)。 */
 export function Segmented<T extends string>(props: {
   options: SegmentOption<T>[];
   value: T;

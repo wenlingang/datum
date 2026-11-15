@@ -81,8 +81,6 @@ async fn sqlite_state() -> (AppState, String) {
         plaintext_password: None,
         file_path: Some(file.display().to_string()),
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(&st, c, Some(String::new())).unwrap();
@@ -314,8 +312,6 @@ fn prod_data_needs_permission() {
             plaintext_password: None,
             file_path: Some(dir.join(format!("{id}.db")).to_string_lossy().into_owned()),
             ssl_mode: SslMode::Disable,
-            uri: None,
-            auth_source: None,
             ssh: None,
         };
         commands::save_connection(&st, c, None).unwrap();

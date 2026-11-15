@@ -31,7 +31,6 @@ const DB_ICON: Record<DbKind, IconName> = {
   mysql: "db-mysql",
   redis: "db-redis",
   sqlite: "db-sqlite",
-  mongo: "db-mongo",
 };
 
 /** 数据库品牌图标(保留原色,不着色)。 */

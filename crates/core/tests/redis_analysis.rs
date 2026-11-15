@@ -25,8 +25,6 @@ async fn setup() -> Option<(AppState, String)> {
         plaintext_password: None,
         file_path: None,
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(&st, c, Some(String::new())).unwrap();
@@ -149,8 +147,6 @@ async fn cluster_scans_every_master() {
         plaintext_password: None,
         file_path: None,
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(&st, c, Some(String::new())).unwrap();

@@ -550,7 +550,7 @@ pub fn classify_cell(value: Option<&str>, data_type: Option<&str>) -> CellStyle 
         };
         return CellStyle { tier, mono: true };
     }
-    if t.contains("uuid") || t.contains("bytea") || t.contains("objectid") || t.contains("bindata")
+    if t.contains("uuid") || t.contains("bytea")
     {
         return CellStyle {
             tier: CellTier::Hash,
@@ -875,22 +875,5 @@ mod tests {
             .map(|i| rows[i].clone())
             .collect();
         assert_eq!(sorted, by_order);
-    }
-
-    #[test]
-    fn mongo_type_names_get_matching_tiers() {
-        assert_eq!(
-            classify_cell(Some("ObjectId(\"x\")"), Some("objectId")).tier,
-            CellTier::Hash
-        );
-        assert_eq!(classify_cell(Some("5"), Some("int64")).tier, CellTier::Dim);
-        assert_eq!(
-            classify_cell(Some("2026-01-01"), Some("date")).tier,
-            CellTier::Dim
-        );
-        assert_eq!(
-            classify_cell(Some("hi"), Some("string")).tier,
-            CellTier::Strong
-        );
     }
 }

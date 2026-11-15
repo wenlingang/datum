@@ -33,8 +33,6 @@ fn connect(st: &AppState, dir: &std::path::Path, name: &str) -> String {
         plaintext_password: None,
         file_path: Some(file.to_string_lossy().into_owned()),
         ssl_mode: SslMode::Disable,
-        uri: None,
-        auth_source: None,
         ssh: None,
     };
     commands::save_connection(st, c, None).unwrap();

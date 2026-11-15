@@ -37,7 +37,6 @@ const DB_ICON: Record<DbKind, IconName> = {
   mysql: "db-mysql",
   redis: "db-redis",
   sqlite: "db-sqlite",
-  mongo: "db-mongo",
 };
 
 const OBJECT_ICON: Record<DbKind, IconName> = {
@@ -45,7 +44,6 @@ const OBJECT_ICON: Record<DbKind, IconName> = {
   mysql: "table",
   sqlite: "table",
   redis: "key-round",
-  mongo: "inbox",
 };
 
 /** Redis 的库是编号:显示成 db0、db1…… */

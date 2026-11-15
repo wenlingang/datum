@@ -1,6 +1,6 @@
 //! 按连接类型分发的数据库操作(都在 tokio 线程池上执行)。
 //!
-//! `kind` 是连接类型的 JSON 字符串形式:`"pg"`、`"mysql"`、`"sqlite"`、`"redis"`、`"mongo"`。
+//! `kind` 是连接类型的 JSON 字符串形式:`"pg"`、`"mysql"`、`"sqlite"`、`"redis"`。
 
 use crate::runtime::{err, from, json, spawn, state};
 use datum_core::core::connection::DbKind;
@@ -33,7 +33,7 @@ impl Db {
         spawn(async move { service::disconnect(&state(), &k, &id).await }).await
     }
 
-    /// 对象列表:关系库为表名,Redis 为 key,Mongo 为集合。
+    /// 对象列表:关系库为表名,Redis 为 key。
     pub async fn list_objects(kind: String, id: String) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;
         spawn(async move { service::list_objects(&state(), &k, &id).await })

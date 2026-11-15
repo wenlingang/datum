@@ -25,7 +25,7 @@ impl Dialect {
             DbKind::Pg => Some(Self::Pg),
             DbKind::Mysql => Some(Self::Mysql),
             DbKind::Sqlite => Some(Self::Sqlite),
-            DbKind::Redis | DbKind::Mongo => None,
+            DbKind::Redis => None,
         }
     }
 

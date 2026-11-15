@@ -205,8 +205,6 @@ pub fn switch_database(state: &AppState, id: String, database: String) -> AppRes
             && c.port == src.port
             && c.user == src.user
             && c.database == database
-            && c.uri == src.uri
-            && c.auth_source == src.auth_source
             && c.ssl_mode == src.ssl_mode
             && match (&c.ssh, &src.ssh) {
                 (None, None) => true,
@@ -329,8 +327,6 @@ mod tests {
             plaintext_password: pw.map(|s| s.into()),
             file_path: None,
             ssl_mode: Default::default(),
-            uri: None,
-            auth_source: None,
             ssh: None,
         }
     }
@@ -372,30 +368,6 @@ mod tests {
     }
 
     #[test]
-    fn switch_database_does_not_reuse_connection_of_other_cluster() {
-        let dir = std::env::temp_dir().join(format!("datum-switch-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let state = AppState::new(dir);
-        let mut a = conn("a", Env::Local, Some("pw"));
-        a.kind = DbKind::Mongo;
-        a.uri = Some("mongodb+srv://u@cluster-a.example.net/".into());
-        a.database = "app".into();
-        let mut b = a.clone();
-        b.id = "b".into();
-        b.uri = Some("mongodb+srv://u@cluster-b.example.net/".into());
-        b.database = "logs".into();
-        save_connection(&state, a, Some("pw".into())).unwrap();
-        save_connection(&state, b, Some("pw".into())).unwrap();
-        // 从 a 切到 logs:b 的 host/port/user 与 a 相同,但不是同一集群,不能复用
-        let switched = switch_database(&state, "a".into(), "logs".into()).unwrap();
-        assert_ne!(switched.id, "b");
-        assert_eq!(
-            switched.uri.as_deref(),
-            Some("mongodb+srv://u@cluster-a.example.net/")
-        );
-    }
-
-    #[test]
     fn saved_password_is_loaded_for_testing_an_edited_connection() {
         let dir = std::env::temp_dir().join(format!("datum-pw-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -406,26 +378,22 @@ mod tests {
     }
 
     #[test]
-    fn switch_database_does_not_reuse_connection_with_other_auth_or_tls() {
+    fn switch_database_does_not_reuse_connection_with_other_tls() {
         let dir = std::env::temp_dir().join(format!("datum-switch2-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let state = AppState::new(dir);
         let mut a = conn("a", Env::Local, Some("pw"));
-        a.kind = DbKind::Mongo;
-        a.auth_source = Some("admin".into());
         a.ssl_mode = crate::core::connection::SslMode::Require;
         a.database = "app".into();
         let mut b = a.clone();
         b.id = "b".into();
-        b.auth_source = Some("app".into());
         b.ssl_mode = crate::core::connection::SslMode::Disable;
         b.database = "logs".into();
         save_connection(&state, a, Some("pw".into())).unwrap();
         save_connection(&state, b, Some("pw".into())).unwrap();
-        // b 的认证库与加密方式都不同:切到 logs 不能复用 b,否则会换认证库、丢掉 TLS
+        // b 的加密方式不同:切到 logs 不能复用 b,否则会丢掉 TLS
         let switched = switch_database(&state, "a".into(), "logs".into()).unwrap();
         assert_ne!(switched.id, "b");
-        assert_eq!(switched.auth_source.as_deref(), Some("admin"));
         assert_eq!(switched.ssl_mode, crate::core::connection::SslMode::Require);
     }
 }
