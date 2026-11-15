@@ -58,6 +58,24 @@ SELECT g,
            'medium', (ARRAY['email', 'social', 'cpc', 'none'])[1 + g % 4]))
 FROM generate_series(1, 400) g;
 ANALYZE web_events;
+-- 危险语句审查截图里 DELETE / DROP 的对象:审查时会预估影响行数
+CREATE TABLE orders (
+  id         int PRIMARY KEY,
+  status     text NOT NULL,
+  created_at timestamptz NOT NULL
+);
+INSERT INTO orders
+SELECT g, (ARRAY['paid', 'shipped', 'delivered', 'cancelled', 'refunded'])[1 + g % 5],
+       timestamptz '2025-06-01 00:00+00' + g * interval '41 minutes'
+FROM generate_series(1, 4800) g;
+CREATE TABLE subscriptions (
+  id      int PRIMARY KEY,
+  cadence text NOT NULL,
+  status  text NOT NULL
+);
+INSERT INTO subscriptions
+SELECT g, (ARRAY['weekly', 'biweekly', 'monthly'])[1 + g % 3], (ARRAY['active', 'active', 'paused'])[1 + g % 3]
+FROM generate_series(1, 72) g;
 SQL
 
   wait_for MySQL docker exec "$MY" mysql -uroot -e "select 1"

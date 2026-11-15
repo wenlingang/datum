@@ -14,7 +14,7 @@ done
 
 # sips --cropToHeightWidth 高 宽 --cropOffset 上 左
 sips --cropToHeightWidth 1110 1214 --cropOffset 368 833 "$OUT/new-connection.png" --out "$DOCS/new-connection.png" >/dev/null
-sips --cropToHeightWidth 525 1150 --cropOffset 660 866 "$OUT/destructive-review.png" --out "$DOCS/destructive-review.png" >/dev/null
+sips --cropToHeightWidth 1212 1128 --cropOffset 316 876 "$OUT/destructive-review.png" --out "$DOCS/destructive-review.png" >/dev/null
 
 # 0.2.x 新功能:关系图整窗;各数据库专属功能按重点区域裁出,放进介绍页的数据库卡片
 sips -z 1024 1600 "$OUT/erd.png" --out "$DOCS/erd.png" >/dev/null
