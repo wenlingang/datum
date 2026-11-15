@@ -17,7 +17,6 @@ pub mod explain;
 pub mod export;
 pub mod grid;
 pub mod json;
-pub mod mongo;
 pub mod my;
 pub mod pg;
 pub mod rds;

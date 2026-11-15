@@ -22,7 +22,6 @@ pub struct AppState {
     pub sqlite_pool: SqlitePool,
     /// SQLite 的 CSV / JSON 导入任务(按连接 id)
     pub sqlite_imports: crate::sqlite::import_data::Jobs,
-    pub mongo_pool: crate::mongo::client::MongoPool,
     /// 已连接的 SSH 隧道(按连接 id)
     pub tunnels: crate::ssh::TunnelPool,
 }
@@ -39,7 +38,6 @@ impl AppState {
             my_pool: MyPool::default(),
             sqlite_pool: SqlitePool::default(),
             sqlite_imports: Default::default(),
-            mongo_pool: Default::default(),
             tunnels: Default::default(),
         }
     }

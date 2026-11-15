@@ -4,9 +4,6 @@
 
 use crate::core::connection::DbKind;
 use crate::error::{AppError, AppResult, ErrorKind};
-pub use crate::mongo::client::FindPage;
-use crate::mongo::convert::MongoResult;
-use crate::mongo::parse::MongoOp;
 use crate::pg::browse::TableDetail;
 use crate::pg::client::QueryResult;
 use crate::pg::edit::{CellEdit, RowDelete};
@@ -15,8 +12,7 @@ use crate::schema::{self, ColumnsByTable, ErdSchema};
 use crate::sql::build::{build_insert_row, ident};
 use crate::sql::Dialect;
 pub use crate::ssh::SshContext;
-use crate::{mongo, my, pg, rds, sqlite, AppState};
-use mongodb::bson::{Bson, Document};
+use crate::{my, pg, rds, sqlite, AppState};
 use rust_i18n::t;
 
 fn unsupported() -> AppError {
@@ -35,7 +31,8 @@ pub async fn connect(state: &AppState, kind: &DbKind, id: &str) -> AppResult<()>
         DbKind::Mysql => my::commands::my_connect(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_connect(state, id).await,
         DbKind::Redis => rds::commands::redis_connect(state, id).await,
-        DbKind::Mongo => mongo::commands::mongo_connect(state, &id).await,
+        // nsh 版不支持 MongoDB(旧配置里的 Mongo 连接保留但不能连接)
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -53,10 +50,7 @@ pub async fn disconnect(state: &AppState, kind: &DbKind, id: &str) {
             state.redis_pool.abandon_evals(&id).await;
             Ok(())
         }
-        DbKind::Mongo => {
-            state.mongo_pool.disconnect(&id).await;
-            Ok(())
-        }
+        DbKind::Mongo => Ok(()),
     };
     // 驱动断开后再关隧道
     state.tunnels.close(tunnel_id).await;
@@ -70,7 +64,7 @@ pub async fn list_objects(state: &AppState, kind: &DbKind, id: &str) -> AppResul
         DbKind::Mysql => my::commands::my_list_objects(state, id).await,
         DbKind::Sqlite => sqlite::commands::sqlite_list_objects(state, id).await,
         DbKind::Redis => rds::commands::redis_scan(state, id, "*".into()).await,
-        DbKind::Mongo => state.mongo_pool.list_collections(&id).await,
+        DbKind::Mongo => Err(mongo_unsupported()),
     }
 }
 
@@ -81,7 +75,7 @@ pub async fn list_databases(state: &AppState, kind: &DbKind, id: &str) -> AppRes
         DbKind::Pg => pg::commands::pg_list_databases(state, id).await,
         DbKind::Mysql => my::commands::my_list_databases(state, id).await,
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
-        DbKind::Mongo => state.mongo_pool.list_databases(&id).await,
+        DbKind::Mongo => Err(mongo_unsupported()),
         DbKind::Sqlite => Ok(vec![]),
     }
 }
@@ -1003,7 +997,7 @@ pub async fn test_connection(
     ssh: &SshContext,
 ) -> AppResult<()> {
     if conn.kind == DbKind::Mongo {
-        return mongo::client::test_connect(&mongo::uri::connect_uris(conn, password)).await;
+        return Err(mongo_unsupported());
     }
     let (target, _tunnel) = crate::ssh::resolve(conn, ssh).await?;
     let kind = match conn.kind {
@@ -1044,73 +1038,6 @@ pub async fn probe_databases(
         DbKind::Redis => Ok((0..16).map(|i| i.to_string()).collect()),
         DbKind::Sqlite | DbKind::Mongo => Ok(vec![]),
     }
-}
-
-pub async fn mongo_find_page(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    page: FindPage,
-) -> AppResult<MongoResult> {
-    state.mongo_pool.find_page(id, coll, page).await
-}
-
-/// (数量, 是否精确):无过滤条件时为估算值。
-pub async fn mongo_count(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    filter: Option<Document>,
-) -> AppResult<(u64, bool)> {
-    state.mongo_pool.count(id, coll, filter).await
-}
-
-pub async fn mongo_execute(
-    state: &AppState,
-    id: &str,
-    ops: Vec<MongoOp>,
-    max_rows: u32,
-    read_only: bool,
-) -> AppResult<MongoResult> {
-    state.mongo_pool.execute(id, ops, max_rows, read_only).await
-}
-
-/// 按 `_id` 取完整文档(文档编辑器用,忽略当前页的 Projection)。
-pub async fn mongo_find_by_id(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    doc_id: Bson,
-) -> AppResult<Option<String>> {
-    state.mongo_pool.find_by_id(id, coll, doc_id).await
-}
-
-pub async fn mongo_replace_one(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    doc_id: Bson,
-    doc: Document,
-) -> AppResult<()> {
-    state.mongo_pool.replace_one(id, coll, doc_id, doc).await
-}
-
-pub async fn mongo_insert_one(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    doc: Document,
-) -> AppResult<Bson> {
-    state.mongo_pool.insert_one(id, coll, doc).await
-}
-
-pub async fn mongo_delete_one(
-    state: &AppState,
-    id: &str,
-    coll: &str,
-    doc_id: Bson,
-) -> AppResult<()> {
-    state.mongo_pool.delete_one(id, coll, doc_id).await
 }
 
 /// 诊断:某个库支持的分区。
