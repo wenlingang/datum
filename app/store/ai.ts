@@ -486,6 +486,8 @@ refreshAi();
 
 /** 最多保存多少段对话(最近的优先)。 */
 const MAX_SAVED_CONVOS = 50;
+/** 每段对话最多保存最近多少条消息:长对话不让文件无限变大(每次变化都整份重写、启动时整份读回)。 */
+const MAX_SAVED_MESSAGES = 200;
 
 interface SavedConversations {
   version: 1;
@@ -500,7 +502,7 @@ function slim(c: Convo): Convo {
     d && Array.isArray(d.rows) ? ({ ...d, rows: [] } as T) : d;
   return {
     ...c,
-    messages: c.messages.map((m) => {
+    messages: c.messages.slice(-MAX_SAVED_MESSAGES).map((m) => {
       const { startedAt: _s, ...rest } = m;
       return {
         ...rest,
