@@ -1,0 +1,7 @@
+# Actions 按 commit SHA 固定(防止被篡改的 tag 混进 CI / 发版);由 Dependabot 每周提升级 PR,SHA 不会长期停在旧版本。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

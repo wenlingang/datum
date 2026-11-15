@@ -12,7 +12,7 @@ runs:
         rev=$(sed -n 's/^nsh-core = { git = "https:\/\/github.com\/longbridge\/nsh", rev = "\([0-9a-f]*\)" }$/\1/p' app/native/Cargo.toml)
         [ -n "$rev" ] || { echo "没找到 nsh 的 git rev" >&2; exit 1; }
         echo "rev=$rev" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@v4
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/bin/nsh

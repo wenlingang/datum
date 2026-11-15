@@ -20,7 +20,7 @@ runs:
     - shell: bash
       run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/.pkg-target" >> "$GITHUB_ENV"
     - if: inputs.save != 'true'
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry/index/
@@ -30,7 +30,7 @@ runs:
         key: pkg-${{ inputs.target }}-${{ inputs.arch }}-${{ hashFiles('app/native/Cargo.lock') }}
         restore-keys: pkg-${{ inputs.target }}-${{ inputs.arch }}-
     - if: inputs.save == 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry/index/
