@@ -166,6 +166,19 @@ SQL
   $P -d postgres -c "DROP DATABASE IF EXISTS datum_ui_test WITH (FORCE)" >/dev/null
 fi
 
+# 经 SSH 跳板的首次连接(主机指纹确认):DATUM_TEST_SSH=主机:端口:用户、DATUM_TEST_SSH_KEY=私钥路径、
+# DATUM_TEST_SSH_REDIS=跳板机视角下 127.0.0.1 上的 Redis 端口(会写一个 key;本机要有 redis-cli 能经 ssh 写入,
+# 或事先在跳板机上 SET datum:ssh-ok 1)
+if [ -n "${DATUM_TEST_SSH:-}" ] && want ssh; then
+  D="$ROOT/ssh"; mkdir -p "$D"
+  SSH_HOST=${DATUM_TEST_SSH%%:*}; REST=${DATUM_TEST_SSH#*:}; SSH_PORT=${REST%%:*}; SSH_USER=${REST#*:}
+  ssh -i "$DATUM_TEST_SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+    "redis-cli -p $DATUM_TEST_SSH_REDIS SET datum:ssh-ok 1" >/dev/null 2>&1 || true
+  printf '[{"id":"ssh-redis","name":"ssh-redis","kind":"redis","env":"local","host":"127.0.0.1","port":%s,"user":"","database":"0","plaintextPassword":"","sslMode":"disable","ssh":{"host":"%s","port":%s,"user":"%s","auth":"key","keyPath":"%s"}}]\n' \
+    "$DATUM_TEST_SSH_REDIS" "$SSH_HOST" "$SSH_PORT" "$SSH_USER" "$DATUM_TEST_SSH_KEY" > "$D/connections.json"
+  run ssh "$D" workspace/ssh-trust.test.tsx
+fi
+
 # Redis 分析(多级前缀、删除大 key、集群逐节点扫描)、实时(Pub/Sub、MONITOR)与 Lua 脚本:DATUM_TEST_REDIS=单机端口(会清空库 0,只用测试实例;
 # Lua 脚本用库 11,其中有只读死循环脚本,结束时会 SCRIPT KILL 掉);
 # DATUM_TEST_REDIS_CLUSTER=三主节点集群的首个端口(各节点端口依次 +1,宣告地址 127.0.0.1)

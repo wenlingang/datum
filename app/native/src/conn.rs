@@ -33,6 +33,22 @@ impl Store {
     }
 
     /// 已保存连接的密码(编辑表单「测试连接」用)。
+    /// 等用户确认的 SSH 主机密钥:`[{ host, port, keyType, fingerprint }]`(首次连接的跳板机)。
+    pub fn ssh_pending_host_keys() -> Result<JsonValue, String> {
+        json(datum_core::ssh::pending_host_keys())
+    }
+
+    /// 用户确认后信任这把主机密钥(写进 Datum 的 known_hosts);指纹须与待确认的一致。
+    pub fn ssh_trust_host_key(host: String, port: u32, fingerprint: String) -> Result<(), String> {
+        let port = u16::try_from(port).map_err(|e| e.to_string())?;
+        datum_core::ssh::trust_host_key(&host, port, &fingerprint, &state().known_hosts_path()).map_err(err)
+    }
+
+    /// 用户不信任:清掉待确认的主机密钥。
+    pub fn ssh_forget_pending_host_keys() {
+        datum_core::ssh::forget_pending_host_keys()
+    }
+
     /// 切库:同实例已有该库的连接则复用,否则克隆一个。返回目标连接。
     pub fn switch_database(id: String, database: String) -> Result<JsonValue, String> {
         core_cmd::switch_database(&state(), id, database)

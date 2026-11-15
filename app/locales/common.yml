@@ -21,3 +21,20 @@ error_text:
     en: Close
     zh-CN: 关闭
     zh-TW: 關閉
+ssh:
+  trust_title:
+    en: Trust this SSH server?
+    zh-CN: 信任这台 SSH 跳板机?
+    zh-TW: 信任這台 SSH 跳板機?
+  trust_body:
+    en: "This is the first connection to %{host}. Its %{type} host key fingerprint is:\n\n%{fingerprint}\n\nCompare it with the fingerprint from the server's administrator (ssh-keygen -lf on the server's host key). Once trusted it is saved, and a changed key will be blocked."
+    zh-CN: "这是首次连接 %{host},它的 %{type} 主机密钥指纹是:\n\n%{fingerprint}\n\n请与服务器管理员提供的指纹核对(在服务器上对主机密钥执行 ssh-keygen -lf)。信任后会记下来,之后指纹变了会被拦住。"
+    zh-TW: "這是首次連線 %{host},它的 %{type} 主機金鑰指紋是:\n\n%{fingerprint}\n\n請與伺服器管理員提供的指紋核對(在伺服器上對主機金鑰執行 ssh-keygen -lf)。信任後會記下來,之後指紋變了會被攔住。"
+  trust_confirm:
+    en: Trust and Connect
+    zh-CN: 信任并连接
+    zh-TW: 信任並連線
+  trust_cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消

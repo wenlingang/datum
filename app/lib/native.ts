@@ -2,6 +2,8 @@
 // 界面代码只从这里调用原生模块,不直接 import "datum/native"。
 
 import { Ai, Db, Erd, Prefs as NativePrefs, Sql, Store } from "datum/native";
+import { AlertDialog } from "nsh/base";
+import { t } from "nsh/i18n";
 import type {
   AgentEvent,
   AlterAssessment,
@@ -48,13 +50,54 @@ import type {
 } from "./types";
 import type { Rects } from "../erd/geom";
 
+// ==== SSH 主机指纹确认 ====
+
+interface PendingHostKey {
+  host: string;
+  port: number;
+  keyType: string;
+  fingerprint: string;
+}
+
+/**
+ * 经 SSH 跳板的操作因「首次见到的主机」失败时:逐个显示指纹请用户确认,确认后写进 known_hosts 并重试;
+ * 用户不信任就照常抛出原来的错误。多级跳板每一跳各确认一次(最多重试几轮)。
+ */
+async function withHostTrust<T>(run: () => Promise<T>): Promise<T> {
+  for (let round = 0; ; round++) {
+    try {
+      return await run();
+    } catch (e) {
+      const pending = Store.sshPendingHostKeys() as PendingHostKey[];
+      if (pending.length === 0 || round >= 4) throw e;
+      for (const k of pending) {
+        const { action } = await AlertDialog.show({
+          title: t("ssh.trust_title"),
+          description: t("ssh.trust_body", { host: `${k.host}:${k.port}`, type: k.keyType, fingerprint: k.fingerprint }),
+          actions: [
+            { id: "cancel", label: t("ssh.trust_cancel"), role: "cancel" },
+            { id: "trust", label: t("ssh.trust_confirm") },
+          ],
+          closeOnEscape: true,
+        });
+        if (action !== "trust") {
+          Store.sshForgetPendingHostKeys();
+          throw e;
+        }
+        Store.sshTrustHostKey(k.host, k.port, k.fingerprint);
+      }
+    }
+  }
+}
+
 export const store = {
   connections: () => Store.connections() as Connection[],
   saveConnection: (conn: Connection, password: string | null) =>
     Store.saveConnection(conn, password) as Connection,
   deleteConnection: (id: string) => Store.deleteConnection(id),
   switchDatabase: (id: string, database: string) => Store.switchDatabase(id, database) as Connection,
-  testConnection: (conn: Connection, password: string | null) => Store.testConnection(conn, password),
+  testConnection: (conn: Connection, password: string | null) =>
+    withHostTrust(() => Store.testConnection(conn, password) as Promise<void>),
   history: () => Store.history() as HistoryEntry[],
   recordHistory: (entry: Omit<HistoryEntry, "id">) =>
     Store.recordHistory({ ...entry, id: "" }) as HistoryEntry[] | null,
@@ -74,7 +117,7 @@ export const store = {
 };
 
 export const db = {
-  connect: (kind: DbKind, id: string) => Db.connect(kind, id),
+  connect: (kind: DbKind, id: string) => withHostTrust(() => Db.connect(kind, id) as Promise<void>),
   disconnect: (kind: DbKind, id: string) => Db.disconnect(kind, id),
   listObjects: async (kind: DbKind, id: string) => (await Db.listObjects(kind, id)) as string[],
   listDatabases: async (kind: DbKind, id: string) => (await Db.listDatabases(kind, id)) as string[],
@@ -411,4 +454,4 @@ export async function redisKey(id: string, key: string) {
 
 /** 用表单当前参数(不保存)列出实例下的库(新建/编辑连接时下拉选库)。 */
 export const probeDatabases = async (conn: import("./types").Connection, password: string | null) =>
-  (await NativeDialogs.probeDatabases(conn, password)) as string[];
+  withHostTrust(async () => (await NativeDialogs.probeDatabases(conn, password)) as string[]);

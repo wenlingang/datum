@@ -133,6 +133,67 @@ fn ssh_err(key: &str) -> AppError {
 
 // ---------- 主机指纹 ----------
 
+/// 首次见到、等用户确认的主机密钥:(主机, 端口) → 公钥。
+static PENDING: std::sync::LazyLock<std::sync::Mutex<HashMap<(String, u16), keys::PublicKey>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// 一把等用户确认的主机密钥(界面显示用)。
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingHostKey {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    /// `SHA256:…`,与 `ssh-keygen -lf` 的写法一致
+    pub fingerprint: String,
+}
+
+/// 等用户确认的主机密钥(连接因「首次见到的主机」失败后,界面据此弹出确认)。
+pub fn pending_host_keys() -> Vec<PendingHostKey> {
+    let mut list: Vec<PendingHostKey> = PENDING
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|((host, port), key)| PendingHostKey {
+            host: host.clone(),
+            port: *port,
+            key_type: key.algorithm().to_string(),
+            fingerprint: key.fingerprint(HashAlg::Sha256).to_string(),
+        })
+        .collect();
+    list.sort_by(|a, b| (&a.host, a.port).cmp(&(&b.host, b.port)));
+    list
+}
+
+/// 用户确认后信任这把主机密钥:写进 Datum 自己的 known_hosts。`fingerprint` 必须与待确认的一致
+/// (防止确认框打开期间密钥被换掉)。
+pub fn trust_host_key(host: &str, port: u16, fingerprint: &str, app_known_hosts: &Path) -> AppResult<()> {
+    let mut pending = PENDING.lock().unwrap();
+    let key = pending
+        .get(&(host.to_string(), port))
+        .filter(|k| k.fingerprint(HashAlg::Sha256).to_string() == fingerprint)
+        .cloned()
+        .ok_or_else(|| ssh_err("core.err.ssh_host_unknown"))?;
+    if let Some(dir) = app_known_hosts.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    keys::known_hosts::learn_known_hosts_path(host, port, &key, app_known_hosts).map_err(|e| {
+        ssh_err("core.err.ssh_known_hosts_unreadable").with_detail(format!("{}: {e}", app_known_hosts.display()))
+    })?;
+    pending.remove(&(host.to_string(), port));
+    Ok(())
+}
+
+/// 「首次见到的主机」报错的文案(测试与界面据此识别)。
+pub fn unknown_host_message() -> String {
+    t!("core.err.ssh_host_unknown").to_string()
+}
+
+/// 用户拒绝信任:清掉待确认的密钥。
+pub fn forget_pending_host_keys() {
+    PENDING.lock().unwrap().clear();
+}
+
 fn known_hosts_files(app_file: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     if let Some(home) = dirs::home_dir() {
@@ -172,15 +233,14 @@ impl client::Handler for HostKeyCheck {
         match known_hosts::status(&self.host, self.port, key, &files) {
             Status::Known => Ok(true),
             Status::Unknown => {
-                // 首次连接:信任并记下,之后指纹变了就会被拦住。记不下来就不连:
-                // 否则每次都像首次连接,指纹被换了也发现不了
-                match keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, &self.app_known_hosts) {
-                    Ok(()) => Ok(true),
-                    Err(e) => reject(
-                        ssh_err("core.err.ssh_known_hosts_unreadable")
-                            .with_detail(format!("{}: {e}", self.app_known_hosts.display())),
-                    ),
-                }
+                // 首次连接:不自动信任。登记成待确认,由界面显示指纹、用户确认后
+                // 写进 known_hosts([`trust_host_key`])再重连;之后指纹变了就会被拦住
+                let fingerprint = key.fingerprint(HashAlg::Sha256).to_string();
+                PENDING.lock().unwrap().insert((self.host.clone(), self.port), key.clone());
+                reject(
+                    AppError::new(ErrorKind::Connection, t!("core.err.ssh_host_unknown"))
+                        .with_detail(format!("{}:{} {fingerprint}", self.host, self.port)),
+                )
             }
             Status::Unreadable(file, e) => {
                 reject(ssh_err("core.err.ssh_known_hosts_unreadable").with_detail(format!("{}: {e}", file.display())))

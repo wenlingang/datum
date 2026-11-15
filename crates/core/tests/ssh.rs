@@ -107,13 +107,67 @@ fn ctx(st: &AppState, secret: &str) -> SshContext {
     }
 }
 
+/// 首次见到的跳板机:界面会请用户确认指纹;测试里直接信任全部待确认的密钥。
+fn trust_pending(st: &AppState) -> bool {
+    let pending = datum_core::ssh::pending_host_keys();
+    for k in &pending {
+        datum_core::ssh::trust_host_key(&k.host, k.port, &k.fingerprint, &st.known_hosts_path()).unwrap();
+    }
+    !pending.is_empty()
+}
+
+fn is_unknown_host(e: &datum_core::error::AppError) -> bool {
+    e.message == rust_i18n_unknown_host()
+}
+
+fn rust_i18n_unknown_host() -> String {
+    datum_core::ssh::unknown_host_message()
+}
+
+/// test_connection;遇到首次见到的跳板机就信任后重试(多级跳板每跳一次)。
+async fn tc(c: &Connection, pass: &str, cx: &SshContext) -> Result<(), datum_core::error::AppError> {
+    let st_dir = cx.known_hosts.parent().unwrap().to_path_buf();
+    for _ in 0..4 {
+        match service::test_connection(c, pass, cx).await {
+            Err(e) if is_unknown_host(&e) => {
+                for k in datum_core::ssh::pending_host_keys() {
+                    datum_core::ssh::trust_host_key(&k.host, k.port, &k.fingerprint, &st_dir.join("known_hosts")).unwrap();
+                }
+            }
+            r => return r,
+        }
+    }
+    service::test_connection(c, pass, cx).await
+}
+
+async fn probe(c: &Connection, pass: &str, cx: &SshContext) -> Result<Vec<String>, datum_core::error::AppError> {
+    for _ in 0..4 {
+        match service::probe_databases(c, pass, cx).await {
+            Err(e) if is_unknown_host(&e) => {
+                for k in datum_core::ssh::pending_host_keys() {
+                    datum_core::ssh::trust_host_key(&k.host, k.port, &k.fingerprint, &cx.known_hosts).unwrap();
+                }
+            }
+            r => return r,
+        }
+    }
+    service::probe_databases(c, pass, cx).await
+}
+
 /// 保存(SSH 密钥一并写入)后经 service 建连。
 async fn save_and_connect(st: &AppState, mut c: Connection, secret: &str) -> Result<String, String> {
     c.ssh.as_mut().unwrap().secret = Some(secret.into());
     let saved = commands::save_connection(st, c, Some(String::new())).map_err(|e| e.display())?;
     // 返回给前端的连接不含 SSH 密钥
     assert_eq!(saved.ssh.as_ref().unwrap().secret, None);
-    service::connect(st, &saved.kind, &saved.id).await.map_err(|e| e.display())?;
+    let mut r = service::connect(st, &saved.kind, &saved.id).await;
+    for _ in 0..4 {
+        match &r {
+            Err(e) if is_unknown_host(e) && trust_pending(st) => r = service::connect(st, &saved.kind, &saved.id).await,
+            _ => break,
+        }
+    }
+    r.map_err(|e| e.display())?;
     Ok(saved.id)
 }
 
@@ -174,11 +228,11 @@ async fn encrypted_key_needs_the_right_passphrase() {
     };
     let st = state();
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Key, &key));
-    let missing = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    let missing = tc(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(missing.display().contains("passphrase"), "{}", missing.display());
-    let wrong = service::test_connection(&c, "", &ctx(&st, "nope")).await.unwrap_err();
+    let wrong = tc(&c, "", &ctx(&st, "nope")).await.unwrap_err();
     assert!(wrong.display().contains("Could not read the SSH private key"), "{}", wrong.display());
-    service::test_connection(&c, "", &ctx(&st, &pass)).await.unwrap();
+    tc(&c, "", &ctx(&st, &pass)).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -198,7 +252,7 @@ async fn changed_host_key_is_rejected() {
     )
     .unwrap();
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Key, &key));
-    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    let e = tc(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("host key has changed"), "{}", e.display());
     // 只记录了另一种类型的密钥:不能当作没见过而首次信任
     std::fs::write(
@@ -206,18 +260,18 @@ async fn changed_host_key_is_rejected() {
         format!("[{}]:{} ecdsa-sha2-nistp256 AAAA\n", j.host, j.port),
     )
     .unwrap();
-    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    let e = tc(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("identity cannot be confirmed"), "{}", e.display());
     // 吊销
     std::fs::write(st.known_hosts_path(), "").unwrap();
-    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
+    tc(&c, "", &ctx(&st, "")).await.unwrap();
     let learned = std::fs::read_to_string(st.known_hosts_path()).unwrap().trim().to_string();
     std::fs::write(st.known_hosts_path(), format!("@revoked {learned}\n")).unwrap();
-    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    let e = tc(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("@revoked"), "{}", e.display());
     // 首次信任记下的那行能被再次认出
     std::fs::write(st.known_hosts_path(), learned).unwrap();
-    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
+    tc(&c, "", &ctx(&st, "")).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -230,19 +284,19 @@ async fn auth_and_forward_failures_are_explained() {
     // 用户名不对:认证失败
     let mut wrong_user = tunnel(&j, SshAuth::Key, &key);
     wrong_user.user = "datum-no-such-user".into();
-    let e = service::test_connection(&conn(DbKind::Mysql, db, wrong_user), "", &ctx(&st, ""))
+    let e = tc(&conn(DbKind::Mysql, db, wrong_user), "", &ctx(&st, ""))
         .await
         .unwrap_err();
     assert!(e.display().contains("SSH authentication failed"), "{}", e.display());
     // 跳板机连不到目标端口
-    let e = service::test_connection(&conn(DbKind::Mysql, 1, tunnel(&j, SshAuth::Key, &key)), "", &ctx(&st, ""))
+    let e = tc(&conn(DbKind::Mysql, 1, tunnel(&j, SshAuth::Key, &key)), "", &ctx(&st, ""))
         .await
         .unwrap_err();
     assert!(e.display().contains("could not reach the database"), "{}", e.display());
     // 跳板机本身连不上
     let mut dead = tunnel(&j, SshAuth::Key, &key);
     dead.port = 1;
-    let e = service::test_connection(&conn(DbKind::Mysql, db, dead), "", &ctx(&st, ""))
+    let e = tc(&conn(DbKind::Mysql, db, dead), "", &ctx(&st, ""))
         .await
         .unwrap_err();
     assert!(e.display().contains("Could not connect to the SSH server"), "{}", e.display());
@@ -256,7 +310,7 @@ async fn probe_databases_through_tunnel() {
     };
     let st = state();
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Key, &key));
-    let dbs = service::probe_databases(&c, "", &ctx(&st, "")).await.unwrap();
+    let dbs = probe(&c, "", &ctx(&st, "")).await.unwrap();
     assert!(dbs.iter().any(|d| d == "mysql"), "{dbs:?}");
 }
 
@@ -268,7 +322,7 @@ async fn agent_auth() {
     };
     let st = state();
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Agent, ""));
-    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
+    tc(&c, "", &ctx(&st, "")).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -328,7 +382,7 @@ async fn rsa_key_is_reported_as_unsupported() {
     };
     let st = state();
     let c = conn(DbKind::Mysql, db, tunnel(&j, SshAuth::Key, &key));
-    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    let e = tc(&c, "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("RSA SSH keys are not supported"), "{}", e.display());
 }
 
@@ -340,7 +394,7 @@ async fn pg_through_tunnel() {
     };
     let st = state();
     let c = conn(DbKind::Pg, db, tunnel(&j, SshAuth::Key, &key));
-    let dbs = service::probe_databases(&c, "", &ctx(&st, "")).await.unwrap();
+    let dbs = probe(&c, "", &ctx(&st, "")).await.unwrap();
     assert!(dbs.iter().any(|d| d == "postgres"), "{dbs:?}");
     let mut c = c;
     c.ssl_mode = SslMode::Prefer;
@@ -398,7 +452,7 @@ async fn proxy_jump_chain() {
     service::disconnect(&st, &DbKind::Pg, &id).await;
     // 跳板写错:报看不懂
     t.proxy_jump = "x:notaport".into();
-    let e = service::test_connection(&conn(DbKind::Pg, db, t), "", &ctx(&st, "")).await.unwrap_err();
+    let e = tc(&conn(DbKind::Pg, db, t), "", &ctx(&st, "")).await.unwrap_err();
     assert!(e.display().contains("ProxyJump"), "{}", e.display());
 }
 
@@ -439,4 +493,38 @@ async fn tunnels_open_no_port_unless_needed() {
         let (_, t) = datum_core::ssh::resolve(&m, &c).await.unwrap();
         assert!(t.unwrap().local_port > 0, "{mode:?}");
     }
+}
+
+/// 首次见到的跳板机不自动信任:连接失败并登记待确认;拒绝后清掉;指纹对不上不能信任;确认后连得上。
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore]
+async fn unknown_host_needs_confirmation() {
+    let (Some(j), Some(key), Some(db)) = (jump(), env("DATUM_SSH_KEY"), port("DATUM_SSH_REDIS")) else {
+        return;
+    };
+    let st = state();
+    datum_core::ssh::forget_pending_host_keys();
+    let c = conn(DbKind::Redis, db, tunnel(&j, SshAuth::Key, &key));
+    let e = service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err();
+    assert!(is_unknown_host(&e), "{}", e.display());
+    let pending = datum_core::ssh::pending_host_keys();
+    assert_eq!(pending.len(), 1);
+    assert_eq!((pending[0].host.as_str(), pending[0].port), (j.host.as_str(), j.port));
+    assert!(pending[0].fingerprint.starts_with("SHA256:"), "{:?}", pending[0]);
+    if let Some(fp) = env("DATUM_SSH_FINGERPRINT") {
+        assert_eq!(pending[0].fingerprint, fp);
+    }
+    // 还没写进 known_hosts
+    assert!(!st.known_hosts_path().exists() || std::fs::read_to_string(st.known_hosts_path()).unwrap().trim().is_empty());
+    // 指纹对不上(确认框打开期间密钥被换):不信任
+    assert!(datum_core::ssh::trust_host_key(&j.host, j.port, "SHA256:bogus", &st.known_hosts_path()).is_err());
+    // 拒绝:清掉,再连仍然要确认
+    datum_core::ssh::forget_pending_host_keys();
+    assert!(datum_core::ssh::pending_host_keys().is_empty());
+    assert!(is_unknown_host(&service::test_connection(&c, "", &ctx(&st, "")).await.unwrap_err()));
+    // 确认后连得上,且之后不再询问
+    assert!(trust_pending(&st));
+    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
+    assert!(datum_core::ssh::pending_host_keys().is_empty());
+    service::test_connection(&c, "", &ctx(&st, "")).await.unwrap();
 }

@@ -189,6 +189,10 @@ core:
       en: "SSH authentication failed: check the user, password or key"
       zh-CN: SSH 认证失败:请检查用户名、密码或私钥
       zh-TW: SSH 認證失敗:請檢查使用者名稱、密碼或私鑰
+    ssh_host_unknown:
+      en: "First connection to this SSH server: confirm its host key fingerprint before connecting"
+      zh-CN: 首次连接这台 SSH 跳板机:请先确认它的主机指纹
+      zh-TW: 首次連線這台 SSH 跳板機:請先確認它的主機指紋
     ssh_host_key_changed:
       en: "The SSH server's host key has changed and does not match the recorded one. This may be a man-in-the-middle attack; if the server was reinstalled, remove the old entry from known_hosts"
       zh-CN: SSH 跳板机的主机指纹与记录不一致,可能遭到中间人攻击;若服务器确实重装过,请从 known_hosts 删除旧记录
