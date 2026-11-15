@@ -324,11 +324,13 @@ function historyContent(m: AiMessage, withData: boolean): string {
   return m.parts.map((p) => (p.kind === "text" ? p.text : stepText(p, withData))).join("\n\n");
 }
 
-/** 能否把这个连接的数据(查询结果行)发给 AI:生产库要在设置里允许。读不到连接时按不允许处理。 */
+/** 能否把这个连接的数据(查询结果行)发给 AI:生产库要在设置里允许。
+ *  找不到连接(已删除、key 解析不出)或读不到配置时按不允许处理(与 Rust 侧的判断一致)。 */
 export function dataAllowed(connId: string): boolean {
   if (settings()?.allowProdData) return true;
   try {
-    return store.connections().find((c) => c.id === connId)?.env !== "prod";
+    const conn = store.connections().find((c) => c.id === connId);
+    return !!conn && conn.env !== "prod";
   } catch {
     return false;
   }

@@ -308,8 +308,8 @@ impl MyPool {
     /// (MySQL 的 max_execution_time;MariaDB 没有这个变量,设置失败就不限时)。
     ///
     /// 会话不在事务里时,先切成只读会话再执行,由服务器拒绝写入。
-    /// 用户在编辑器里开着事务时,MySQL 不允许改当前事务的只读属性:直接在事务里执行
-    /// (看得到事务里未提交的改动),只读由调用方的静态检查保证(只交来只读语句)。
+    /// 用户在编辑器里开着事务时,MySQL 不允许改当前事务的只读属性:在保存点里执行
+    /// (看得到事务里未提交的改动),结束后回到保存点,语句造成的写入一并撤销。
     pub async fn query_read_only_bounded(
         &self,
         id: &str,
@@ -329,7 +329,17 @@ impl MyPool {
                 return Err(err);
             }
         };
-        let result = read_only_on(conn, sql, max_rows, timeout_ms, !in_txn).await;
+        let result = if in_txn {
+            // 事务里改不了只读属性:放进保存点执行,结束后回到保存点 ——
+            // 语句看得到事务里未提交的改动,而它自己造成的写入(如视图里调用的写函数)被撤销
+            conn.query_drop("SAVEPOINT datum_ro").await.map_err(qerr)?;
+            let r = read_only_on(conn, sql, max_rows, timeout_ms, false).await;
+            let _ = conn.query_drop("ROLLBACK TO SAVEPOINT datum_ro").await;
+            let _ = conn.query_drop("RELEASE SAVEPOINT datum_ro").await;
+            r
+        } else {
+            read_only_on(conn, sql, max_rows, timeout_ms, true).await
+        };
         if result.is_err() {
             Self::drop_if_dead(&mut guard).await;
         }

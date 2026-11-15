@@ -122,3 +122,37 @@ async fn session_reconnects_after_being_killed() {
     assert_eq!(scalar(&st, &id, "SELECT 1").await, "1");
     assert_ne!(scalar(&st, &id, "SELECT CONNECTION_ID()").await, thread);
 }
+
+/// 事务里的只读执行没法让服务器强制只读:放在保存点里执行,语句造成的写入随后撤销。
+/// 用视图里调用会写数据的函数模拟静态检查看不出的副作用。
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore]
+async fn read_only_in_transaction_undoes_hidden_writes() {
+    let st = state();
+    let id = connect(&st).await;
+    let t = fresh_table(&st, &id).await;
+    let (f, v) = (format!("{t}_f"), format!("{t}_v"));
+    exec(&st, &id, "SET GLOBAL log_bin_trust_function_creators = 1").await;
+    exec(&st, &id, &format!("CREATE FUNCTION {f}() RETURNS INT MODIFIES SQL DATA BEGIN INSERT INTO {t} VALUES (99, 'side'); RETURN 1; END")).await;
+    exec(&st, &id, &format!("CREATE VIEW {v} AS SELECT {f}() AS x")).await;
+
+    // 不在事务里:服务器拒绝
+    assert!(service::query_read_only(&st, &MY, &id, &format!("SELECT * FROM {v}"), None).await.is_err());
+    assert_eq!(scalar(&st, &id, &format!("SELECT COUNT(*) FROM {t}")).await, "2");
+
+    // 在事务里:语句能执行(看得到事务里的改动),但它的写入被撤销,用户自己的改动保留
+    exec(&st, &id, "BEGIN").await;
+    exec(&st, &id, &format!("UPDATE {t} SET v = 'x' WHERE id = 1")).await;
+    let _ = service::query_read_only(&st, &MY, &id, &format!("SELECT * FROM {v}"), None).await;
+    assert_eq!(scalar(&st, &id, &format!("SELECT COUNT(*) FROM {t}")).await, "2", "函数里的 INSERT 应被撤销");
+    assert_eq!(scalar(&st, &id, &format!("SELECT v FROM {t} WHERE id = 1")).await, "x", "用户的改动应保留");
+    // 限时版本(AI、影响预估走这条)同样
+    let _ = service::query_read_only_timeout(&st, &MY, &id, &format!("SELECT * FROM {v}"), 10, 5000).await;
+    assert_eq!(scalar(&st, &id, &format!("SELECT COUNT(*) FROM {t}")).await, "2");
+    exec(&st, &id, "ROLLBACK").await;
+    assert_eq!(scalar(&st, &id, &format!("SELECT v FROM {t} WHERE id = 1")).await, "a");
+
+    exec(&st, &id, &format!("DROP VIEW {v}")).await;
+    exec(&st, &id, &format!("DROP FUNCTION {f}")).await;
+    exec(&st, &id, &format!("DROP TABLE {t}")).await;
+}
