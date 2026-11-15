@@ -284,6 +284,10 @@ p { margin: 0 0 16px; max-width: 36em; }
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px 48px; margin-top: 44px; }
 .facts p { font-size: 16.5px; color: var(--muted); margin: 0; }
 .facts h3 small { display: block; font-size: 13px; font-weight: 500; color: var(--accent); margin-top: 2px; }
+.facts.two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 64px; }
+/* 代码里的 -> 不连写成箭头:用户要照着输入 */
+.facts code { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; white-space: nowrap; }
+.intro { font-size: 19px; color: var(--muted); max-width: 46em; margin: 12px 0 0; }
 
 /* Install: one column per platform, separated by rules rather than boxed */
 .platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 36px; border-top: 1px solid var(--line); }
@@ -323,7 +327,7 @@ footer a { color: var(--ink); }
   .pop { min-width: 0; left: 12px !important; right: 12px; }
   .picks { grid-template-columns: 1fr 1fr; }
   .pick span { display: none; }
-  .facts { grid-template-columns: 1fr; }
+  .facts, .facts.two { grid-template-columns: 1fr; }
   .pair { grid-template-columns: 1fr; }
   .platforms { grid-template-columns: 1fr; }
   .platforms > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
@@ -356,6 +360,7 @@ document.documentElement.classList.add("js");
   <div class="wrap top">
     <a class="brand" href="#top" aria-label="Datum, back to top"><img src="icon.png" alt="" width="34" height="34">Datum</a>
     <nav aria-label="Main">
+      <a class="opt" href="#databases"><span lang="en">Databases</span><span lang="zh-CN">数据库</span></a>
       <a class="opt" href="#features"><span lang="en">Features</span><span lang="zh-CN">功能</span></a>
       <a class="opt" href="#install"><span lang="en">Install</span><span lang="zh-CN">安装</span></a>
       <a class="gh" href="https://github.com/wenlingang/datum">GitHub</a>
@@ -465,6 +470,8 @@ document.documentElement.classList.add("js");
           <p lang="zh-CN">AI 会自己查看当前连接的表结构、执行只读查询来回答你。凡是要写入的，都以 SQL 卡片交给你确认。</p>
           <p class="muted" lang="en">Bring your own provider: OpenAI-compatible, Anthropic or Gemini, with presets for DeepSeek, Qwen, Kimi and more. Press <kbd>⌘J</kbd> to give the conversation the whole window.</p>
           <p class="muted" lang="zh-CN">服务商自己配：OpenAI 兼容、Anthropic、Gemini，内置 DeepSeek、通义、Kimi 等预设。按 <kbd>⌘J</kbd> 让对话占满整个窗口。</p>
+          <p class="muted" lang="en">On prod connections it only sees table structure until you allow more, so customer data doesn't leave your machine by accident.</p>
+          <p class="muted" lang="zh-CN">在 prod 连接上，AI 默认只能看表结构，你允许之后才读数据，客户数据不会被顺手发出去。</p>
         </div>
         <img class="shot" src="screenshots/ai-assistant.png" width="1600" height="1024" loading="lazy" alt="The AI panel next to a query tab">
       </div>
@@ -480,6 +487,8 @@ document.documentElement.classList.add("js");
             <button class="env-btn" data-env="staging" aria-pressed="false">staging</button>
             <button class="env-btn" data-env="prod" aria-pressed="true">prod</button>
           </div>
+          <p class="muted" lang="en">A runaway query can be stopped on the server, not just abandoned. Transactions you open in the editor stay yours: <code>BEGIN</code> … <code>COMMIT</code> spans statements, and previews and undo never end them for you.</p>
+          <p class="muted" lang="zh-CN">跑飞的查询可以在服务器端真正停下，而不只是不等结果。编辑器里开的事务始终归你管：<code>BEGIN</code> … <code>COMMIT</code> 跨多条语句生效，影响预估与撤销都不会替你结束事务。</p>
           <p class="muted" lang="en">Try it: pick an environment and run the statement.</p>
           <p class="muted" lang="zh-CN">试试看：选一个环境，点运行。</p>
         </div>
@@ -513,6 +522,37 @@ document.documentElement.classList.add("js");
     </div>
   </section>
 
+  <section class="block" id="databases">
+    <div class="wrap">
+      <h2 lang="en">Made for each database.</h2>
+      <h2 lang="zh-CN">每种数据库，都有专门的功能。</h2>
+      <p class="intro" lang="en">Beyond a shared SQL editor, Datum handles the jobs that are specific to each engine, the ones a generic client leaves to the command line.</p>
+      <p class="intro" lang="zh-CN">除了通用的 SQL 编辑器，Datum 还把每种数据库特有、通用客户端只能交给命令行的事做进了界面里。</p>
+      <div class="facts two">
+        <div>
+          <h3>PostgreSQL<small lang="en">JSONB you can click through</small><small lang="zh-CN">能点开的 JSONB</small></h3>
+          <p lang="en">JSONB cells open as a tree. Click a field to filter the whole table on it, and the editor suggests keys after <code>-&gt;'</code>, level by level. Explain plans are drawn as a tree with the costliest step marked.</p>
+          <p lang="zh-CN">JSONB 单元格展开成树，点一个字段就能按它筛选整张表；编辑器在 <code>-&gt;'</code> 之后逐级提示键名。执行计划画成树，标出最耗时的一步。</p>
+        </div>
+        <div>
+          <h3>MySQL<small lang="en">ALTER TABLE without surprises</small><small lang="zh-CN">改表前先知道代价</small></h3>
+          <p lang="en">Before an <code>ALTER TABLE</code> runs, Datum tells you whether it is INSTANT, INPLACE or a full copy, whether it blocks writes, and roughly how long it takes on this table, and suggests gh‑ost when it's risky. A character-set check finds utf8mb3 columns and mismatched collations that quietly disable indexes.</p>
+          <p lang="zh-CN">执行 <code>ALTER TABLE</code> 之前，先告诉你它是 INSTANT、INPLACE 还是整表复制，会不会挡住写入，在这张表上大概要多久；风险高时建议改用 gh‑ost。字符集体检能找出仍是 utf8mb3 的列，以及让索引悄悄失效的排序规则不一致。</p>
+        </div>
+        <div>
+          <h3>SQLite<small lang="en">The ALTER TABLE SQLite doesn't have</small><small lang="zh-CN">补上 SQLite 缺的改表</small></h3>
+          <p lang="en">Change columns, primary keys and foreign keys in a form; Datum writes SQLite's twelve-step table rebuild and runs it in one transaction. Import CSV or JSON as a new table, with column types inferred and a preview first.</p>
+          <p lang="zh-CN">在表单里改列、主键和外键，Datum 按 SQLite 官方的 12 步写好重建表脚本，在一个事务里执行。CSV、JSON 可以直接导入成新表，先预览、自动推断列类型。</p>
+        </div>
+        <div>
+          <h3>Redis<small lang="en">More than GET and SET</small><small lang="zh-CN">不止 GET 与 SET</small></h3>
+          <p lang="en">Edit hashes, lists, sets, sorted sets and streams as tables. Values are recognized as JSON, MessagePack, gzip, Java serialization or Protobuf. Watch Pub/Sub and MONITOR live, run Lua with KEYS and ARGV forms, and analyze memory across every node of a cluster.</p>
+          <p lang="zh-CN">Hash、List、Set、ZSet、Stream 都能像表格一样编辑。值会被自动识别为 JSON、MessagePack、gzip、Java 序列化或 Protobuf。实时查看 Pub/Sub 与 MONITOR，用表单填 KEYS、ARGV 执行 Lua，集群下逐个节点分析内存。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="block" id="features">
     <div class="wrap">
       <h2 lang="en">Everything in Datum</h2>
@@ -520,23 +560,23 @@ document.documentElement.classList.add("js");
       <div class="facts">
         <div>
           <h3><span lang="en">Connections</span><span lang="zh-CN">连接</span></h3>
-          <p lang="en">Live connection-string preview, a database picker that lists what's on the server, SSL modes, and SSH tunnels with password, key or ssh-agent. Colored by environment; staging and prod passwords go to the system keychain.</p>
-          <p lang="zh-CN">实时预览连接串，数据库可从实例上的库里选，支持各种 SSL 模式与 SSH 隧道（密码、私钥或 ssh-agent）。按环境着色，staging 与 prod 的密码存进系统钥匙串。</p>
+          <p lang="en">Live connection-string preview, a database picker that lists what's on the server, SSL modes, and SSH tunnels with password, key or ssh-agent, <code>~/.ssh/config</code> aliases and jump hosts. Colored by environment; staging and prod passwords go to the system keychain.</p>
+          <p lang="zh-CN">实时预览连接串，数据库可从实例上的库里选，支持各种 SSL 模式与 SSH 隧道（密码、私钥或 ssh-agent，读取 <code>~/.ssh/config</code> 的别名与多级跳板）。按环境着色，staging 与 prod 的密码存进系统钥匙串。</p>
         </div>
         <div>
           <h3><span lang="en">SQL editor</span><span lang="zh-CN">SQL 编辑器</span></h3>
-          <p lang="en">Highlighting, schema-aware completion with JOIN conditions and column values, run one statement or all of them with a result tab each, format, Explain, row limits, per-database history. Tabs and their SQL come back after a restart.</p>
-          <p lang="zh-CN">语法高亮，懂表结构的补全，能补 JOIN 条件和列的取值；执行单条或全部，每条一个结果标签；格式化、Explain、行数上限、按库隔离的历史。重启后标签与 SQL 原样恢复。</p>
+          <p lang="en">Highlighting, schema-aware completion with JOIN conditions and column values, run one statement or all of them with a result tab each, <code>:name</code> parameters, snippets, Explain as a tree, stop a running query, per-database history. Tabs and their SQL come back after a restart.</p>
+          <p lang="zh-CN">语法高亮，懂表结构的补全，能补 JOIN 条件和列的取值；执行单条或全部，每条一个结果标签；<code>:name</code> 参数、SQL 片段、树形执行计划、随时停止正在执行的查询、按库隔离的历史。重启后标签与 SQL 原样恢复。</p>
         </div>
         <div>
           <h3><span lang="en">Tables</span><span lang="zh-CN">表浏览</span></h3>
-          <p lang="en">Server-side paging and sorting, values colored by type, AND / OR filters or a plain sentence, full cell view with JSON formatting. Stage edits and commit once. Export CSV, SQL or Markdown.</p>
-          <p lang="zh-CN">服务端分页与排序，按类型着色，且 / 或筛选或直接说一句话，单元格全文查看并格式化 JSON。暂存编辑后一次提交。导出 CSV、SQL、Markdown。</p>
+          <p lang="en">Server-side paging, sorting and filtering, values colored by type, AND / OR filters or a plain sentence, full cell view with JSON formatting. Stage edits and commit once. Export CSV, Excel, JSON, SQL or Markdown; whole tables stream straight to the file.</p>
+          <p lang="zh-CN">服务端分页、排序与筛选，按类型着色，且 / 或筛选或直接说一句话，单元格全文查看并格式化 JSON。暂存编辑后一次提交。导出 CSV、Excel、JSON、SQL、Markdown，整表导出逐行直接写入文件。</p>
         </div>
         <div>
           <h3><span lang="en">Safety</span><span lang="zh-CN">安全</span></h3>
-          <p lang="en">Destructive statements wait for review with the number of rows they touch. Single-table UPDATE and DELETE can be undone. Read-only runs are enforced by the database itself.</p>
-          <p lang="zh-CN">危险语句先审查，并显示会影响的行数。单表 UPDATE、DELETE 执行后可撤销。只读执行由数据库本身强制。</p>
+          <p lang="en">Destructive statements wait for review with the number of rows they touch. UPDATE and DELETE can be undone, including multi-table forms and several at once. Read-only runs are enforced by the database itself, and your open transactions are left alone.</p>
+          <p lang="zh-CN">危险语句先审查，并显示会影响的行数。UPDATE、DELETE 执行后可撤销，多表写法、几条一起执行也行。只读执行由数据库本身强制，你开着的事务不会被打断。</p>
         </div>
         <div>
           <h3><span lang="en">Diagnostics</span><span lang="zh-CN">诊断</span></h3>
@@ -545,12 +585,27 @@ document.documentElement.classList.add("js");
         </div>
         <div>
           <h3>AI</h3>
-          <p lang="en">Several providers with presets, one conversation per connection, read-only lookups on its own, SQL cards you confirm, fixes for errors and readings of Explain plans.</p>
-          <p lang="zh-CN">多个服务商与常用预设，按连接分会话，自己做只读查询，写入以 SQL 卡片确认，能修报错、能解读执行计划。</p>
+          <p lang="en">Several providers with presets, one conversation per connection, read-only lookups on its own, SQL cards you confirm, fixes for errors and readings of Explain plans. Conversations survive a restart.</p>
+          <p lang="zh-CN">多个服务商与常用预设，按连接分会话，自己做只读查询，写入以 SQL 卡片确认，能修报错、能解读执行计划。对话重启后仍在。</p>
+        </div>
+        <div>
+          <h3><span lang="en">ER diagrams</span><span lang="zh-CN">ER 图</span></h3>
+          <p lang="en">The whole database, or one table and its neighbours, with real and inferred foreign keys. Pan, zoom, drag tables, search, and double-click to open one.</p>
+          <p lang="zh-CN">整库，或某张表及其关联表，显示物理外键与按命名推断的外键。平移、缩放、拖动表、搜索，双击即可打开表。</p>
+        </div>
+        <div>
+          <h3><span lang="en">Schema compare</span><span lang="zh-CN">结构对比</span></h3>
+          <p lang="en">Diff two databases of the same kind: tables, columns, indexes, views, triggers, foreign keys and comments, with a migration script that brings the target in line.</p>
+          <p lang="zh-CN">比较两个同类数据库的表、列、索引、视图、触发器、外键与注释，生成让目标库与源库一致的迁移脚本。</p>
+        </div>
+        <div>
+          <h3><span lang="en">Privacy</span><span lang="zh-CN">数据与隐私</span></h3>
+          <p lang="en">AI sees only the schema of prod connections unless you allow more. First SSH connections show the host fingerprint for you to confirm, and new prod connections verify the server certificate.</p>
+          <p lang="zh-CN">prod 连接的数据默认不发给 AI，只给表结构。首次连接 SSH 跳板机要你确认主机指纹，新建的 prod 连接默认校验服务器证书。</p>
         </div>
       </div>
-      <p class="note" lang="en">English, Simplified and Traditional Chinese; light, dark or system; updates inside the app. ER diagrams aren't available yet, and MongoDB is no longer supported.</p>
-      <p class="note" lang="zh-CN">英文、简体中文、繁体中文；浅色、深色或跟随系统；应用内更新。ER 图暂未提供，已不再支持 MongoDB。</p>
+      <p class="note" lang="en">English, Simplified and Traditional Chinese; light, dark or system; updates inside the app. MongoDB is no longer supported.</p>
+      <p class="note" lang="zh-CN">英文、简体中文、繁体中文；浅色、深色或跟随系统；应用内更新。已不再支持 MongoDB。</p>
 
     </div>
   </section>
