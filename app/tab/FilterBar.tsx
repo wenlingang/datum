@@ -2,7 +2,7 @@
 // 点「应用」或在值输入框回车才作用到结果。对应 GPUI 版 tab/filter.rs。
 // 在 JSON 树上点字段生成的条件带字段路径,列名后面标出取值表达式(PG 下推成 WHERE)。
 
-import { signal, Text, View } from "nsh";
+import { cleanup, computed, effect, signal, Text, View } from "nsh";
 import { Button } from "nsh/base";
 import { t } from "nsh/i18n";
 import { type DbKind, FILTER_OPS, type FilterOp, type JsonPath } from "../lib/types";
@@ -53,6 +53,17 @@ export function FilterBar(props: { m: TabModel }) {
   const total = () => m.result()?.rows.length ?? 0;
   const canClear = () => m.drafts().length > 0 || m.applied().length > 0;
   const nl = signal("");
+  // 命中数预览要把全部结果行交给原生层过一遍:条件停下 200ms 后才算,结果缓存;
+  // 以前每次刷新(每敲一个字)都整份重算
+  const settled = signal({ drafts: m.drafts(), conj: m.conj() });
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  effect(() => {
+    const next = { drafts: m.drafts(), conj: m.conj() };
+    if (previewTimer !== undefined) clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => settled.set(next), 200);
+  });
+  cleanup(() => previewTimer !== undefined && clearTimeout(previewTimer));
+  const previewCount = computed(() => filterPreviewCount(m, settled().drafts, settled().conj));
   return (
     <View class="max-h-[260px] shrink-0 gap-2 border-b border-border bg-panel px-5 py-3">
       {/* 自然语言筛选:一句话交给 AI,转成下面的且/或条件 */}
@@ -166,7 +177,7 @@ export function FilterBar(props: { m: TabModel }) {
             else={
               <View class="flex-row items-center gap-1">
                 <Text class={`${FS.xs} text-fg-faint`}>{t("filter.preview_match")}</Text>
-                <Text class={`${FS.xs} font-mono font-bold text-fg-soft`}>{String(filterPreviewCount(m))}</Text>
+                <Text class={`${FS.xs} font-mono font-bold text-fg-soft`}>{String(previewCount())}</Text>
                 <Text class={`${FS.xs} text-fg-faint`}>{t("filter.of_total_rows", { total: total() })}</Text>
               </View>
             }

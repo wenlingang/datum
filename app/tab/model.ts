@@ -1260,12 +1260,11 @@ export function filterByJson(m: TabModel, col: string, path: JsonPath, kind: Jso
   filterApply(m);
 }
 
-export function filterPreviewCount(m: TabModel): number {
+export function filterPreviewCount(m: TabModel, drafts = m.drafts(), conj = m.conj()): number {
   const result = m.result();
   if (!result) return 0;
-  const drafts = m.drafts();
   if (!drafts.some(isActive)) return result.rows.length;
-  return grid.filterIndices(result.rows, result.columns, drafts, m.conj()).length;
+  return grid.filterIndices(result.rows, result.columns, drafts, conj).length;
 }
 
 // ------------------------------------------------------------ AI

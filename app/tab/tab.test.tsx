@@ -334,6 +334,27 @@ test("表浏览筛选在服务端执行:对整张表生效,不只是当前这一
   expect(app.texts()).not.toContain("Coffee 250");
 });
 
+test("查询结果本地筛选:命中数预览随条件更新", async () => {
+  const app = await start();
+  await replaceSql(app, "SELECT id, name FROM categories");
+  await app.press("id:run");
+  await app.waitUntil(() => hasText(app, "Query succeeded · 4 rows returned"), { timeout: 15000 });
+  await app.keyboard.press("mod+f");
+  await app.waitFor("text:Estimated matches", { timeout: 5000 });
+  await app.waitFor("text:/ 4 rows");
+  const draft = "1";
+  await app.press(`id:filter-col:${draft}`);
+  await app.press("text:name >> nth=1");
+  await app.type(`id:filter-value:${draft}`, "Blend");
+  // 条件停下后才算(防抖),最终是 1 行
+  await app.waitUntil(() => {
+    const t = app.texts();
+    const i = t.indexOf("Estimated matches");
+    return i >= 0 && t[i + 1] === "1";
+  }, { timeout: 5000 });
+  app.dispose();
+});
+
 test("查询参数:执行前弹框填值,预览代入结果;同一标签记住上次的值", async () => {
   const app = await start();
   await replaceSql(app, "SELECT name FROM categories WHERE id >= :min AND name <> :skip");
