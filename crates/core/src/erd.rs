@@ -328,52 +328,52 @@ pub fn layout(graph: &ErdGraph) -> HashMap<String, NodeRect> {
         connected.insert(&e.target);
     }
 
-    // 去回边:DFS 标记,只保留指向未完成节点之外的边
+    // 去回边:DFS 标记,只保留指向未完成节点之外的边。
+    // 用显式栈(外键链很深时递归会爆栈),访问顺序与递归版相同;同时记下完成顺序(后序)。
     let mut dag: HashMap<&str, Vec<&str>> = HashMap::new();
     let mut state: HashMap<&str, u8> = HashMap::new(); // 1 = 访问中, 2 = 完成
-    fn dfs<'a>(
-        v: &'a str,
-        succ: &HashMap<&'a str, Vec<&'a str>>,
-        state: &mut HashMap<&'a str, u8>,
-        dag: &mut HashMap<&'a str, Vec<&'a str>>,
-    ) {
-        state.insert(v, 1);
-        for &w in succ.get(v).map(Vec::as_slice).unwrap_or_default() {
-            match state.get(w).copied().unwrap_or(0) {
-                1 => {} // 回边,丢弃
-                0 => {
-                    dag.entry(v).or_default().push(w);
-                    dfs(w, succ, state, dag);
-                }
-                _ => dag.entry(v).or_default().push(w),
-            }
+    let mut postorder: Vec<&str> = Vec::new();
+    let empty: Vec<&str> = Vec::new();
+    for &root in &ids {
+        if !connected.contains(root) || state.contains_key(root) {
+            continue;
         }
-        state.insert(v, 2);
-    }
-    for &v in &ids {
-        if connected.contains(v) && !state.contains_key(v) {
-            dfs(v, &succ, &mut state, &mut dag);
+        // (节点, 下一个要看的后继下标)
+        let mut stack: Vec<(&str, usize)> = vec![(root, 0)];
+        state.insert(root, 1);
+        while let Some(&mut (v, ref mut next)) = stack.last_mut() {
+            let ws = succ.get(v).unwrap_or(&empty);
+            if let Some(&w) = ws.get(*next) {
+                *next += 1;
+                match state.get(w).copied().unwrap_or(0) {
+                    1 => {} // 回边,丢弃
+                    0 => {
+                        dag.entry(v).or_default().push(w);
+                        state.insert(w, 1);
+                        stack.push((w, 0));
+                    }
+                    _ => dag.entry(v).or_default().push(w),
+                }
+            } else {
+                state.insert(v, 2);
+                postorder.push(v);
+                stack.pop();
+            }
         }
     }
 
-    // 最长路径分层:layer(v) = max(layer(u) + 1),u → v
+    // 最长路径分层:layer(v) = max(layer(u) + 1),u → v。
+    // DAG 的后序倒过来就是拓扑序,按它推一遍即可(以前反复松弛到不动点,最坏 O(V·E))。
     let mut layer: HashMap<&str, usize> = ids
         .iter()
         .filter(|v| connected.contains(*v))
         .map(|v| (*v, 0))
         .collect();
-    let mut changed = true;
-    let mut guard = 0;
-    while changed && guard < ids.len() + 1 {
-        changed = false;
-        guard += 1;
-        for (&u, ws) in &dag {
-            let lu = layer[u];
-            for &w in ws {
-                if layer[w] < lu + 1 {
-                    layer.insert(w, lu + 1);
-                    changed = true;
-                }
+    for &u in postorder.iter().rev() {
+        let lu = layer[u];
+        for &w in dag.get(u).unwrap_or(&empty) {
+            if layer[w] < lu + 1 {
+                layer.insert(w, lu + 1);
             }
         }
     }
@@ -653,6 +653,35 @@ mod tests {
 
     fn names(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// 很深的外键链(t0 → t1 → … → tN):布局不能爆栈,层号依次递增。
+    #[test]
+    fn deep_chain_layout_does_not_overflow() {
+        const N: usize = 50_000;
+        let node = |i: usize| ErdNode {
+            table: format!("t{i}"),
+            columns: vec![],
+            collapsed: false,
+            hidden_count: 0,
+            is_focus: false,
+        };
+        let graph = ErdGraph {
+            nodes: (0..N).map(node).collect(),
+            edges: (0..N - 1)
+                .map(|i| ErdEdge {
+                    id: format!("e{i}"),
+                    source: format!("t{i}"),
+                    target: format!("t{}", i + 1),
+                    label: String::new(),
+                    inferred: false,
+                })
+                .collect(),
+        };
+        let out = layout(&graph);
+        assert_eq!(out.len(), N);
+        // 引用方在左:链上的表依次往右排
+        assert!(out["t0"].x < out["t1"].x && out["t1"].x < out[&format!("t{}", N - 1)].x);
     }
 
     #[test]
