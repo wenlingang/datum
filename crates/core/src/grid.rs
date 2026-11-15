@@ -21,13 +21,23 @@ pub fn compare_cells(a: &str, b: &str) -> Ordering {
 
 /// 按某列排序后的行下标(稳定排序)。NULL 始终排在最后,与方向无关。
 pub fn sort_order(rows: &[Vec<Cell>], col_ix: usize, descending: bool) -> Vec<usize> {
+    // 每行的数值先解析一次(规则同 compare_cells):以前每次比较都解析两边,10 万行要解析几百万次
+    let nums: Vec<Option<f64>> = rows
+        .iter()
+        .map(|r| {
+            r[col_ix].as_deref().map(str::trim).filter(|t| !t.is_empty()).and_then(|t| t.parse::<f64>().ok())
+        })
+        .collect();
     let mut order: Vec<usize> = (0..rows.len()).collect();
     order.sort_by(|&ia, &ib| match (&rows[ia][col_ix], &rows[ib][col_ix]) {
         (None, None) => Ordering::Equal,
         (None, _) => Ordering::Greater,
         (_, None) => Ordering::Less,
         (Some(a), Some(b)) => {
-            let o = compare_cells(a, b);
+            let o = match (nums[ia], nums[ib]) {
+                (Some(na), Some(nb)) => na.partial_cmp(&nb).unwrap_or(Ordering::Equal),
+                _ => a.cmp(b),
+            };
             if descending {
                 o.reverse()
             } else {
@@ -610,6 +620,26 @@ pub fn column_widths(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 预解析数值的排序与逐对 compare_cells 的结果一致(数字、文本、空白、NULL 混在一起)。
+    #[test]
+    fn sort_order_matches_pairwise_compare() {
+        let vals = ["10", " 2 ", "abc", "", "1e3", "-5", "0010", "b", "  ", "3.5", "NaN", "Ab"];
+        let rows: Vec<Vec<Cell>> = vals.iter().map(|v| vec![Some(v.to_string())]).chain([vec![None]]).collect();
+        for desc in [false, true] {
+            let mut expected: Vec<usize> = (0..rows.len()).collect();
+            expected.sort_by(|&a, &b| match (&rows[a][0], &rows[b][0]) {
+                (None, None) => Ordering::Equal,
+                (None, _) => Ordering::Greater,
+                (_, None) => Ordering::Less,
+                (Some(x), Some(y)) => {
+                    let o = compare_cells(x, y);
+                    if desc { o.reverse() } else { o }
+                }
+            });
+            assert_eq!(sort_order(&rows, 0, desc), expected, "desc={desc}");
+        }
+    }
 
     fn s(v: &str) -> Cell {
         Some(v.to_string())

@@ -557,20 +557,21 @@ static JOINED: LazyLock<Regex> = LazyLock::new(|| {
 
 /// 与左侧已引用表有外键关联的表排到前面,详情标出关联到谁。
 fn rank_related(items: Vec<Item>, left: &[String], fks: &[ForeignKey]) -> Vec<Item> {
-    let related = |t: &str| -> Option<String> {
-        fks.iter().find_map(|f| {
-            if f.table == t && left.contains(&f.ref_table) {
-                Some(f.ref_table.clone())
-            } else if f.ref_table == t && left.contains(&f.table) {
-                Some(f.table.clone())
-            } else {
-                None
-            }
-        })
-    };
-    let (mut hit, rest): (Vec<Item>, Vec<Item>) = items.into_iter().partition(|i| related(&i.label).is_some());
+    // 候选表 → 关联到的左侧表:外键只扫一遍,每张表取第一条匹配的外键
+    // (以前每个候选都扫一遍全部外键,几千张表时每敲一个字要几十毫秒)
+    let left: std::collections::HashSet<&str> = left.iter().map(String::as_str).collect();
+    let mut related: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for f in fks {
+        if left.contains(f.ref_table.as_str()) {
+            related.entry(f.table.as_str()).or_insert(f.ref_table.as_str());
+        }
+        if left.contains(f.table.as_str()) {
+            related.entry(f.ref_table.as_str()).or_insert(f.table.as_str());
+        }
+    }
+    let (mut hit, rest): (Vec<Item>, Vec<Item>) = items.into_iter().partition(|i| related.contains_key(i.label.as_str()));
     for i in &mut hit {
-        if let Some(other) = related(&i.label) {
+        if let Some(other) = related.get(i.label.as_str()) {
             i.detail = t!("core.completion.related_to", table = other).to_string();
         }
     }

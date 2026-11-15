@@ -40,6 +40,8 @@ jobs:
             app/native
       - uses: ./.github/actions/setup-nsh
       - run: cargo test --workspace --locked
+      - name: 基准测试能编译(不运行)
+        run: cargo bench -p datum-core --no-run --locked
       - name: 类型检查与构建
         working-directory: app
         run: |
