@@ -10,6 +10,23 @@
   <a href="https://wenlingang.github.io/datum/"><img src="docs/screenshots/sql-editor.png" alt="Datum" width="100%"></a>
 </p>
 
+## 截圖
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/erd.png" alt="關聯圖:所有資料表與外鍵,包括依欄位名稱推斷出的關聯"><br><sub>關聯圖:所有資料表與外鍵,包括依欄位名稱推斷出的關聯</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/jsonb.png" alt="PostgreSQL JSONB:在樹上點欄位,就依它篩選整張資料表"><br><sub>PostgreSQL JSONB:在樹上點欄位,就依它篩選整張資料表</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/mysql-alter.png" alt="MySQL:執行 ALTER TABLE 前先知道會不會整表複製、會不會擋住寫入"><br><sub>MySQL:執行 ALTER TABLE 前先知道會不會整表複製、會不會擋住寫入</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/sqlite-alter.png" alt="SQLite:在表單裡修改欄位,Datum 寫好重建資料表的腳本"><br><sub>SQLite:在表單裡修改欄位,Datum 寫好重建資料表的腳本</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/redis.png" alt="Redis:Hash、List、Set、ZSet、Stream 都能像表格一樣編輯"><br><sub>Redis:Hash、List、Set、ZSet、Stream 都能像表格一樣編輯</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/diagnostics.png" alt="診斷:工作階段、鎖定等待、慢 SQL、未使用的索引"><br><sub>診斷:工作階段、鎖定等待、慢 SQL、未使用的索引</sub></td>
+  </tr>
+</table>
+
 ## 下載
 
 從 [Releases](https://github.com/wenlingang/datum/releases/latest) 下載對應平台的安裝檔,安裝說明見[介紹頁](https://wenlingang.github.io/datum/#install)。

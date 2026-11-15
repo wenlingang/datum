@@ -10,6 +10,23 @@ A lightweight, fast-starting desktop database client for **PostgreSQL**, **MySQL
   <a href="https://wenlingang.github.io/datum/"><img src="docs/screenshots/sql-editor.png" alt="Datum" width="100%"></a>
 </p>
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/erd.png" alt="Relationship diagram: every table and foreign key, including ones inferred from column names"><br><sub>Relationship diagram: every table and foreign key, including ones inferred from column names</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/jsonb.png" alt="PostgreSQL JSONB: click a field in the tree to filter the whole table on it"><br><sub>PostgreSQL JSONB: click a field in the tree to filter the whole table on it</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/mysql-alter.png" alt="MySQL: see whether an ALTER TABLE copies the table and blocks writes before it runs"><br><sub>MySQL: see whether an ALTER TABLE copies the table and blocks writes before it runs</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/sqlite-alter.png" alt="SQLite: change columns in a form; Datum writes the table rebuild"><br><sub>SQLite: change columns in a form; Datum writes the table rebuild</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/screenshots/redis.png" alt="Redis: edit hashes, lists, sets, sorted sets and streams as tables"><br><sub>Redis: edit hashes, lists, sets, sorted sets and streams as tables</sub></td>
+    <td width="50%" valign="top"><img src="docs/screenshots/diagnostics.png" alt="Diagnostics: sessions, lock waits, slow SQL and unused indexes"><br><sub>Diagnostics: sessions, lock waits, slow SQL and unused indexes</sub></td>
+  </tr>
+</table>
+
 ## Download
 
 Get the package for your platform from [Releases](https://github.com/wenlingang/datum/releases/latest); installation notes are on [the website](https://wenlingang.github.io/datum/#install).
