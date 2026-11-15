@@ -259,6 +259,18 @@ describe("import", () => {
     app.dispose();
   });
 
+  test("typing and running right away imports the latest text (statement split is debounced)", async () => {
+    const app = await start();
+    await app.waitFor("text:temp-sqlite");
+    await app.press("id:dev-import");
+    await app.waitFor("text:Import Database");
+    await app.type("id:import-sql", "create table imp_fast(id integer primary key);\ninsert into imp_fast(id) values (1);");
+    // 不等条数刷新就点运行
+    await app.press("id:import-run");
+    await app.waitFor("text:/^Import complete: 2 statements/", { timeout: 15_000 });
+    app.dispose();
+  });
+
   test("CSV 导入成新表:预览推断列、改表名、单事务插入;重名表报错", async () => {
     const csv = `${CONFIG}/people list.csv`;
     Store.writeTextFile(csv, "﻿id;name;score;zip\n1;Ann;3.5;007\n2;Bob;4;010\n");

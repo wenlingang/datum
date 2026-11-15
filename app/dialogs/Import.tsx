@@ -2,7 +2,7 @@
 // (全成功提交,任一失败回滚并报告第几条)。对应 GPUI 版 dialogs/import.rs。
 // SQLite 连接多一个「CSV / JSON」页(ImportData.tsx),把数据文件导入成表。
 
-import { cleanup, signal, Text, View, type Signal } from "nsh";
+import { cleanup, computed, signal, Text, View, type Signal } from "nsh";
 import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { db, dialogsNative, errorText, sql, store } from "../lib/native";
@@ -71,6 +71,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
     () => text(),
     (v) => {
       text.set(v);
+      settle(v);
       report.set(null);
     },
   );
@@ -80,13 +81,25 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
   const running = () => props.running();
   const choices = () => conns.list().filter((c) => supportsSql(c.kind));
   const current = () => choices().find((c) => c.id === connId());
-  const statements = () => {
+  const split = (src: string) => {
     try {
-      return sql.statements(text());
+      return sql.statements(src);
     } catch {
       return [];
     }
   };
+  // 切分整份文本(最大 20 MB)很重:文本停下 300ms 后才切一次并缓存,
+  // 而不是每次界面刷新、每敲一个字都重切。选文件载入时立即切。
+  const settled = signal("");
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  const settle = (v: string, now = false) => {
+    if (settleTimer !== undefined) clearTimeout(settleTimer);
+    settleTimer = undefined;
+    if (now) settled.set(v);
+    else settleTimer = setTimeout(() => settled.set(v), 300);
+  };
+  cleanup(() => settleTimer !== undefined && clearTimeout(settleTimer));
+  const statements = computed(() => split(settled()));
   const count = () => statements().length;
 
   async function pickFile() {
@@ -101,6 +114,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
     try {
       const content = store.readSqlFile(path);
       text.set(content);
+      settle(content, true);
       fileName.set(path.split(/[\\/]/).pop() ?? path);
       report.set(null);
     } catch (e) {
@@ -110,7 +124,8 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
 
   async function run() {
     const conn = current();
-    const stmts = statements();
+    // 用最新的文本(停顿还没到 300ms 时缓存可能是旧的)
+    const stmts = settled() === text() ? statements() : split(text());
     if (!conn || stmts.length === 0 || running()) return;
     props.running.set(true);
     report.set(null);
@@ -201,7 +216,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
           variant="primary"
           loading={running()}
           label={running() ? t("import.importing") : t("import.start")}
-          disabled={!current() || count() === 0}
+          disabled={!current() || (settled() === text() ? count() === 0 : !text().trim())}
           onPress={() => void run()}
         />
       </View>
