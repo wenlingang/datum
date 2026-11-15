@@ -284,7 +284,17 @@ p { margin: 0 0 16px; max-width: 36em; }
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px 48px; margin-top: 44px; }
 .facts p { font-size: 16.5px; color: var(--muted); margin: 0; }
 .facts h3 small { display: block; font-size: 13px; font-weight: 500; color: var(--accent); margin-top: 2px; }
-.facts.two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 64px; }
+/* 每种数据库一行:左文右图,隔行左右交替(与上面的场景一致,但标题更小) */
+.dbrows { display: grid; gap: 72px; margin-top: 48px; }
+.dbrow { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+.dbrow.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
+.dbrow.flip > :first-child { order: 2; }
+.dbrow h3 { font-size: 22px; margin: 0 0 10px; }
+.dbrow h3 small { display: block; font-size: 14px; font-weight: 500; color: var(--accent); margin-top: 4px; }
+.dbrow p { font-size: 16.5px; color: var(--muted); margin: 0; }
+/* 对话框截图偏高:限高后按比例缩小、居中,不压过左边的文字 */
+.dbrow .shot { max-height: 440px; width: auto; max-width: 100%; justify-self: center; }
+.dbrow code { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; white-space: nowrap; }
 /* 代码里的 -> 不连写成箭头:用户要照着输入 */
 .facts code { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; white-space: nowrap; }
 .intro { font-size: 19px; color: var(--muted); max-width: 46em; margin: 12px 0 0; }
@@ -327,7 +337,9 @@ footer a { color: var(--ink); }
   .pop { min-width: 0; left: 12px !important; right: 12px; }
   .picks { grid-template-columns: 1fr 1fr; }
   .pick span { display: none; }
-  .facts, .facts.two { grid-template-columns: 1fr; }
+  .facts { grid-template-columns: 1fr; }
+  .dbrow, .dbrow.flip { grid-template-columns: 1fr; gap: 24px; }
+  .dbrows { gap: 56px; }
   .pair { grid-template-columns: 1fr; }
   .platforms { grid-template-columns: 1fr; }
   .platforms > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
@@ -519,6 +531,18 @@ document.documentElement.classList.add("js");
         </div>
         <img class="shot" src="screenshots/diagnostics.png" width="1600" height="555" loading="lazy" alt="The diagnostics tab listing lock waits, with buttons to cancel a query or end a session">
       </div>
+
+      <div class="scene flip">
+        <div>
+          <h2 lang="en">See how it all connects.</h2>
+          <h2 lang="zh-CN">表之间怎么连，一眼看清。</h2>
+          <p lang="en">The relationship diagram lays out every table and foreign key, including the ones a schema never declared but column names imply, like <code>customer_id</code>. Focus on one table to see just its neighbours, and double-click a table to open it.</p>
+          <p lang="zh-CN">关系图把所有表和外键排出来，连库里没声明、但列名一看就知道的关联（比如 <code>customer_id</code>）也会推断出来。聚焦某张表只看它和它的邻居，双击就能打开这张表。</p>
+          <p class="muted" lang="en">Search tables, columns or keys, drag tables where you want them, and zoom with a pinch or <kbd>⌘</kbd> + scroll.</p>
+          <p class="muted" lang="zh-CN">可以搜索表、列和外键，把表拖到顺手的位置，双指捏合或 <kbd>⌘</kbd> + 滚轮缩放。</p>
+        </div>
+        <img class="shot" src="screenshots/erd.png" width="1600" height="1024" loading="lazy" alt="The relationship diagram of a coffee roastery database, with tables linked by their foreign keys">
+      </div>
     </div>
   </section>
 
@@ -528,26 +552,38 @@ document.documentElement.classList.add("js");
       <h2 lang="zh-CN">每种数据库，都有专门的功能。</h2>
       <p class="intro" lang="en">Beyond a shared SQL editor, Datum handles the jobs that are specific to each engine, the ones a generic client leaves to the command line.</p>
       <p class="intro" lang="zh-CN">除了通用的 SQL 编辑器，Datum 还把每种数据库特有、通用客户端只能交给命令行的事做进了界面里。</p>
-      <div class="facts two">
-        <div>
-          <h3>PostgreSQL<small lang="en">JSONB you can click through</small><small lang="zh-CN">能点开的 JSONB</small></h3>
-          <p lang="en">JSONB cells open as a tree. Click a field to filter the whole table on it, and the editor suggests keys after <code>-&gt;'</code>, level by level. Explain plans are drawn as a tree with the costliest step marked.</p>
-          <p lang="zh-CN">JSONB 单元格展开成树，点一个字段就能按它筛选整张表；编辑器在 <code>-&gt;'</code> 之后逐级提示键名。执行计划画成树，标出最耗时的一步。</p>
+      <div class="dbrows">
+        <div class="dbrow">
+          <div>
+            <h3>PostgreSQL<small lang="en">JSONB you can click through</small><small lang="zh-CN">能点开的 JSONB</small></h3>
+            <p lang="en">JSONB cells open as a tree. Click a field to filter the whole table on it, and the editor suggests keys after <code>-&gt;'</code>, level by level. Explain plans are drawn as a tree with the costliest step marked.</p>
+            <p lang="zh-CN">JSONB 单元格展开成树，点一个字段就能按它筛选整张表；编辑器在 <code>-&gt;'</code> 之后逐级提示键名。执行计划画成树，标出最耗时的一步。</p>
+          </div>
+          <img class="shot" src="screenshots/jsonb.png" width="1740" height="884" loading="lazy" alt="A PostgreSQL table filtered on a JSONB field, with the row's JSON shown as a tree">
         </div>
-        <div>
-          <h3>MySQL<small lang="en">ALTER TABLE without surprises</small><small lang="zh-CN">改表前先知道代价</small></h3>
-          <p lang="en">Before an <code>ALTER TABLE</code> runs, Datum tells you whether it is INSTANT, INPLACE or a full copy, whether it blocks writes, and roughly how long it takes on this table, and suggests gh‑ost when it's risky. A character-set check finds utf8mb3 columns and mismatched collations that quietly disable indexes.</p>
-          <p lang="zh-CN">执行 <code>ALTER TABLE</code> 之前，先告诉你它是 INSTANT、INPLACE 还是整表复制，会不会挡住写入，在这张表上大概要多久；风险高时建议改用 gh‑ost。字符集体检能找出仍是 utf8mb3 的列，以及让索引悄悄失效的排序规则不一致。</p>
+        <div class="dbrow flip">
+          <div>
+            <h3>Redis<small lang="en">More than GET and SET</small><small lang="zh-CN">不止 GET 与 SET</small></h3>
+            <p lang="en">Edit hashes, lists, sets, sorted sets and streams as tables. Values are recognized as JSON, MessagePack, gzip, Java serialization or Protobuf. Watch Pub/Sub and MONITOR live, run Lua with KEYS and ARGV forms, and analyze memory across every node of a cluster.</p>
+            <p lang="zh-CN">Hash、List、Set、ZSet、Stream 都能像表格一样编辑。值会被自动识别为 JSON、MessagePack、gzip、Java 序列化或 Protobuf。实时查看 Pub/Sub 与 MONITOR，用表单填 KEYS、ARGV 执行 Lua，集群下逐个节点分析内存。</p>
+          </div>
+          <img class="shot" src="screenshots/redis.png" width="1500" height="710" loading="lazy" alt="A Redis hash shown as an editable table of fields and values">
         </div>
-        <div>
-          <h3>SQLite<small lang="en">The ALTER TABLE SQLite doesn't have</small><small lang="zh-CN">补上 SQLite 缺的改表</small></h3>
-          <p lang="en">Change columns, primary keys and foreign keys in a form; Datum writes SQLite's twelve-step table rebuild and runs it in one transaction. Import CSV or JSON as a new table, with column types inferred and a preview first.</p>
-          <p lang="zh-CN">在表单里改列、主键和外键，Datum 按 SQLite 官方的 12 步写好重建表脚本，在一个事务里执行。CSV、JSON 可以直接导入成新表，先预览、自动推断列类型。</p>
+        <div class="dbrow">
+          <div>
+            <h3>MySQL<small lang="en">ALTER TABLE without surprises</small><small lang="zh-CN">改表前先知道代价</small></h3>
+            <p lang="en">Before an <code>ALTER TABLE</code> runs, Datum tells you whether it is INSTANT, INPLACE or a full copy, whether it blocks writes, and roughly how long it takes on this table, and suggests gh‑ost when it's risky. A character-set check finds utf8mb3 columns and mismatched collations that quietly disable indexes.</p>
+            <p lang="zh-CN">执行 <code>ALTER TABLE</code> 之前，先告诉你它是 INSTANT、INPLACE 还是整表复制，会不会挡住写入，在这张表上大概要多久；风险高时建议改用 gh‑ost。字符集体检能找出仍是 utf8mb3 的列，以及让索引悄悄失效的排序规则不一致。</p>
+          </div>
+          <img class="shot" src="screenshots/mysql-alter.png" width="1120" height="976" loading="lazy" alt="Before an ALTER TABLE runs on MySQL: a full table copy on 400,000 rows, flagged high risk, with a safer way to write it">
         </div>
-        <div>
-          <h3>Redis<small lang="en">More than GET and SET</small><small lang="zh-CN">不止 GET 与 SET</small></h3>
-          <p lang="en">Edit hashes, lists, sets, sorted sets and streams as tables. Values are recognized as JSON, MessagePack, gzip, Java serialization or Protobuf. Watch Pub/Sub and MONITOR live, run Lua with KEYS and ARGV forms, and analyze memory across every node of a cluster.</p>
-          <p lang="zh-CN">Hash、List、Set、ZSet、Stream 都能像表格一样编辑。值会被自动识别为 JSON、MessagePack、gzip、Java 序列化或 Protobuf。实时查看 Pub/Sub 与 MONITOR，用表单填 KEYS、ARGV 执行 Lua，集群下逐个节点分析内存。</p>
+        <div class="dbrow flip">
+          <div>
+            <h3>SQLite<small lang="en">The ALTER TABLE SQLite doesn't have</small><small lang="zh-CN">补上 SQLite 缺的改表</small></h3>
+            <p lang="en">Change columns, primary keys and foreign keys in a form; Datum writes SQLite's twelve-step table rebuild and runs it in one transaction. Import CSV or JSON as a new table, with column types inferred and a preview first.</p>
+            <p lang="zh-CN">在表单里改列、主键和外键，Datum 按 SQLite 官方的 12 步写好重建表脚本，在一个事务里执行。CSV、JSON 可以直接导入成新表，先预览、自动推断列类型。</p>
+          </div>
+          <img class="shot" src="screenshots/sqlite-alter.png" width="1400" height="1071" loading="lazy" alt="Changing a SQLite column type in a form, with the generated table rebuild script below">
         </div>
       </div>
     </div>

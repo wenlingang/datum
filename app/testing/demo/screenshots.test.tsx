@@ -1,11 +1,13 @@
 // README / 介绍页截图。不进常规测试(run-tests.sh 不跑它),要在真机上跑:
 //   D=$(mktemp -d) && testing/demo/make-demo.sh "$D"
+//   testing/demo/make-demo-servers.sh up   # 新功能的截图要用 PG / MySQL / Redis 演示库(Docker),拍完 down
 //   mkdir -p testing/demo/out
 //   DATUM_CONFIG_DIR="$D" nsh test testing/demo/screenshots.test.tsx --target macos
 //   testing/demo/publish.sh        # 原图在 testing/demo/out/,缩放 / 裁剪后放进 docs/screenshots/
 // 窗口取 1440×922(1600×1025 的同比例):真机窗口不能超出屏幕,1600×1025 在 14 寸 MacBook 上会被截掉。
 // 只用 make-demo.sh 生成的临时配置目录:演示库是临时的 roastery.db,PG / MySQL / Redis 连接指向
-// 本机不常用的端口,连不上;不配置 AI 服务商,不会调用真实 AI。
+// 本机不常用的端口,由 make-demo-servers.sh 在这些端口上起演示库(不起时连不上,前五张截图不受影响);
+// 不配置 AI 服务商,不会调用真实 AI。每张新截图最好用新的配置目录单独跑(--filter),免得恢复出别的标签。
 
 import { open, test, type App } from "nsh/test";
 
@@ -129,4 +131,80 @@ test("ai-assistant.png:暗色,AI 面板未配置时的引导", async () => {
   await app.hover("text:-- Top single-origin coffees by revenue");
   await noToasts(app);
   await app.screenshot(`${OUT}/ai-assistant.png`);
+}, 90_000);
+
+// ---- 0.2.x 新功能(需要 make-demo-servers.sh up 起的演示数据库)----
+
+test("erd.png:亮色,roastery 整库的关系图", async () => {
+  const app = await start("light");
+  await openRoastery(app);
+  await app.press("label:Relationship Diagram");
+  await app.waitFor("id:erd-node:orders", T);
+  await app.waitFor("id:erd-node:order_items", T);
+  await app.hover("id:erd-node:customers");
+  await app.wait(1200);
+  await app.screenshot(`${OUT}/erd.png`);
+}, 90_000);
+
+test("jsonb.png:暗色,PG 的 JSONB 行详情展开成树,点字段筛选整张表", async () => {
+  const app = await start("dark");
+  await app.press("id:rail-demo-analytics");
+  // 表右键「View Table Details」:打开表并展开右侧详情栏;再点一行,详情栏换成行详情
+  await app.rightClick("id:table-list >> label:web_events");
+  await app.press("label:View Table Details");
+  await app.waitFor("text:/\"total_cents\": 1563/", T);
+  await app.press("text:/\"total_cents\": 1563/");
+  await app.waitFor("id:row-json:payload", T);
+  await app.press("id:json-node:customer");
+  await app.waitFor("id:json-node:customer.tier", T);
+  await app.press("id:json-node:customer.tier");
+  await app.press("id:json-filter");
+  await app.waitFor("id:filter-server-hint", T);
+  // 筛选后选中第 4 行(tier 也是 silver;第 1 行仍是选中状态,再点会取消选中),详情栏展开到这个字段
+  await app.waitFor("text:/\"total_cents\": 1902/", T);
+  await app.press("text:/\"total_cents\": 1902/");
+  await app.waitFor("id:row-json:payload", T);
+  await app.press("id:json-node:customer");
+  await app.waitFor("id:json-node:customer.tier", T);
+  await app.press("id:json-node:customer.tier");
+  await app.wait(1500);
+  await app.screenshot(`${OUT}/jsonb.png`);
+}, 90_000);
+
+test("mysql-alter.png:亮色,MySQL 改列类型前的风险评估", async () => {
+  const app = await start("light");
+  await app.press("id:rail-demo-shop");
+  await app.waitFor("id:table-list >> label:orders", T);
+  await newQuery(app, "ALTER TABLE orders MODIFY total_cents BIGINT NOT NULL;");
+  await app.press("id:run");
+  await app.waitFor("id:risk-dialog", T);
+  await app.waitFor("id:risk-alter-risk", T);
+  await app.wait(800);
+  await app.screenshot(`${OUT}/mysql-alter.png`);
+  await app.press("id:risk-cancel");
+}, 90_000);
+
+test("redis.png:暗色,Redis 按类型编辑 Hash", async () => {
+  const app = await start("dark");
+  await app.press("id:rail-demo-cache");
+  await app.press("id:table-list >> label:customer:1042");
+  await app.waitFor("text:Maya Okafor", T);
+  await app.hover("id:table-list >> label:customer:1043");
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/redis.png`);
+}, 90_000);
+
+test("sqlite-alter.png:亮色,SQLite 表单改列类型,预览 12 步重建表脚本", async () => {
+  const app = await start("light");
+  await openRoastery(app);
+  await app.rightClick("id:table-list >> label:products");
+  await app.press("label:Alter Table…");
+  await app.waitFor("id:alter-dialog", T);
+  // 第 5 列 origin:TEXT → VARCHAR(40)
+  await app.clear("id:alter-type:4");
+  await app.type("id:alter-type:4", "VARCHAR(40)");
+  await app.waitUntil(() => app.texts().includes("Rebuild table"), T);
+  await app.waitUntil(() => app.texts().some((x) => x.includes("PRAGMA foreign_keys = OFF;")), T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/sqlite-alter.png`);
 }, 90_000);
