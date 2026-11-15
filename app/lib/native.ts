@@ -329,6 +329,10 @@ import type * as TabTypes from "./types";
 type GridCell = string | null;
 
 /** 结果网格与编辑器的纯计算(datum-core 的 grid / completion / sql::build)。 */
+/** 已经传给原生侧的补全结构(按连接):引用没变就不再传。 */
+const sentSchemas = new Map<string, { tables: string[]; columns: ColumnsByTable | null; fks: ForeignKey[] | null; rev: number }>();
+let schemaRev = 0;
+
 export const grid = {
   classifyCell: (value: GridCell, dataType: string | null) =>
     Grid.classifyCell(value, dataType) as TabTypes.CellStyle,
@@ -344,6 +348,8 @@ export const grid = {
   buildInsertRow: (table: string, columns: string[], values: GridCell[], kind: DbKind) =>
     Grid.buildInsertRow(table, columns, values, kind),
   buildInsert: (table: string, columns: string[], kind: DbKind) => Grid.buildInsert(table, columns, kind),
+  /** 编辑器补全。整库结构按 `key`(连接 id)缓存在原生侧:表、列、外键的引用都没变时只传版本号,
+   *  不必每敲一个字都把整库结构传过去再解析一遍。 */
   completions: (
     kind: DbKind,
     text: string,
@@ -352,7 +358,20 @@ export const grid = {
     columns: ColumnsByTable | null,
     explicit: boolean,
     fks: ForeignKey[] | null = null,
-  ) => Grid.completions(kind, text, caret, tables, columns, explicit, fks) as TabTypes.CompletionResult | null,
+    key = "",
+  ): TabTypes.CompletionResult | null => {
+    const prev = sentSchemas.get(key);
+    const same = !!prev && prev.tables === tables && prev.columns === columns && prev.fks === fks;
+    const rev = same ? prev.rev : ++schemaRev;
+    if (!same) sentSchemas.set(key, { tables, columns, fks, rev });
+    const ask = (full: boolean) =>
+      Grid.completionsCached(kind, text, caret, key, rev, full ? tables : null, full ? columns : null, explicit, full ? fks : null) as
+        | (TabTypes.CompletionResult & { needSchema?: boolean })
+        | null;
+    let r = ask(!same);
+    if (r?.needSchema) r = ask(true);
+    return r;
+  },
   /** 表浏览带服务端筛选的分页 SQL(没有有效条件时与普通分页相同)。 */
   filteredPageSql: (
     table: string,

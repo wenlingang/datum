@@ -106,6 +106,7 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
     cols,
     req.trigger === "invoked",
     conns.foreignKeys(m.connId) ?? null,
+    m.connId,
   );
   // 一律标为 incomplete:编辑器每敲一个字都重新来问。否则它只在本地过滤首次的答案——
   // 空格触发时的空答案会一直空下去,首次算出的替换范围也会过时(接受时只替换最初那一小段,

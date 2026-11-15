@@ -242,55 +242,42 @@ impl Grid {
         explicit: bool,
         fks: JsonValue,
     ) -> Result<JsonValue, String> {
-        let k: DbKind = from(JsonValue::String(kind.clone()), "kind")?;
-        let offset = utf16_to_byte(&text, caret as usize);
-        let result = match k {
-            DbKind::Redis => completion::redis_completions(&text, offset, &tables, explicit),
-            DbKind::Mongo => completion::mongo_completions(&text, offset, &tables, explicit),
-            _ => {
-                let raw: std::collections::BTreeMap<String, Vec<BriefJs>> = if columns.is_null() {
-                    Default::default()
-                } else {
-                    from(columns, "columns")?
-                };
-                let cols: ColumnsByTable = raw
-                    .into_iter()
-                    .map(|(t, list)| {
-                        (
-                            t,
-                            list.into_iter()
-                                .map(|c| ColumnBrief {
-                                    name: c.name,
-                                    data_type: c.data_type,
-                                })
-                                .collect(),
-                        )
-                    })
-                    .collect();
-                let fks: Vec<ForeignKey> = if fks.is_null() { vec![] } else { from(fks, "fks")? };
-                completion::sql_completions_with(&text, offset, &tables, &cols, &fks, explicit)
+        let schema = parse_schema(tables, columns, fks)?;
+        run_completions(&kind, &text, caret, &schema, explicit)
+    }
+
+    /// 同 [`Self::completions`],整库结构按 `key`(连接 id)缓存在这里:结构没变(`rev` 相同)时
+    /// 界面传 null,不必每敲一个字都把整库的表、列、外键传过来再重新解析。
+    /// 缓存里没有这个版本时回 `{ needSchema: true }`,界面带上结构再问一次。
+    #[allow(clippy::too_many_arguments)]
+    pub fn completions_cached(
+        kind: String,
+        text: String,
+        caret: u32,
+        key: String,
+        rev: u32,
+        tables: JsonValue,
+        columns: JsonValue,
+        explicit: bool,
+        fks: JsonValue,
+    ) -> Result<JsonValue, String> {
+        let schema = if tables.is_null() {
+            match SCHEMAS.lock().unwrap().get(&key) {
+                Some((r, s)) if *r == rev => s.clone(),
+                _ => return Ok(json!({ "needSchema": true })),
             }
+        } else {
+            let tables: Vec<String> = from(tables, "tables")?;
+            let s = std::sync::Arc::new(parse_schema(tables, columns, fks)?);
+            let mut cache = SCHEMAS.lock().unwrap();
+            // 连接很多时不无限增长:超过上限清空重来(未命中时界面会补传)
+            if cache.len() >= 64 && !cache.contains_key(&key) {
+                cache.clear();
+            }
+            cache.insert(key, (rev, s.clone()));
+            s
         };
-        let Some(r) = result else {
-            return Ok(JsonValue::Null);
-        };
-        let items: Vec<JsonValue> = r
-            .items
-            .into_iter()
-            .map(|i| {
-                json!({
-                    "label": i.label,
-                    "detail": i.detail,
-                    "kind": kind_name(i.kind),
-                    "insert": i.insert,
-                })
-            })
-            .collect();
-        Ok(json!({
-            "start": byte_to_utf16(&text, r.replace.start),
-            "end": byte_to_utf16(&text, r.replace.end),
-            "items": items,
-        }))
+        run_completions(&kind, &text, caret, &schema, explicit)
     }
 
     /// 光标是否在某列的取值位置(`col = '…`、`col IN (…`):
@@ -428,6 +415,26 @@ struct BriefJs {
 mod tests {
     use super::*;
 
+    /// 补全结构缓存:没传过的版本回 needSchema;传过一次后同版本可不带结构;版本变了要重传。
+    #[test]
+    fn completion_schema_is_cached_by_rev() {
+        let ask = |rev: u32, full: bool| {
+            let (tables, cols) = if full {
+                (json!(["users"]), json!({ "users": [{ "name": "email", "dataType": "text" }] }))
+            } else {
+                (JsonValue::Null, JsonValue::Null)
+            };
+            Grid::completions_cached("sqlite".into(), "SELECT * FROM us".into(), 16, "k-test".into(), rev, tables, cols, true, JsonValue::Null).unwrap()
+        };
+        assert_eq!(ask(1, false)["needSchema"], json!(true));
+        let full = ask(1, true);
+        assert!(full["items"].as_array().unwrap().iter().any(|i| i["label"] == "users"), "{full}");
+        // 同版本不带结构:用缓存,结果一样
+        assert_eq!(ask(1, false), full);
+        // 版本变了:缓存不再可用
+        assert_eq!(ask(2, false)["needSchema"], json!(true));
+    }
+
     #[test]
     fn utf16_round_trip() {
         let s = "选 a";
@@ -480,4 +487,56 @@ mod tests {
         let sql = Grid::filtered_page_sql("t".into(), 0, 100, "pg".into(), None, None, filters, "and".into(), json!({ "doc": "jsonb" })).unwrap();
         assert_eq!(sql, r#"SELECT * FROM "t" WHERE ("doc" @> '{"a":3}'::jsonb) LIMIT 100 OFFSET 0"#);
     }
+}
+
+/// 补全用的整库结构(解析好的)。
+struct CompletionSchema {
+    tables: Vec<String>,
+    columns: ColumnsByTable,
+    fks: Vec<ForeignKey>,
+}
+
+/// 按连接缓存的补全结构:`(版本号, 结构)`。
+static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, (u32, std::sync::Arc<CompletionSchema>)>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn parse_schema(tables: Vec<String>, columns: JsonValue, fks: JsonValue) -> Result<CompletionSchema, String> {
+    let raw: std::collections::BTreeMap<String, Vec<BriefJs>> =
+        if columns.is_null() { Default::default() } else { from(columns, "columns")? };
+    let columns: ColumnsByTable = raw
+        .into_iter()
+        .map(|(t, list)| (t, list.into_iter().map(|c| ColumnBrief { name: c.name, data_type: c.data_type }).collect()))
+        .collect();
+    let fks: Vec<ForeignKey> = if fks.is_null() { vec![] } else { from(fks, "fks")? };
+    Ok(CompletionSchema { tables, columns, fks })
+}
+
+fn run_completions(kind: &str, text: &str, caret: u32, schema: &CompletionSchema, explicit: bool) -> Result<JsonValue, String> {
+    let k: DbKind = from(JsonValue::String(kind.to_string()), "kind")?;
+    let offset = utf16_to_byte(text, caret as usize);
+    let result = match k {
+        DbKind::Redis => completion::redis_completions(text, offset, &schema.tables, explicit),
+        DbKind::Mongo => completion::mongo_completions(text, offset, &schema.tables, explicit),
+        _ => completion::sql_completions_with(text, offset, &schema.tables, &schema.columns, &schema.fks, explicit),
+    };
+    let Some(r) = result else {
+        return Ok(JsonValue::Null);
+    };
+    let items: Vec<JsonValue> = r
+        .items
+        .into_iter()
+        .map(|i| {
+            json!({
+                "label": i.label,
+                "detail": i.detail,
+                "kind": kind_name(i.kind),
+                "insert": i.insert,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "start": byte_to_utf16(text, r.replace.start),
+        "end": byte_to_utf16(text, r.replace.end),
+        "items": items,
+    }))
 }
