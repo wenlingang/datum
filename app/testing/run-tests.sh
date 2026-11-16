@@ -47,6 +47,24 @@ if want workspace; then
   run workspace-alter "$D" workspace/alter-sqlite.test.tsx
   [ "$(sqlite3 "$D/alter.db" "select count(*) from products where country is not null; select name from v_kenya; select count(*) from sqlite_master where name = 'products_country'; select count(*) from pragma_foreign_key_list('line_items'); select count(*) from line_items")" = "$(printf '2\nNyeri\n1\n0\n2')" ] \
     || { echo "alter: 数据、视图、索引或外键回滚不符合预期"; FAILED=1; }
+  # 生成测试数据:外键、唯一、CHECK 清单、成对时间列;跑完核对库里的约束
+  D="$ROOT/testdata"; mkdir -p "$D"
+  sqlite3 "$D/td.db" "create table categories(id integer primary key, name text not null unique); insert into categories(name) values('Beans'),('Gear');
+    create table products(id integer primary key, category_id integer not null references categories(id), sku varchar(12) not null unique, name text not null, price numeric(8,2) check (price >= 0), status text not null check (status in ('active','draft','archived')), email text, created_at text, updated_at text);
+    insert into products(category_id, sku, name, price, status) values(1,'SKU-1','Boquete',12,'active'),(2,'SKU-2','Grinder',99,'draft'),(1,'SKU-3','Nyeri',9,'active');
+    create table empty_parent(id integer primary key); create table orphan(id integer primary key, p_id integer not null references empty_parent(id));"
+  printf '[%s]\n' "$(conn c-td testdata "$D/td.db")" > "$D/connections.json"
+  # 「让 AI 推断各列」:假服务固定回一段生成器建议;请求里只能有表结构,不能有行数据
+  printf '%s' '{"columns":[{"name":"sku","generator":"text","minLen":10,"maxLen":10},{"name":"price","generator":"decimal","min":5,"max":50},{"name":"status","generator":"pickList","values":["active","bogus"]},{"name":"ghost","generator":"email"}],"note":"ok"}' > "$D/reply.txt"
+  python3 "$HERE/ai-mock.py" "$D/reply.txt" "$D/requests.log" "$D/port" & MOCK=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$D/port" ] && break; sleep 0.2; done
+  printf '{"providers":[{"id":"mock","name":"Mock","protocol":"openai","baseUrl":"http://127.0.0.1:%s","apiKey":"sk-test","enabled":true,"models":[{"id":"mock-model","enabled":true}]}],"current":{"providerId":"mock","model":"mock-model"}}' "$(cat "$D/port")" > "$D/ai_settings.json"
+  run workspace-testdata "$D" workspace/testdata-sqlite.test.tsx
+  kill $MOCK 2>/dev/null || true
+  grep -q 'CREATE TABLE' "$D/requests.log" || { echo "testdata ai: 请求里没有建表语句"; FAILED=1; }
+  if grep -q 'Boquete\|Grinder' "$D/requests.log"; then echo "testdata ai: 不应发送行数据"; FAILED=1; fi
+  [ "$(sqlite3 "$D/td.db" "select count(*) from products; select count(distinct sku) from products; select count(*) from products p left join categories c on c.id = p.category_id where c.id is null; select count(*) from products where status not in ('active','draft','archived') or price < 0 or length(sku) > 12 or updated_at < created_at; select count(*) from categories; select count(*) from orphan")" = "$(printf '53\n53\n0\n0\n2\n0')" ] \
+    || { echo "testdata: 行数、唯一、外键或 CHECK 不符合预期"; FAILED=1; }
 fi
 
 if want tab; then
