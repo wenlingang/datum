@@ -11,6 +11,7 @@ pub mod commands;
 pub mod completion;
 pub mod diag;
 pub mod core;
+pub mod data_diff;
 pub mod erd;
 pub mod error;
 pub mod explain;
