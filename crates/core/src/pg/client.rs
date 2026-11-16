@@ -467,6 +467,21 @@ impl PgPool {
     }
 }
 
+impl PgPool {
+    /// 在辅助会话上执行一段操作(持有会话锁,期间别的元数据查询插不进来)。
+    /// 事务与清理由调用方负责:索引建议在这里开只读事务、建假想索引,结束前回滚并清掉。
+    pub async fn with_meta<R>(
+        &self,
+        id: &str,
+        f: impl for<'c> FnOnce(&'c Client) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + Send + 'c>>,
+    ) -> AppResult<R> {
+        let conn = self.get(id)?;
+        let mut aux = conn.aux().await?;
+        let client = aux.as_mut().expect("aux 已建立");
+        Ok(f(client).await)
+    }
+}
+
 impl PgConn {
     /// 拿到辅助会话(没建或已断开时先建),返回时持有它的锁,保证 Some。
     async fn aux(&self) -> AppResult<tokio::sync::MutexGuard<'_, Option<Client>>> {
@@ -560,7 +575,7 @@ async fn reset_session(client: &Client, timeout: bool) -> AppResult<()> {
 }
 
 /// 在已拿到的连接上执行 SQL(调用方持有连接锁)。
-async fn run_capped(client: &Client, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
+pub(crate) async fn run_capped(client: &Client, sql: &str, max_rows: Option<u32>) -> AppResult<QueryResult> {
     use futures_util::StreamExt;
     {
         let stream = client.simple_query_raw(sql).await.map_err(|e| {

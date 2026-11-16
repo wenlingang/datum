@@ -126,7 +126,7 @@ impl SqlitePool {
         f(&conn)
     }
 
-    fn with_conn_mut<R>(&self, id: &str, f: impl FnOnce(&mut SqliteConn) -> AppResult<R>) -> AppResult<R> {
+    pub(crate) fn with_conn_mut<R>(&self, id: &str, f: impl FnOnce(&mut SqliteConn) -> AppResult<R>) -> AppResult<R> {
         let entry = self.entry(id)?;
         let mut conn = entry.conn.lock().unwrap_or_else(|e| e.into_inner());
         f(&mut conn)

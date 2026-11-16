@@ -93,6 +93,11 @@ function TabItem(props: { tab: () => WorkTab }) {
           <Icon name="arrow-left-right" size={14} color={active() ? "data" : "fg-faint"} />
         </View>
       </If>
+      <If when={tab().kind === "index"}>
+        <View class="mr-1.5">
+          <Icon name="scan-search" size={14} color={active() ? "data" : "fg-faint"} />
+        </View>
+      </If>
       <If when={tab().kind === "diag"}>
         <View class="mr-1.5">
           <Icon name="stethoscope" size={14} color={active() ? "data" : "fg-faint"} />

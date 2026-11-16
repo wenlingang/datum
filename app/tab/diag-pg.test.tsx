@@ -28,6 +28,24 @@ test("慢 SQL:$1 换成 :p1,填值后出执行计划", async () => {
   app.dispose();
 });
 
+test("慢 SQL → 索引建议:填参数后给出候选;库里没装 hypopg 时标未验证并给出安装语句", async () => {
+  const app = await diag();
+  await app.press("id:diag-tab-slow");
+  await app.waitUntil(() => has(app, "JOIN big b ON a.v < b.v WHERE a.id > $1"), { timeout: 10000 });
+  await app.press("id:diag-sql-menu >> nth=0");
+  await app.press("label:Suggest Indexes");
+  await app.waitFor("id:params-dialog", { timeout: 5000 });
+  await app.type("id:param:p1", "10");
+  await app.press("id:params-run");
+  await app.waitFor("id:index-advisor", { timeout: 10000 });
+  await app.waitUntil(() => has(app, "CREATE INDEX idx_big_id ON big (id);"), { timeout: 15000 });
+  expect(app.texts()).toContain("Unverified");
+  expect(app.shows("id:advisor-install")).toBe(true);
+  await app.press("id:advisor-install");
+  await app.waitUntil(() => has(app, "CREATE EXTENSION hypopg;"), { timeout: 5000 });
+  app.dispose();
+});
+
 test("未使用的索引:生成 DROP INDEX CONCURRENTLY,执行前先确认,执行后索引消失", async () => {
   const app = await diag();
   await app.press("id:diag-tab-unused_indexes");

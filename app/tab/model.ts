@@ -40,6 +40,7 @@ import { maxRows } from "../store/prefs";
 import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
 import { setDetailOpen, type WorkTab } from "../store/workspace";
+import { openIndexAdvisor } from "./advisorModel";
 import { caretOf, primaryRange } from "./textpos";
 
 /** 表浏览每页行数。 */
@@ -821,6 +822,18 @@ export function explain(m: TabModel, override?: string) {
   }
   if (askParams(m, sql, (bound) => explain(m, bound))) return;
   void runExplain(m, sql, false);
+}
+
+/** 为当前 / 选中的语句给出索引建议(新开索引建议 tab);有命名参数时先弹框填值。 */
+export function suggestIndexes(m: TabModel, override?: string) {
+  if (!supportsSql(m.dbKind) || m.kind !== "query") return;
+  const sql = override ?? sqlToRun(m);
+  if (!sql.trim()) {
+    m.err.set(t("tab.empty_sql"));
+    return;
+  }
+  if (askParams(m, sql, (bound) => suggestIndexes(m, bound))) return;
+  openIndexAdvisor(m.connId, m.dbKind, sql);
 }
 
 /** 对当前执行计划的语句真正执行一次(EXPLAIN ANALYZE),拿到实际耗时与行数;只对只读语句开放。 */

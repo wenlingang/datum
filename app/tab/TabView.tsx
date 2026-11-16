@@ -23,6 +23,8 @@ import { Diagnostics } from "./Diagnostics";
 import { SchemaDiff } from "./SchemaDiff";
 import { DataDiff } from "./DataDiff";
 import { isDataDiffModel } from "./dataDiffModel";
+import { advisorModelOf } from "./advisorModel";
+import { IndexAdvisor } from "./IndexAdvisor";
 import { RedisInsight } from "./RedisInsight";
 import { RedisLive } from "./RedisLive";
 import { RedisLua } from "./RedisLua";
@@ -133,6 +135,10 @@ export function TabBody(props: { tab: WorkTab }) {
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
   if (props.tab.kind === "ddiff" && isDataDiffModel(props.tab.state)) return <DataDiff m={props.tab.state} />;
+  if (props.tab.kind === "index") {
+    const am = advisorModelOf(props.tab);
+    return am ? <IndexAdvisor m={am} /> : <Placeholder icon="network" text={t("erd.wip")} />;
+  }
   if (!m) return <Placeholder icon="network" text={t("erd.wip")} />;
   return <ModelView m={m} tabId={props.tab.id} />;
 }

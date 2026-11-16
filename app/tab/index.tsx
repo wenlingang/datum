@@ -23,10 +23,13 @@ import {
   selectionText,
   sendSelectionToAi,
   setSql,
+  suggestIndexes,
   toggleFilter,
   viewRows,
 } from "./model";
 import { hasMaskedColumns, maskedRows } from "./mask";
+import { sql as sqlText } from "../lib/native";
+import { openIndexAdvisor } from "./advisorModel";
 import { TabStatusView } from "./TabStatus";
 import { TabBody } from "./TabView";
 
@@ -247,6 +250,21 @@ export function explainOn(connId: string, sql: string) {
   const tab = newQueryTab(sql);
   const m = modelOf(tab);
   if (m) explain(m);
+}
+
+/** 在指定连接上为一条语句给出索引建议:没有命名参数直接开索引建议 tab;
+ *  有参数(慢 SQL 归一化后的占位符)时先新开查询 tab 弹框填值,填完再开。 */
+export function suggestIndexesOn(connId: string, sql: string) {
+  const conn = conns.get(connId);
+  if (!conn) return;
+  if (sqlText.findParams(sql).length === 0) {
+    openIndexAdvisor(connId, conn.kind, sql);
+    return;
+  }
+  activate(connId);
+  if (!conns.tables(connId) && !conns.isLoading(connId)) void loadTables(connId);
+  const m = modelOf(newQueryTab(sql));
+  if (m) suggestIndexes(m);
 }
 
 /** AI 生成的 SQL「编辑器运行」:只在 connId 上执行;`confirmed` 为卡片已做过破坏性确认。

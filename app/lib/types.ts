@@ -903,6 +903,55 @@ export interface Plan {
   totalMs: number | null;
 }
 
+/** 索引建议:验证方式。 */
+export type AdviceMode = "hypopg" | "sqlite_txn" | "unverified";
+/** 验证结论。 */
+export type Verdict = "helps" | "no_gain" | "not_used" | "skipped" | "error";
+
+/** 一次验证:成本前后、是否用上索引、加索引后的计划。 */
+export interface IndexVerify {
+  verdict: Verdict;
+  costBefore: number | null;
+  costAfter: number | null;
+  /** 成本下降的百分比(负数是变贵) */
+  improvementPct: number | null;
+  usesIndex: boolean;
+  fullScansBefore: number;
+  fullScansAfter: number;
+  sortsBefore: number;
+  sortsAfter: number;
+  plan: Plan | null;
+  message: string | null;
+}
+
+/** 一个候选索引与它的验证结果(未验证为 null)。 */
+export interface IndexCandidate {
+  table: string;
+  tableSql: string;
+  columns: { name: string; desc: boolean }[];
+  reason: string;
+  source: "rule" | "ai";
+  name: string;
+  ddl: string;
+  /** 放进编辑器的语句(PG CONCURRENTLY / MySQL 在线 DDL) */
+  editorSql: string;
+  verify: IndexVerify | null;
+}
+
+/** 索引建议的结果。 */
+export interface IndexAdvice {
+  sql: string;
+  mode: AdviceMode;
+  note: string;
+  /** hypopg 可用但没装时的安装语句 */
+  installSql: string | null;
+  baseline: Plan | null;
+  baselineError: string | null;
+  candidates: IndexCandidate[];
+  combo: { names: string[]; used: string[]; verify: IndexVerify } | null;
+  ai: { added: number; dropped: string[]; error: string | null; masked: boolean } | null;
+}
+
 /** 表结构对比的一张表。 */
 export interface TableDiff {
   kind: "table" | "view" | "trigger";

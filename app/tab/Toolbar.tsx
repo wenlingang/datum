@@ -10,7 +10,7 @@ import { Btn, Icon, TextField, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { HistoryPanel } from "./History";
 import { SnippetPanel } from "./Snippets";
-import { beautify, explain, run, runAll, stop, type TabModel } from "./model";
+import { beautify, explain, run, runAll, stop, suggestIndexes, type TabModel } from "./model";
 
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
 
@@ -33,6 +33,17 @@ function LimitMenu(props: { m: TabModel }) {
       >
         <Text class={`${FS.xs} flex-1 text-foreground`}>{t("toolbar.run_all")}</Text>
         <Text class={`${FS.xs} text-fg-faint`}>⌘⇧↵</Text>
+      </Button>
+      <Button
+        testID="suggest-indexes"
+        tooltip={tip(t("advisor.suggest_tooltip"))}
+        onPress={() => {
+          m.limitOpen.set(false);
+          suggestIndexes(m);
+        }}
+        class="h-[26px] flex-row items-center gap-2 rounded-(--radius) px-2.5 hover:bg-list-hover"
+      >
+        <Text class={`${FS.xs} flex-1 text-foreground`}>{t("advisor.suggest")}</Text>
       </Button>
       <View class="my-1 border-t border-border" />
       <Text class={`${FS.xs} px-2 pb-1 font-bold text-fg-faint`}>{t("toolbar.limit_title")}</Text>
@@ -131,6 +142,7 @@ export function Toolbar(props: { m: TabModel }) {
         <Btn
           small
           variant="ghost"
+          testID="explain"
           icon="list-tree"
           label="Explain"
           kbd="⌘E"

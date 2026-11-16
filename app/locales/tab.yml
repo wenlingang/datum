@@ -3091,3 +3091,205 @@ rlua:
       en: "The script calls a command that can't be used inside scripts."
       zh-CN: "脚本调用了不允许在脚本中使用的命令。"
       zh-TW: "腳本呼叫了不允許在腳本中使用的指令。"
+advisor:
+  suggest:
+    en: Suggest Indexes
+    zh-CN: 索引建议
+    zh-TW: 索引建議
+  suggest_tooltip:
+    en: Propose indexes for this statement and prove they help against the execution plan, before anything is created
+    zh-CN: 为这条语句提出候选索引,先用执行计划证明有用,再决定建不建
+    zh-TW: 為這條語句提出候選索引,先用執行計畫證明有用,再決定建不建
+  title:
+    en: Index Advisor
+    zh-CN: 索引建议
+    zh-TW: 索引建議
+  subtitle:
+    en: Verified against the plan before anything is created
+    zh-CN: 建索引之前,先用执行计划验证
+    zh-TW: 建索引之前,先用執行計畫驗證
+  rerun:
+    en: Re-run
+    zh-CN: 重新分析
+    zh-TW: 重新分析
+  running:
+    en: Analyzing the statement and verifying candidates…
+    zh-CN: 正在分析语句、验证候选…
+    zh-TW: 正在分析語句、驗證候選…
+  ask_ai:
+    en: Ask AI for More
+    zh-CN: 让 AI 补充
+    zh-TW: 讓 AI 補充
+  ask_ai_tooltip:
+    en: Sends the SQL, table definitions and current plan (no row data) to the AI provider; its candidates are checked locally and verified like the others
+    zh-CN: 把 SQL、表结构与当前执行计划(不含行数据)发给 AI 服务商;它给的候选在本地校验后同样验证
+    zh-TW: 把 SQL、資料表結構與目前執行計畫(不含列資料)送給 AI 服務商;它給的候選在本機校驗後同樣驗證
+  ai_not_ready:
+    en: AI provider not configured. Add one in Settings.
+    zh-CN: 还没配置 AI 服务商,请在设置里添加。
+    zh-TW: 還沒設定 AI 服務商,請在設定裡新增。
+  ai_added:
+    en: "AI added %{n} candidate(s)."
+    zh-CN: "AI 补充了 %{n} 个候选。"
+    zh-TW: "AI 補充了 %{n} 個候選。"
+  ai_dropped:
+    en: "Dropped AI suggestions (unknown table or column, or already indexed): %{list}"
+    zh-CN: "丢掉的 AI 建议(表或列不存在,或已有索引):%{list}"
+    zh-TW: "捨棄的 AI 建議(資料表或欄位不存在,或已有索引):%{list}"
+  ai_failed:
+    en: "AI suggestions failed: %{error}"
+    zh-CN: "AI 建议失败:%{error}"
+    zh-TW: "AI 建議失敗:%{error}"
+  ai_masked:
+    en: "Production connection without AI data access: literals in the SQL and plan were replaced with ? before sending."
+    zh-CN: "生产库未允许 AI 读数据:发送前已把 SQL 与计划里的字面量换成 ?。"
+    zh-TW: "正式環境未允許 AI 讀取資料:送出前已把 SQL 與計畫裡的字面值換成 ?。"
+  mode_verified:
+    en: Verified
+    zh-CN: 已验证
+    zh-TW: 已驗證
+  mode_unverified:
+    en: Unverified
+    zh-CN: 未验证
+    zh-TW: 未驗證
+  install_hypopg:
+    en: Open CREATE EXTENSION in Editor
+    zh-CN: 在编辑器中打开 CREATE EXTENSION
+    zh-TW: 在編輯器中開啟 CREATE EXTENSION
+  install_note:
+    en: Installs hypopg (hypothetical indexes) in this database. Needs the extension package on the server and the privilege to create extensions.
+    zh-CN: 在这个库里安装 hypopg(假想索引)。需要服务器上有扩展包,并有建扩展的权限。
+    zh-TW: 在這個資料庫裡安裝 hypopg(假想索引)。需要伺服器上有擴充套件,並有建立擴充的權限。
+  no_candidates:
+    en: No index suggestions. The statement's filters, joins and sorting are already covered by existing indexes, or don't use plain columns.
+    zh-CN: 没有索引建议。语句的过滤、连接与排序已被现有索引覆盖,或者用的不是普通列。
+    zh-TW: 沒有索引建議。語句的篩選、連接與排序已被現有索引涵蓋,或者用的不是一般欄位。
+  source_rule:
+    en: Rule
+    zh-CN: 规则
+    zh-TW: 規則
+  source_ai:
+    en: AI
+    zh-CN: AI
+    zh-TW: AI
+  verdict:
+    helps:
+      en: Helps
+      zh-CN: 有收益
+      zh-TW: 有效益
+    no_gain:
+      en: No clear gain
+      zh-CN: 收益不明显
+      zh-TW: 效益不明顯
+    not_used:
+      en: Not used by the plan
+      zh-CN: 计划没用上
+      zh-TW: 計畫沒用上
+    skipped:
+      en: Not verified
+      zh-CN: 未验证
+      zh-TW: 未驗證
+    error:
+      en: Verification failed
+      zh-CN: 验证失败
+      zh-TW: 驗證失敗
+    unverified:
+      en: Unverified
+      zh-CN: 未验证
+      zh-TW: 未驗證
+  cost:
+    en: "Cost %{before} → %{after}"
+    zh-CN: "成本 %{before} → %{after}"
+    zh-TW: "成本 %{before} → %{after}"
+  uses_index:
+    en: "Plan uses index: %{answer}"
+    zh-CN: "计划用上索引:%{answer}"
+    zh-TW: "計畫用上索引:%{answer}"
+  answer_yes:
+    en: "yes"
+    zh-CN: 是
+    zh-TW: 是
+  answer_no:
+    en: "no"
+    zh-CN: 否
+    zh-TW: 否
+  full_scans:
+    en: "Full scans %{before} → %{after}"
+    zh-CN: "全表扫描 %{before} → %{after}"
+    zh-TW: "全表掃描 %{before} → %{after}"
+  sorts:
+    en: "Sorts %{before} → %{after}"
+    zh-CN: "排序 %{before} → %{after}"
+    zh-TW: "排序 %{before} → %{after}"
+  open_create:
+    en: Open CREATE INDEX in Editor
+    zh-CN: 在编辑器中打开 CREATE INDEX
+    zh-TW: 在編輯器中開啟 CREATE INDEX
+  open_alter:
+    en: Open ALTER TABLE in Editor
+    zh-CN: 在编辑器中打开 ALTER TABLE
+    zh-TW: 在編輯器中開啟 ALTER TABLE
+  open_tooltip:
+    en: Puts the statement in a new editor tab. Nothing runs until you run it there, and it goes through the usual risk review
+    zh-CN: 把语句放进新的编辑器标签页。在那里运行前什么都不会执行,运行时照常过风险审查
+    zh-TW: 把語句放進新的編輯器分頁。在那裡執行前什麼都不會執行,執行時照常經過風險審查
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Statement copied
+    zh-CN: 已复制语句
+    zh-TW: 已複製語句
+  editor_note:
+    en: "Suggested by the index advisor. Running this creates a real index: check the table size and the risk review first."
+    zh-CN: "来自索引建议。执行会建真实的索引:先看看表的大小与风险审查。"
+    zh-TW: "來自索引建議。執行會建立真實的索引:先看看資料表大小與風險審查。"
+  editor_note_pg:
+    en: CONCURRENTLY doesn't block writes while building, but can't run inside a transaction block.
+    zh-CN: CONCURRENTLY 建索引期间不阻塞写入,但不能在事务块里执行。
+    zh-TW: CONCURRENTLY 建索引期間不阻塞寫入,但不能在交易區塊裡執行。
+  editor_note_mysql:
+    en: ALGORITHM=INPLACE, LOCK=NONE builds online without blocking writes; the server refuses it if that's not possible.
+    zh-CN: ALGORITHM=INPLACE, LOCK=NONE 在线建索引、不阻塞写入;做不到时服务器会直接拒绝。
+    zh-TW: ALGORITHM=INPLACE, LOCK=NONE 線上建索引、不阻塞寫入;做不到時伺服器會直接拒絕。
+  combo_title:
+    en: All helpful candidates together
+    zh-CN: 有收益的候选一起加上
+    zh-TW: 有效益的候選一起加上
+  combo_used:
+    en: "The plan uses: %{names}"
+    zh-CN: "计划实际用上:%{names}"
+    zh-TW: "計畫實際用上:%{names}"
+  combo_tab:
+    en: Combined
+    zh-CN: 组合
+    zh-TW: 組合
+  compare:
+    en: Compare plans
+    zh-CN: 计划对比
+    zh-TW: 計畫對比
+  plan_before:
+    en: Current plan
+    zh-CN: 现在的计划
+    zh-TW: 目前的計畫
+  plan_after:
+    en: "With %{name}"
+    zh-CN: "加上 %{name} 后"
+    zh-TW: "加上 %{name} 後"
+  plan_after_empty:
+    en: With the index
+    zh-CN: 加上索引后
+    zh-TW: 加上索引後
+  no_after_plan:
+    en: "No plan to compare: candidates aren't verified on this connection."
+    zh-CN: "没有可对比的计划:这个连接上的候选没有验证。"
+    zh-TW: "沒有可對比的計畫:這個連線上的候選沒有驗證。"
+  no_plan_tree:
+    en: The current plan isn't available as a tree.
+    zh-CN: 现在的计划没法显示成树形。
+    zh-TW: 目前的計畫沒辦法顯示成樹狀。
+  baseline_failed:
+    en: "Couldn't get the current plan: %{error}"
+    zh-CN: "取不到现在的执行计划:%{error}"
+    zh-TW: "取不到目前的執行計畫:%{error}"

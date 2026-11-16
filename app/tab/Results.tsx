@@ -10,7 +10,7 @@ import { Btn, Dot, Hint, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
 import { PlanView } from "./PlanView";
-import { aiExplainPlan, aiFixError, canAnalyze, explainAnalyze, selectResult, type StmtResult, viewIndices, type TabModel } from "./model";
+import { aiExplainPlan, aiFixError, canAnalyze, explainAnalyze, selectResult, type StmtResult, suggestIndexes, viewIndices, type TabModel } from "./model";
 import { ErrorText } from "../ui/error";
 
 function okSummary(m: TabModel): string {
@@ -196,6 +196,15 @@ export function Results(props: { m: TabModel }) {
                   onPress={() => explainAnalyze(m)}
                 />
               </If>
+              <Btn
+                testID="plan-suggest-indexes"
+                small
+                variant="outline"
+                icon="scan-search"
+                label={t("advisor.suggest")}
+                tooltip={t("advisor.suggest_tooltip")}
+                onPress={() => suggestIndexes(m, m.lastRun()?.sql)}
+              />
               <Btn
                 testID="ai-explain-plan"
                 small

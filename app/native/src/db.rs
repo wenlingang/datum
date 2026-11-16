@@ -565,6 +565,17 @@ impl Db {
             .and_then(json)
     }
 
+    /// 索引建议:规则候选(`with_ai` 时再请 AI 补充)并验证,不在库里建任何东西:
+    /// `{ sql, mode, note, installSql, baseline, candidates: [{ …, verify }], combo, ai }`。
+    pub async fn index_advise(kind: String, id: String, sql: String, with_ai: bool) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        let opts = datum_core::advisor::Options { with_ai, ..Default::default() };
+        spawn(async move { datum_core::advisor::advise(&state(), &k, &id, &sql, &opts).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
     /// 表结构对比:`{ tables: [{ name, status, changes }], same, sql }`;脚本让目标库与源库一致。
     pub async fn schema_diff(kind: String, source_id: String, target_id: String) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;

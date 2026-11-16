@@ -15,7 +15,7 @@ import { FS, MONO } from "../ui/text";
 import { formatBytes } from "./RedisInsight";
 import { ErrorText } from "../ui/error";
 import { DropMenu, MItem } from "../ui/menu";
-import { explainOn, openQueryOn } from "./index";
+import { explainOn, openQueryOn, suggestIndexesOn } from "./index";
 import { namedPlaceholders } from "./placeholders";
 
 /** 自动刷新间隔。 */
@@ -147,6 +147,7 @@ function SqlMenu(props: {
         <MItem label={t("diag.open_in_editor")} onSelect={() => openQueryOn(props.connId, prepared())} />
         <If when={props.section === "slow"}>
           <MItem label={t("diag.explain")} onSelect={() => explainOn(props.connId, prepared())} />
+          <MItem label={t("advisor.suggest")} onSelect={() => suggestIndexesOn(props.connId, prepared())} />
         </If>
         <MItem
           label={t("diag.ask_ai")}
