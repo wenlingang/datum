@@ -697,6 +697,83 @@ core:
       en: "Migration: makes the target match the source. Statements that drop anything are commented out; uncomment them after checking."
       zh-CN: "迁移脚本:让目标库与源库一致。删除类语句已注释,确认后再取消注释。"
       zh-TW: "遷移腳本:讓目標庫與來源庫一致。刪除類語句已註解,確認後再取消註解。"
+  ddiff:
+    no_table:
+      en: "Table %{table} doesn't exist or has no columns"
+      zh-CN: "表 %{table} 不存在或没有列"
+      zh-TW: "資料表 %{table} 不存在或沒有欄位"
+    no_key:
+      en: "The source table has no primary key. Pick unique key columns to match rows by; without a key, rows can't be paired up reliably"
+      zh-CN: "源表没有主键。请选唯一键列用来对齐行;没有键就无法可靠地把两边的行一一对应"
+      zh-TW: "來源資料表沒有主鍵。請選唯一鍵欄位用來對齊列;沒有鍵就無法可靠地把兩邊的列一一對應"
+    key_missing:
+      en: "Key column %{column} isn't in both tables"
+      zh-CN: "键列 %{column} 不是两张表都有"
+      zh-TW: "鍵欄位 %{column} 不是兩張資料表都有"
+    bad_filter:
+      en: "The filter must be a single condition (no semicolons)"
+      zh-CN: "筛选条件只能是一个条件表达式(不能含分号)"
+      zh-TW: "篩選條件只能是一個條件運算式(不能含分號)"
+    source:
+      en: "source"
+      zh-CN: "源表"
+      zh-TW: "來源資料表"
+    target:
+      en: "target"
+      zh-CN: "目标表"
+      zh-TW: "目標資料表"
+    read_failed:
+      en: "Couldn't read the %{side}"
+      zh-CN: "读取%{side}失败"
+      zh-TW: "讀取%{side}失敗"
+    dup_key:
+      en: "The key isn't unique: two rows have the same key. Pick a primary key or unique key"
+      zh-CN: "键不唯一:有两行的键相同。请选主键或唯一键"
+      zh-TW: "鍵不唯一:有兩列的鍵相同。請選主鍵或唯一鍵"
+    order_mismatch:
+      en: "The database sorts this key differently from byte order (e.g. enum or time zone columns), so rows can't be paired safely. Pick another key"
+      zh-CN: "数据库对这个键的排序与字节序不一致(如枚举、带时区的时间列),无法安全对齐行。请换一个键"
+      zh-TW: "資料庫對這個鍵的排序與位元組序不一致(如列舉、帶時區的時間欄位),無法安全對齊列。請換一個鍵"
+    no_report:
+      en: "No finished comparison; run it again"
+      zh-CN: "没有已完成的对比,请重新对比"
+      zh-TW: "沒有已完成的對比,請重新對比"
+    header:
+      en: "Data sync: makes table %{target} match %{source}. Run on the target. Deletes are commented out unless included."
+      zh-CN: "数据同步脚本:让表 %{target} 与 %{source} 一致,在目标库上执行。删除语句默认已注释。"
+      zh-TW: "資料同步腳本:讓資料表 %{target} 與 %{source} 一致,在目標庫上執行。刪除語句預設已註解。"
+    identical:
+      en: "The data is identical; nothing to sync"
+      zh-CN: "数据一致,无需同步"
+      zh-TW: "資料一致,無需同步"
+    script_truncated:
+      en: "Warning: only the first %{kept} of %{total} differences are kept, so this script is partial. Narrow the filter and compare again for the rest."
+      zh-CN: "注意:%{total} 处差异只保留了前 %{kept} 处,脚本不完整。缩小筛选范围后再对比剩下的。"
+      zh-TW: "注意:%{total} 處差異只保留了前 %{kept} 處,腳本不完整。縮小篩選範圍後再對比剩下的。"
+    script_capped:
+      en: "Warning: the row limit (%{n} per side) was reached; only rows up to that point (in key order) were compared."
+      zh-CN: "注意:达到行数上限(每边 %{n} 行),只对比了(按键排序)前面这一段。"
+      zh-TW: "注意:達到列數上限(每邊 %{n} 列),只對比了(按鍵排序)前面這一段。"
+    script_target_cols:
+      en: "Columns only in the target are left as is (new rows get their defaults): %{cols}"
+      zh-CN: "只在目标表有的列保持不变(新插入的行取默认值):%{cols}"
+      zh-TW: "只在目標資料表有的欄位保持不變(新插入的列取預設值):%{cols}"
+    section_delete:
+      en: "Rows only in the target: %{n} (delete)"
+      zh-CN: "只在目标表的行:%{n} 行(删除)"
+      zh-TW: "只在目標資料表的列:%{n} 列(刪除)"
+    section_delete_commented:
+      en: "Rows only in the target: %{n} (delete, commented out; turn on Include Deletes or uncomment after checking)"
+      zh-CN: "只在目标表的行:%{n} 行(删除,已注释;打开「包含删除」或确认后取消注释)"
+      zh-TW: "只在目標資料表的列:%{n} 列(刪除,已註解;打開「包含刪除」或確認後取消註解)"
+    section_update:
+      en: "Rows that differ: %{n} (update changed columns)"
+      zh-CN: "值不同的行:%{n} 行(只更新变化的列)"
+      zh-TW: "值不同的列:%{n} 列(只更新變化的欄位)"
+    section_insert:
+      en: "Rows only in the source: %{n} (insert)"
+      zh-CN: "只在源表的行:%{n} 行(插入)"
+      zh-TW: "只在來源資料表的列:%{n} 列(插入)"
   completion:
     table:
       en: Table

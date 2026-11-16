@@ -9,7 +9,7 @@ import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables, refreshTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { openDiagnostics, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
+import { openDataDiff, openDiagnostics, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
 import { NewKeyDialog } from "../tab/RedisKeyEditor";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
@@ -72,6 +72,7 @@ function ConnMenuItems(props: { conn: Connection }) {
         </If>
         <MItem label={t("sidebar.export_database")} onSelect={() => void exportDatabase(c.id)} />
         <MItem label={t("sidebar.schema_diff")} onSelect={() => openSchemaDiff(c.id)} />
+        <MItem label={t("sidebar.data_diff")} onSelect={() => openDataDiff(c.id)} />
       </If>
       <MSep />
       <MItem label={t("sidebar.delete")} danger onSelect={() => void confirmDeleteConnection(c)} />
@@ -93,6 +94,7 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
       <MItem label={t("sidebar.view_table_detail")} onSelect={() => showTableDetail(connId, table)} />
       <MItem label={t("workspace.copy_table_name")} onSelect={() => void copyText(table)} />
       <MItem label={t("sidebar.view_ddl")} onSelect={() => void showDdl(connId, table)} />
+      <MItem label={t("sidebar.data_diff_table")} onSelect={() => openDataDiff(connId, table)} />
       <If when={kind === "sqlite"}>
         <MItem label={t("sidebar.alter_table")} onSelect={() => showAlterTable(connId, table)} />
       </If>

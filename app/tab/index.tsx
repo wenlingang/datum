@@ -7,6 +7,7 @@ import { supportsSql } from "../lib/types";
 import { toast } from "../store/toast";
 import { addTab, focusTab, newTabId, setResultToolsProvider, workspace, type WorkTab } from "../store/workspace";
 import { createErdModel } from "../erd/model";
+import { createDataDiffModel, dataDiffTitle, isDataDiffModel } from "./dataDiffModel";
 import { DetailPanelView } from "./DetailPanel";
 import {
   beautify,
@@ -207,6 +208,28 @@ export function openSchemaDiff(connId: string) {
     table: null,
     title: signal(t("sdiff.title")),
     state: null,
+  });
+}
+
+/** 打开数据对比 tab:本连接为源,`table` 为预选的源表(同一连接同一张表复用已开的 tab)。 */
+export function openDataDiff(connId: string, table: string | null = null) {
+  const conn = conns.get(connId);
+  if (!conn || !supportsSql(conn.kind)) return;
+  const existing = workspace
+    .tabs()
+    .find((x) => x.kind === "ddiff" && x.connId === connId && x.table === table && isDataDiffModel(x.state));
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "ddiff",
+    connId,
+    dbKind: conn.kind,
+    table,
+    title: signal(dataDiffTitle(table)),
+    state: createDataDiffModel(connId, table),
   });
 }
 

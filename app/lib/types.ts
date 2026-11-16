@@ -918,6 +918,76 @@ export interface DiffReport {
   sql: string;
 }
 
+/** 数据对比的一边:连接 + 表名。 */
+export interface DataDiffSide {
+  connId: string;
+  table: string;
+}
+
+/** 数据对比:两张表的结构对照(可用的键、两边都有 / 只在一边的列)。 */
+export interface DataDiffInspection {
+  primaryKey: string[];
+  targetPrimaryKey: string[];
+  uniqueKeys: { name: string; columns: string[] }[];
+  common: string[];
+  onlySource: string[];
+  onlyTarget: string[];
+}
+
+/** 数据对比参数;`key` 为空表示用源表主键。 */
+export interface DataDiffSpec {
+  kind: DbKind;
+  source: DataDiffSide;
+  target: DataDiffSide;
+  key: string[];
+  filter: string | null;
+  maxRows: number;
+}
+
+export type DataDiffKind = "onlySource" | "onlyTarget" | "different";
+
+/** 一条差异行;值与报告的 columns 对齐(二进制列为十六进制)。 */
+export interface DataDiffRow {
+  kind: DataDiffKind;
+  key: (string | null)[];
+  source: (string | null)[] | null;
+  target: (string | null)[] | null;
+  /** 值不同的列下标 */
+  changed: number[];
+}
+
+/** 数据对比报告:计数准确,差异行最多保留一万条(truncated 为 true 时有省略)。 */
+export interface DataDiffReport {
+  sourceTable: string;
+  targetTable: string;
+  columns: string[];
+  classes: ("number" | "binary" | "json" | "text" | null)[];
+  key: string[];
+  onlySourceColumns: string[];
+  onlyTargetColumns: string[];
+  identical: number;
+  onlySource: number;
+  onlyTarget: number;
+  different: number;
+  sourceRows: number;
+  targetRows: number;
+  rows: DataDiffRow[];
+  truncated: boolean;
+  capped: boolean;
+  maxRows: number;
+  cancelled: boolean;
+}
+
+/** 数据对比后台任务的进度;完成后 report 有值(出错时 error 有值)。 */
+export interface DataDiffProgress {
+  sourceRows: number;
+  targetRows: number;
+  done: boolean;
+  cancelled: boolean;
+  error: string | null;
+  report: DataDiffReport | null;
+}
+
 /** SQLite 连接上会被脚本改动的设置(多语句执行出错后按它恢复)。 */
 export interface SqliteSessionFlags {
   legacyAlterTable: boolean;

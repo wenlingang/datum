@@ -573,4 +573,47 @@ impl Db {
             .map_err(err)
             .and_then(json)
     }
+
+    /// 数据对比:两张表的结构对照 `{ primaryKey, targetPrimaryKey, uniqueKeys, common, onlySource, onlyTarget }`。
+    pub async fn data_diff_inspect(kind: String, source: JsonValue, target: JsonValue) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        let source: datum_core::data_diff::Side = from(source, "source")?;
+        let target: datum_core::data_diff::Side = from(target, "target")?;
+        spawn(async move { datum_core::data_diff::inspect(&state(), &k, &source, &target).await })
+            .await?
+            .map_err(err)
+            .and_then(json)
+    }
+
+    /// 数据对比:后台开始,返回任务 id;用 `data_diff_progress` 轮询。
+    pub async fn data_diff_start(spec: JsonValue) -> Result<String, String> {
+        let spec: datum_core::data_diff::Spec = from(spec, "spec")?;
+        spawn(async move {
+            let st = state();
+            st.data_diffs.start(st.clone(), spec)
+        })
+        .await
+    }
+
+    /// 数据对比的进度 `{ sourceRows, targetRows, done, cancelled, error, report }`;任务不存在为 null。
+    pub fn data_diff_progress(job: String) -> Result<JsonValue, String> {
+        json(state().data_diffs.progress(&job))
+    }
+
+    /// 取消进行中的数据对比(在两块之间生效)。
+    pub fn data_diff_cancel(job: String) -> Result<(), String> {
+        state().data_diffs.cancel(&job);
+        Ok(())
+    }
+
+    /// 丢弃数据对比任务(释放差异行)。
+    pub fn data_diff_close(job: String) -> Result<(), String> {
+        state().data_diffs.close(&job);
+        Ok(())
+    }
+
+    /// 数据对比的同步脚本(让目标表与源表一致);`include_deletes` 为 false 时 DELETE 被注释。
+    pub fn data_diff_script(job: String, include_deletes: bool) -> Result<String, String> {
+        state().data_diffs.script(&job, include_deletes).map_err(err)
+    }
 }

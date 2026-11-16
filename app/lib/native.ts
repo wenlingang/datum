@@ -42,6 +42,10 @@ import type {
   MaskKind,
   MaskOverride,
   MaskSettingsView,
+  DataDiffInspection,
+  DataDiffProgress,
+  DataDiffSide,
+  DataDiffSpec,
   AlterOutcome,
   AlterPlan,
   AlterScript,
@@ -226,6 +230,16 @@ export const db = {
   /** 表结构对比:脚本让目标库与源库一致(删除类语句已注释)。 */
   schemaDiff: async (kind: DbKind, sourceId: string, targetId: string) =>
     (await Db.schemaDiff(kind, sourceId, targetId)) as DiffReport,
+  /** 数据对比:两张表的结构对照(主键、唯一键、共同列)。 */
+  dataDiffInspect: async (kind: DbKind, source: DataDiffSide, target: DataDiffSide) =>
+    (await Db.dataDiffInspect(kind, source, target)) as DataDiffInspection,
+  /** 数据对比:后台开始,返回任务 id;用 dataDiffProgress 轮询。 */
+  dataDiffStart: (spec: DataDiffSpec) => Db.dataDiffStart(spec) as Promise<string>,
+  dataDiffProgress: (job: string) => Db.dataDiffProgress(job) as DataDiffProgress | null,
+  dataDiffCancel: (job: string) => Db.dataDiffCancel(job) as void,
+  dataDiffClose: (job: string) => Db.dataDiffClose(job) as void,
+  /** 同步脚本(让目标表与源表一致);includeDeletes 为 false 时 DELETE 被注释。 */
+  dataDiffScript: (job: string, includeDeletes: boolean) => Db.dataDiffScript(job, includeDeletes) as string,
   /** 执行计划(树 + 原始输出);`analyze` 会真正执行,只接受只读语句。 */
   explainPlan: async (kind: DbKind, id: string, sql: string, analyze: boolean) =>
     (await Db.explainPlan(kind, id, sql, analyze)) as Plan,
