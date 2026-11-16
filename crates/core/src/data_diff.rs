@@ -408,7 +408,8 @@ fn select_expr(c: &Col, d: Dialect, col_type: &str) -> String {
     match (c.class, d) {
         (ColClass::Binary, Dialect::Pg) => format!("encode({q}, 'hex')"),
         (ColClass::Binary, Dialect::Mysql) => format!("HEX({q})"),
-        (ColClass::Binary, Dialect::Sqlite) => format!("hex({q})"),
+        // SQLite 的 hex(NULL) 是空串:NULL 要单独保留,否则与空 BLOB 分不开
+        (ColClass::Binary, Dialect::Sqlite) => format!("CASE WHEN {q} IS NULL THEN NULL ELSE hex({q}) END"),
         (ColClass::Number, Dialect::Mysql) if is_mysql_bit(col_type) => format!("CAST({q} AS UNSIGNED)"),
         _ => q,
     }

@@ -254,19 +254,23 @@ async fn sqlite_same_connection_two_tables() {
     let a = st.config_dir.join("one.db");
     rusqlite::Connection::open(&a).unwrap();
     let id = connect(&st, DbKind::Sqlite, 0, "", "", Some(a.display().to_string())).await;
-    exec(&st, DbKind::Sqlite, &id, "CREATE TABLE t1 (id INTEGER PRIMARY KEY, v TEXT COLLATE NOCASE)").await;
-    exec(&st, DbKind::Sqlite, &id, "CREATE TABLE t2 (id INTEGER PRIMARY KEY, v TEXT)").await;
-    exec(&st, DbKind::Sqlite, &id, "INSERT INTO t1 VALUES (1, 'A'), (2, 'b')").await;
-    exec(&st, DbKind::Sqlite, &id, "INSERT INTO t2 VALUES (1, 'a'), (2, 'b')").await;
+    exec(&st, DbKind::Sqlite, &id, "CREATE TABLE t1 (id INTEGER PRIMARY KEY, v TEXT COLLATE NOCASE, b BLOB)").await;
+    exec(&st, DbKind::Sqlite, &id, "CREATE TABLE t2 (id INTEGER PRIMARY KEY, v TEXT, b BLOB)").await;
+    // id 3:NULL 与空 BLOB 不同(SQLite 的 hex(NULL) 是空串,不能混为一谈)
+    exec(&st, DbKind::Sqlite, &id, "INSERT INTO t1 VALUES (1, 'A', NULL), (2, 'b', NULL), (3, 'c', NULL)").await;
+    exec(&st, DbKind::Sqlite, &id, "INSERT INTO t2 VALUES (1, 'a', NULL), (2, 'b', NULL), (3, 'c', X'')").await;
     let s = Spec::new(
         DbKind::Sqlite,
         Side { conn_id: id.clone(), table: "t1".into() },
         Side { conn_id: id.clone(), table: "t2".into() },
     );
     let r = compare(&st, &s).await;
-    assert_eq!((r.identical, r.different), (1, 1));
+    assert_eq!((r.identical, r.different), (1, 2));
     let script = data_diff::script(&r, false);
     assert!(script.contains("UPDATE \"t2\" SET \"v\" = 'A' WHERE \"id\" = 1;"), "{script}");
+    assert!(script.contains("UPDATE \"t2\" SET \"b\" = NULL WHERE \"id\" = 3;"), "{script}");
+    apply(&st, DbKind::Sqlite, &id, &script).await;
+    assert_eq!(compare(&st, &s).await.total_diffs(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
