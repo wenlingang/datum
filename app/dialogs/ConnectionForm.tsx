@@ -6,6 +6,7 @@ import { t } from "nsh/i18n";
 import { dialogsNative, errorText, probeDatabases, store } from "../lib/native";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSH_AUTHS, type SshAuth, SSL_MODES } from "../lib/types";
 import { activate, loadTables, saveConnection } from "../store/conns";
+import { privacy } from "../store/privacy";
 import { toast } from "../store/toast";
 import { Btn, DbIcon, envLabel, envToken, Hint, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
@@ -61,7 +62,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
   const sqlite = () => d().kind === "sqlite";
   const preview = () => {
     try {
-      return previewString(d());
+      return previewString(d(), privacy.demo());
     } catch {
       return "";
     }

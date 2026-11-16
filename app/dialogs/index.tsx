@@ -5,14 +5,17 @@ import type { JSX } from "nsh";
 import type { Connection } from "../lib/types";
 import { ConnectionFormDialog } from "./ConnectionForm";
 import { ImportDialog } from "./Import";
+import { PrivacyDialog } from "./PrivacyDialog";
 import { SettingsDialog } from "./Settings";
 import {
   closeConnForm,
   closeImport,
+  closePrivacy,
   closeSettings,
   dialogState,
   showConnForm,
   showImport,
+  showPrivacy,
   showSettings,
   type SettingsSection,
 } from "./state";
@@ -45,6 +48,11 @@ export function openImportData(connId: string) {
   showImport(connId, "data");
 }
 
+/** 连接的「数据与隐私」:敏感数据遮罩开关与识别出的敏感列。 */
+export function openPrivacy(connId: string) {
+  showPrivacy(connId);
+}
+
 /** 挂在根部的对话框宿主(各对话框的 Dialog 在这里渲染)。 */
 export function DialogHost(): JSX.Element {
   return (
@@ -57,6 +65,9 @@ export function DialogHost(): JSX.Element {
       </Each>
       <Each of={dialogState.import() ? [dialogState.import()!] : []} key={(r) => r.key}>
         {(r) => <ImportDialog open connId={r().connId} mode={r().mode} onClose={closeImport} />}
+      </Each>
+      <Each of={dialogState.privacy() ? [dialogState.privacy()!] : []} key={(r) => r.key}>
+        {(r) => <PrivacyDialog open connId={r().connId} onClose={closePrivacy} />}
       </Each>
     </>
   );

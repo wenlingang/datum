@@ -26,16 +26,24 @@ export interface ImportRequest {
   mode: ImportMode;
 }
 
+/** 连接的「数据与隐私」(敏感数据遮罩)。 */
+export interface PrivacyRequest {
+  key: number;
+  connId: string;
+}
+
 let nextKey = 1;
 
 const connForm = signal<ConnFormRequest | null>(null);
 const settings = signal<SettingsRequest | null>(null);
 const importReq = signal<ImportRequest | null>(null);
+const privacyReq = signal<PrivacyRequest | null>(null);
 
 export const dialogState = {
   connForm: () => connForm(),
   settings: () => settings(),
   import: () => importReq(),
+  privacy: () => privacyReq(),
 };
 
 export function showConnForm(conn?: Connection, database?: string) {
@@ -52,3 +60,8 @@ export function showImport(connId: string, mode: ImportMode = "sql") {
   importReq.set({ key: nextKey++, connId, mode });
 }
 export const closeImport = () => importReq.set(null);
+
+export function showPrivacy(connId: string) {
+  privacyReq.set({ key: nextKey++, connId });
+}
+export const closePrivacy = () => privacyReq.set(null);

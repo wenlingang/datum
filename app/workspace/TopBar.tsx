@@ -7,6 +7,7 @@ import { titleBar } from "nsh/desktop";
 import { t } from "nsh/i18n";
 import { openSettings } from "../dialogs";
 import type { Connection } from "../lib/types";
+import { privacy, hideInDemo, toggleDemoMode } from "../store/privacy";
 import { toggleAi, toggleSidebar, workspace } from "../store/workspace";
 import { BrandLine, BrandWash, Dot, Icon, IconButton, tip, VSep } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
@@ -17,7 +18,8 @@ export function headDbLabel(c: Connection): string {
   if (c.kind === "sqlite") {
     const p = c.filePath ?? "";
     const name = p.split(/[\\/]/).pop();
-    return name || "—";
+    // 演示模式:不露出文件名(常带着用户名、项目名)
+    return name ? hideInDemo(name) : "—";
   }
   if (c.kind === "redis") return `db${c.database}`;
   return c.database;
@@ -86,6 +88,29 @@ export function TopBar() {
           <PathPill />
         </View>
         <View class="shrink-0 flex-row items-center gap-2 pr-3">
+          {/* 演示模式:醒目的 DEMO 徽章,点它即退出 */}
+          <If
+            when={privacy.demo()}
+            else={
+              <IconButton
+                icon="monitor"
+                testID="demo-toggle"
+                tooltip={t("mask.demo_enter")}
+                onPress={toggleDemoMode}
+              />
+            }
+          >
+            <Button
+              testID="demo-badge"
+              onPress={toggleDemoMode}
+              tooltip={tip(t("mask.demo_exit"))}
+              accessibilityLabel={t("mask.demo_exit")}
+              class="h-6 flex-row items-center gap-1.5 rounded-full bg-warning px-2.5 hover:opacity-90"
+            >
+              <Icon name="eye-off" size={12} color="warning-foreground" />
+              <Text class={`${FS.xs} font-bold text-warning-foreground`}>{t("mask.demo_badge")}</Text>
+            </Button>
+          </If>
           <Button
             onPress={toggleAi}
             selected={workspace.aiOpen()}

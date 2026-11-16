@@ -536,3 +536,168 @@ alter:
     en: "%{table} rowid %{rowid} → no matching row in %{parent}"
     zh-CN: "%{table} 的 rowid %{rowid} → 在 %{parent} 里找不到对应行"
     zh-TW: "%{table} 的 rowid %{rowid} → 在 %{parent} 中找不到對應列"
+mask:
+  menu:
+    en: "Data & Privacy…"
+    zh-CN: "数据与隐私…"
+    zh-TW: "資料與隱私…"
+  dialog_title:
+    en: "Data & Privacy · %{name}"
+    zh-CN: "数据与隐私 · %{name}"
+    zh-TW: "資料與隱私 · %{name}"
+  enabled:
+    en: "Mask sensitive data"
+    zh-CN: "遮罩敏感数据"
+    zh-TW: "遮罩敏感資料"
+  enabled_hint:
+    en: "Masked columns show as a***@example.com or 138****1234 in the grid, row details, copies, exports and everything sent to AI. On by default for staging and prod connections."
+    zh-CN: "遮罩后的列在网格、行详情、复制、导出和发给 AI 的内容里都显示成 a***@example.com、138****1234 这样。预发和生产连接默认打开。"
+    zh-TW: "遮罩後的欄在網格、列詳細資料、複製、匯出和傳給 AI 的內容裡都顯示成 a***@example.com、138****1234 這樣。預備和正式連線預設開啟。"
+  forced_by_demo:
+    en: "Demo mode is on: masking is forced on for every connection."
+    zh-CN: "演示模式已打开:所有连接强制遮罩。"
+    zh-TW: "展示模式已開啟:所有連線強制遮罩。"
+  follow_env:
+    en: "Use Environment Default"
+    zh-CN: "跟随环境默认"
+    zh-TW: "依環境預設"
+  auto_detect:
+    en: "Detect sensitive columns automatically (by name and values)"
+    zh-CN: "自动识别敏感列(按列名和取值)"
+    zh-TW: "自動辨識敏感欄(依欄名和值)"
+  columns_title:
+    en: "Sensitive Columns"
+    zh-CN: "敏感列"
+    zh-TW: "敏感欄"
+  columns_hint:
+    en: "Detected by column name among loaded tables; columns recognized only by their values (e.g. a query's expression column) are masked when results come in. Right-click a column header to mask or unmask it."
+    zh-CN: "这里按列名列出已加载表里认出的列;只能从取值认出的列(如查询里的表达式列)在出结果时自动遮罩。在表头上右键可以遮罩或取消遮罩某一列。"
+    zh-TW: "這裡依欄名列出已載入資料表裡辨識出的欄;只能從值辨識的欄(如查詢裡的運算式欄)在出結果時自動遮罩。在表頭上按右鍵可以遮罩或取消遮罩某一欄。"
+  no_columns:
+    en: "No sensitive columns recognized by name."
+    zh-CN: "没有按列名认出的敏感列。"
+    zh-TW: "沒有依欄名辨識出的敏感欄。"
+  columns_not_loaded:
+    en: "Open this connection to list its columns."
+    zh-CN: "打开这个连接后才能列出它的列。"
+    zh-TW: "開啟這個連線後才能列出它的欄。"
+  kind_secret:
+    en: "Password / Secret"
+    zh-CN: "密码 / 密钥"
+    zh-TW: "密碼 / 金鑰"
+  kind_email:
+    en: "Email"
+    zh-CN: "邮箱"
+    zh-TW: "電子郵件"
+  kind_phone:
+    en: "Phone"
+    zh-CN: "电话"
+    zh-TW: "電話"
+  kind_id_number:
+    en: "ID Number"
+    zh-CN: "证件号"
+    zh-TW: "證件號碼"
+  kind_card:
+    en: "Card / Account Number"
+    zh-CN: "卡号 / 账号"
+    zh-TW: "卡號 / 帳號"
+  kind_address:
+    en: "Address"
+    zh-CN: "地址"
+    zh-TW: "地址"
+  kind_name:
+    en: "Name"
+    zh-CN: "姓名"
+    zh-TW: "姓名"
+  kind_manual:
+    en: "Marked manually"
+    zh-CN: "手动标记"
+    zh-TW: "手動標記"
+  choice_auto:
+    en: "Auto"
+    zh-CN: "自动"
+    zh-TW: "自動"
+  choice_mask:
+    en: "Mask"
+    zh-CN: "遮罩"
+    zh-TW: "遮罩"
+  choice_plain:
+    en: "Don't Mask"
+    zh-CN: "不遮罩"
+    zh-TW: "不遮罩"
+  mask_column:
+    en: "Mask This Column"
+    zh-CN: "遮罩此列"
+    zh-TW: "遮罩此欄"
+  unmask_column:
+    en: "Unmask This Column"
+    zh-CN: "取消遮罩此列"
+    zh-TW: "取消遮罩此欄"
+  column_masked:
+    en: "%{column} is now masked"
+    zh-CN: "已遮罩 %{column}"
+    zh-TW: "已遮罩 %{column}"
+  column_unmasked:
+    en: "%{column} is no longer masked"
+    zh-CN: "已取消遮罩 %{column}"
+    zh-TW: "已取消遮罩 %{column}"
+  column_masked_tip:
+    en: "Sensitive column: values are masked"
+    zh-CN: "敏感列:值已遮罩"
+    zh-TW: "敏感欄:值已遮罩"
+  unmask_disabled_demo:
+    en: "Can't unmask columns in demo mode"
+    zh-CN: "演示模式下不能取消遮罩"
+    zh-TW: "展示模式下不能取消遮罩"
+  reveal:
+    en: "Reveal Value"
+    zh-CN: "显示原值"
+    zh-TW: "顯示原值"
+  reveal_tooltip:
+    en: "Show the real value of this cell only"
+    zh-CN: "只显示这一格的原值"
+    zh-TW: "只顯示這一格的原值"
+  reveal_disabled_demo:
+    en: "Values can't be revealed in demo mode"
+    zh-CN: "演示模式下不能显示原值"
+    zh-TW: "展示模式下不能顯示原值"
+  cell_masked:
+    en: "This value is masked."
+    zh-CN: "这个值已遮罩。"
+    zh-TW: "這個值已遮罩。"
+  cell_masked_edit:
+    en: "This value is masked. Reveal it to see or edit the real value."
+    zh-CN: "这个值已遮罩。显示原值后才能查看或修改。"
+    zh-TW: "這個值已遮罩。顯示原值後才能檢視或修改。"
+  cell_masked_demo:
+    en: "This value is masked (demo mode)."
+    zh-CN: "这个值已遮罩(演示模式)。"
+    zh-TW: "這個值已遮罩(展示模式)。"
+  export_masked:
+    en: "Mask Sensitive Columns"
+    zh-CN: "遮罩敏感列"
+    zh-TW: "遮罩敏感欄"
+  demo_mode:
+    en: "Demo mode"
+    zh-CN: "演示模式"
+    zh-TW: "展示模式"
+  demo_mode_hint:
+    en: "For screen sharing and recordings: masks sensitive data on every connection, disables revealing values, and hides hosts, ports, user names and file paths. Toggle with ⌘⇧D or the title bar button."
+    zh-CN: "用于共享屏幕和录屏:所有连接强制遮罩敏感数据,不能显示原值,并隐藏主机、端口、用户名和文件路径。用 ⌘⇧D 或顶栏按钮切换。"
+    zh-TW: "用於分享螢幕和錄影:所有連線強制遮罩敏感資料,不能顯示原值,並隱藏主機、埠、使用者名稱和檔案路徑。用 ⌘⇧D 或標題列按鈕切換。"
+  settings_hint:
+    en: "Per-connection masking is in each connection's menu → Data & Privacy…."
+    zh-CN: "每个连接的遮罩设置在连接菜单 → 数据与隐私…"
+    zh-TW: "每個連線的遮罩設定在連線選單 → 資料與隱私…"
+  demo_enter:
+    en: "Enter Demo Mode (⌘⇧D)"
+    zh-CN: "进入演示模式(⌘⇧D)"
+    zh-TW: "進入展示模式(⌘⇧D)"
+  demo_exit:
+    en: "Exit Demo Mode (⌘⇧D)"
+    zh-CN: "退出演示模式(⌘⇧D)"
+    zh-TW: "結束展示模式(⌘⇧D)"
+  demo_badge:
+    en: "DEMO"
+    zh-CN: "演示中"
+    zh-TW: "展示中"

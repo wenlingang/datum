@@ -31,6 +31,7 @@ import {
 import { ActionMenu, CheckBox, DialogFrame, Dropdown, LoadingBtn, MaskedField, Toggle } from "./controls";
 import type { SettingsSection } from "./state";
 import { CopyButton, ErrorText } from "../ui/error";
+import { privacy, setDemoMode } from "../store/privacy";
 
 const SECTIONS: { id: SettingsSection; icon: IconName; key: string }[] = [
   { id: "ai", icon: "sparkles", key: "settings.section_ai" },
@@ -679,6 +680,12 @@ function PrivacySection(props: { ctx: Ctx }) {
         <Text class={`${FS.sm} text-foreground`}>{t("settings.allow_prod_data")}</Text>
       </View>
       <Hint>{t("settings.allow_prod_data_hint")}</Hint>
+      {/* 演示模式:全局强制遮罩敏感数据、不能显示原值,隐藏连接细节(⌘⇧D / 顶栏按钮) */}
+      <View class="pt-2">
+        <Toggle testID="demo-mode" checked={privacy.demo()} onChange={setDemoMode} label={t("mask.demo_mode")} />
+      </View>
+      <Hint>{t("mask.demo_mode_hint")}</Hint>
+      <Hint>{t("mask.settings_hint")}</Hint>
       <NoticeLine ctx={props.ctx} />
     </View>
   );

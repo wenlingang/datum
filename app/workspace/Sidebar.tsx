@@ -3,7 +3,7 @@
 import { effect, List, Scroll, signal, Text, View } from "nsh";
 import { Button } from "nsh/base";
 import { t } from "nsh/i18n";
-import { openConnectionForm, openImport, openImportData } from "../dialogs";
+import { openConnectionForm, openImport, openImportData, openPrivacy } from "../dialogs";
 import { errorText } from "../lib/native";
 import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables, refreshTables } from "../store/conns";
@@ -64,6 +64,7 @@ function ConnMenuItems(props: { conn: Connection }) {
     <>
       <MItem label={t("sidebar.edit")} onSelect={() => openConnectionForm(c)} />
       <MItem label={t("sidebar.refresh_tables")} onSelect={() => void loadTables(c.id)} />
+      <MItem label={t("mask.menu")} onSelect={() => openPrivacy(c.id)} />
       <If when={supportsSql(c.kind)}>
         <MItem label={t("sidebar.import_sql")} onSelect={() => openImport(c.id)} />
         <If when={c.kind === "sqlite"}>

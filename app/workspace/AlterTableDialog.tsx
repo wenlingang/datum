@@ -9,6 +9,7 @@ import { CheckBox, DialogFrame, Dropdown } from "../dialogs/controls";
 import { db, errorText, sql as sqlText } from "../lib/native";
 import type { AlterFk, AlterOutcome, AlterPlan, AlterScript, RiskFinding } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
+import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
 import { closeTab, findTableTab } from "../store/workspace";
 import { openTable } from "../tab";
@@ -224,7 +225,7 @@ function AlterForm(props: { connId: string; table: string }) {
     gate.set({
       findings,
       targetLabel: conn?.name ?? "",
-      database: conn?.filePath ? conn.filePath : null,
+      database: conn?.filePath ? hideInDemo(conn.filePath) : null,
       relational: true,
       impacts: signal<ImpactState[]>(findings.map(() => ({ state: "none" as const }))),
       alters: signal<AlterState[]>(findings.map(() => ({ state: "none" as const }))),

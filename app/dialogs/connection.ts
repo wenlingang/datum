@@ -181,19 +181,21 @@ const SSL_QUERY: Record<SslMode, string> = {
 };
 
 /** 连接串预览(密码以圆点掩码)。 */
-export function previewString(d: ConnDraft): string {
-  if (d.kind === "sqlite") return `sqlite://${d.filePath === "" ? t("conn_form.file_preview") : d.filePath}`;
-  const host = or(d.host, "127.0.0.1");
-  const user = or(d.user, "postgres");
+export function previewString(d: ConnDraft, hide = false): string {
+  // 演示模式(hide):主机、端口、用户名、文件路径换成占位
+  const h = (s: string) => (hide && s ? "•••" : s);
+  if (d.kind === "sqlite") return `sqlite://${d.filePath === "" ? t("conn_form.file_preview") : h(d.filePath)}`;
+  const host = h(or(d.host, "127.0.0.1"));
+  const user = h(or(d.user, "postgres"));
   const db = or(d.database, "postgres");
   const auth = d.password === "" ? `${user}@` : `${user}:••••@`;
-  const port = d.port.trim() === "" ? "" : `:${d.port.trim()}`;
+  const port = d.port.trim() === "" ? "" : `:${h(d.port.trim())}`;
   const redis = d.kind === "redis";
   const scheme = redis && (d.ssl === "require" || d.ssl === "verifyFull") ? "rediss" : KIND_SCHEME[d.kind];
   const query = redis ? "" : SSL_QUERY[d.ssl];
-  const jump = d.ssh && d.sshProxyJump.trim() ? ` ⇢ ${d.sshProxyJump.trim()}` : "";
-  const sshUser = d.sshUser.trim() ? `${d.sshUser.trim()}@` : "";
-  const via = d.ssh ? `${jump}  ⇢ ssh ${sshUser}${or(d.sshHost, "?")}:${or(d.sshPort, "22")}` : "";
+  const jump = d.ssh && d.sshProxyJump.trim() ? ` ⇢ ${h(d.sshProxyJump.trim())}` : "";
+  const sshUser = d.sshUser.trim() ? `${h(d.sshUser.trim())}@` : "";
+  const via = d.ssh ? `${jump}  ⇢ ssh ${sshUser}${h(or(d.sshHost, "?"))}:${h(or(d.sshPort, "22"))}` : "";
   return `${scheme}://${auth}${host}${port}/${db}${query}${via}`;
 }
 

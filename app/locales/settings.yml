@@ -58,6 +58,10 @@ menu:
     en: Refresh
     zh-CN: 刷新
     zh-TW: 重新整理
+  demo_mode:
+    en: "Demo Mode"
+    zh-CN: "演示模式"
+    zh-TW: "展示模式"
 
 # 偏好选项展示名(prefs.rs)。prefs.language / prefs.language_system 在 common.yml
 prefs:

@@ -7,6 +7,7 @@ import { t } from "nsh/i18n";
 import { openSettings } from "../dialogs";
 import { supportsSql } from "../lib/types";
 import { conns, loadTables } from "../store/conns";
+import { privacy, toggleDemoMode } from "../store/privacy";
 import { toast } from "../store/toast";
 import { closeTab, toggleAi, toggleAiFullscreen, toggleDetail, toggleSidebar, workspace } from "../store/workspace";
 import { newQueryTab, openErd, runTabCommand } from "../tab";
@@ -94,6 +95,9 @@ function applicationMenu(): MenuItem[] {
         { label: t("menu.ai_workbench"), shortcut: "mod+j", onSelect: toggleAiFullscreen },
         { label: t("menu.erd"), onSelect: openErdForActive },
         { type: "separator" },
+        // 演示模式:强制遮罩敏感数据、隐藏连接细节(⌘⇧D)
+        { label: t("menu.demo_mode"), shortcut: "mod+shift+d", checked: privacy.demo(), onSelect: toggleDemoMode },
+        { type: "separator" },
         { label: t("menu.refresh"), shortcut: "mod+r", onSelect: refresh },
       ],
     },
@@ -114,6 +118,7 @@ export function installAppCommands() {
     "mod+f": () => runTabCommand("filter"),
     "mod+s": () => runTabCommand("commit"),
     "mod+shift+f": () => runTabCommand("format"),
+    "mod+shift+d": toggleDemoMode,
   });
   if (!isAvailable) return;
   try {
