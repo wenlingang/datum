@@ -1,7 +1,7 @@
 // datum/native 的类型化封装:原生导出返回 `unknown`(JSON),这里断言成 lib/types 的形状。
 // 界面代码只从这里调用原生模块,不直接 import "datum/native"。
 
-import { Ai, Db, Erd, Prefs as NativePrefs, Sql, Store } from "datum/native";
+import { Ai, Db, Erd, Prefs as NativePrefs, Sql, Store, TestData } from "datum/native";
 import { AlertDialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import type {
@@ -47,6 +47,14 @@ import type {
   ImportPreview,
   ImportProgress,
   ImportSource,
+  TdAiSuggestion,
+  TdAnalysis,
+  TdColumnMeta,
+  TdGenerator,
+  TdLocale,
+  TdPlan,
+  TdPreview,
+  TdProgress,
 } from "./types";
 import type { Rects } from "../erd/geom";
 
@@ -455,3 +463,24 @@ export async function redisKey(id: string, key: string) {
 /** 用表单当前参数(不保存)列出实例下的库(新建/编辑连接时下拉选库)。 */
 export const probeDatabases = async (conn: import("./types").Connection, password: string | null) =>
   withHostTrust(async () => (await NativeDialogs.probeDatabases(conn, password)) as string[]);
+
+/** 测试数据生成。 */
+export const testData = {
+  /** 分析一张表:自动方案(行数 100、随机种子)、父表为空的外键、生成器类型。 */
+  analyze: async (kind: DbKind, id: string, table: string, locale: TdLocale) =>
+    (await TestData.analyze(kind, id, table, locale)) as TdAnalysis,
+  /** 改选生成器类型时的默认参数(按列的类型收口);类型名不认识为 null。 */
+  generatorFor: (column: TdColumnMeta, kind: string) => TestData.generatorFor(column, kind) as TdGenerator | null,
+  /** 实际插入时的前 10 行。 */
+  preview: async (kind: DbKind, id: string, plan: TdPlan) => (await TestData.preview(kind, id, plan)) as TdPreview,
+  /** 整份 INSERT 文本(最多 1000 行)。 */
+  insertSql: (kind: DbKind, id: string, plan: TdPlan) => TestData.insertSql(kind, id, plan) as Promise<string>,
+  /** 后台插入;用 progress 轮询。 */
+  start: (kind: DbKind, id: string, plan: TdPlan) => TestData.start(kind, id, plan) as Promise<void>,
+  progress: (id: string) => TestData.progress(id) as TdProgress | null,
+  /** 取消:回滚当前事务。 */
+  cancel: (id: string) => TestData.cancel(id),
+  /** 让 AI 按建表语句建议生成器(只发结构)。 */
+  aiSuggest: async (kind: DbKind, id: string, table: string) => (await TestData.aiSuggest(kind, id, table)) as TdAiSuggestion,
+  randomSeed: () => TestData.randomSeed() as number,
+};
