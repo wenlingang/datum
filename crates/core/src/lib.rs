@@ -6,6 +6,7 @@
 // 界面语言由 app 层通过 rust_i18n::set_locale 设置(全局共享),这里只登记 core 自己的文案。
 rust_i18n::i18n!("locales", fallback = "en");
 
+pub mod advisor;
 pub mod ai;
 pub mod commands;
 pub mod completion;

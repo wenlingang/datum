@@ -946,3 +946,83 @@ core:
       en: "Not shown: %{n} more findings (the full script still covers every table)."
       zh-CN: "还有 %{n} 条未显示(完整脚本里仍包含全部表)。"
       zh-TW: "還有 %{n} 條未顯示(完整腳本裡仍包含全部資料表)。"
+  advisor:
+    reason:
+      eq:
+        en: "equality filter on %{cols}"
+        zh-CN: "等值过滤 %{cols}"
+        zh-TW: "等值篩選 %{cols}"
+      range:
+        en: "range filter on %{cols}"
+        zh-CN: "范围过滤 %{cols}"
+        zh-TW: "範圍篩選 %{cols}"
+      order:
+        en: "matches ORDER BY %{cols} (avoids a sort)"
+        zh-CN: "与 ORDER BY %{cols} 一致(免掉排序)"
+        zh-TW: "與 ORDER BY %{cols} 一致(免去排序)"
+      group:
+        en: "matches GROUP BY %{cols}"
+        zh-CN: "与 GROUP BY %{cols} 一致"
+        zh-TW: "與 GROUP BY %{cols} 一致"
+      join:
+        en: "join lookup on %{cols}"
+        zh-CN: "按连接列 %{cols} 查找"
+        zh-TW: "按連接欄位 %{cols} 查找"
+      ai:
+        en: "Suggested by AI"
+        zh-CN: "AI 建议"
+        zh-TW: "AI 建議"
+    note:
+      hypopg:
+        en: "Verified with hypothetical indexes (hypopg) in a read-only, rolled-back transaction. Nothing was created."
+        zh-CN: "已用假想索引(hypopg)在只读、回滚的事务里验证,没有建任何东西。"
+        zh-TW: "已用假想索引(hypopg)在唯讀、回滾的交易裡驗證,沒有建立任何東西。"
+      hypopg_not_installed:
+        en: "Unverified: the hypopg extension is available on this server but not installed in this database. Install it to verify candidates without creating real indexes."
+        zh-CN: "未验证:服务器上有 hypopg 扩展,但这个库还没装。装上后可以不建真实索引就验证候选。"
+        zh-TW: "未驗證:伺服器上有 hypopg 擴充,但這個資料庫還沒安裝。裝上後可以不建真實索引就驗證候選。"
+      hypopg_unavailable:
+        en: "Unverified: the hypopg extension isn't available on this server, so candidates can't be tested without creating them."
+        zh-CN: "未验证:服务器上没有 hypopg 扩展,不建索引就没法测试候选。"
+        zh-TW: "未驗證:伺服器上沒有 hypopg 擴充,不建索引就沒辦法測試候選。"
+      mysql:
+        en: "Unverified (MySQL has no hypothetical indexes). Candidates come from the query's filters, joins and sorting; the current plan is shown below."
+        zh-CN: "未验证(MySQL 没有假想索引)。候选按语句的过滤、连接与排序推出;下面是现在的执行计划。"
+        zh-TW: "未驗證(MySQL 沒有假想索引)。候選按語句的篩選、連接與排序推出;下面是目前的執行計畫。"
+      sqlite:
+        en: "Verified by creating each index inside a transaction that is rolled back (tables up to %{rows} rows). The database is left unchanged."
+        zh-CN: "在会回滚的事务里逐个建索引验证(表不超过 %{rows} 行),库保持原样。"
+        zh-TW: "在會回滾的交易裡逐個建立索引驗證(資料表不超過 %{rows} 列),資料庫保持原樣。"
+      sqlite_read_only:
+        en: "Unverified: the database is opened read-only."
+        zh-CN: "未验证:数据库以只读方式打开。"
+        zh-TW: "未驗證:資料庫以唯讀方式開啟。"
+      sqlite_in_txn:
+        en: "Unverified: a transaction is open on this connection. Commit or roll it back, then try again."
+        zh-CN: "未验证:这个连接上有未结束的事务。提交或回滚后再试。"
+        zh-TW: "未驗證:這個連線上有未結束的交易。提交或回滾後再試。"
+      failed:
+        en: "Unverified: verification failed (%{error})."
+        zh-CN: "未验证:验证失败(%{error})。"
+        zh-TW: "未驗證:驗證失敗(%{error})。"
+    too_large:
+      en: "Not verified: %{table} has %{rows} rows or more (limit %{limit})."
+      zh-CN: "未验证:%{table} 有 %{rows} 行以上(上限 %{limit})。"
+      zh-TW: "未驗證:%{table} 有 %{rows} 列以上(上限 %{limit})。"
+    err:
+      unsupported_db:
+        en: "Index suggestions are available for PostgreSQL, MySQL and SQLite."
+        zh-CN: "索引建议只支持 PostgreSQL、MySQL 与 SQLite。"
+        zh-TW: "索引建議只支援 PostgreSQL、MySQL 與 SQLite。"
+      unsupported_stmt:
+        en: "Index suggestions need a single SELECT, UPDATE or DELETE statement."
+        zh-CN: "索引建议需要一条 SELECT、UPDATE 或 DELETE 语句。"
+        zh-TW: "索引建議需要一條 SELECT、UPDATE 或 DELETE 語句。"
+      params:
+        en: "Fill in the statement's parameters first."
+        zh-CN: "请先填写语句里的参数。"
+        zh-TW: "請先填寫語句裡的參數。"
+      ai_unreadable:
+        en: "Couldn't read the AI reply as index suggestions."
+        zh-CN: "看不懂 AI 的回复,没能得到索引建议。"
+        zh-TW: "看不懂 AI 的回覆,沒能得到索引建議。"
