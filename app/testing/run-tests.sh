@@ -56,6 +56,13 @@ if want tab; then
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
   run tab-unit "$D" tab/placeholders.test.ts
+  D="$ROOT/tab-advisor"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
+  IDX="select group_concat(name) from (select name from sqlite_master where type = 'index' order by name)"
+  BEFORE=$(sqlite3 "$D/roastery.db" "$IDX")
+  run tab-advisor "$D" tab/advisor.test.tsx
+  [ "$(sqlite3 "$D/roastery.db" "$IDX")" = "$BEFORE" ] || { echo "advisor: 验证后库里多了索引"; FAILED=1; }
   # 自然语言筛选:本地起一个 OpenAI 兼容的假服务,固定回一段筛选 JSON
   D="$ROOT/tab-nl"; mkdir -p "$D"
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
