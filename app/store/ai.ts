@@ -65,14 +65,15 @@ export interface Convo {
 /** 发送给 AI 的历史上限(system 每次重建,不占额度)。 */
 export const MAX_HISTORY = 30;
 
-type WireMessage = { role: string; content: string };
+type WireMessage = { role: string; content: string; parts?: WirePart[] };
 
 /** 原生调用的入口;测试替换成假的实现(不碰真实配置与 AI 服务)。 */
 export const aiBackend = {
   status: (): AiStatus => ai.status(),
   settings: (): AiSettings => ai.settings(),
   saveSettings: (s: AiSettings): AiSettings => ai.saveSettings(s),
-  chat: (messages: WireMessage[], onEvent: (e: ChatEvent) => void): Promise<void> => ai.chat(messages, onEvent),
+  chat: (messages: WireMessage[], connId: string | null, onEvent: (e: ChatEvent) => void): Promise<void> =>
+    ai.chat(messages, connId, onEvent),
   agentChat: (kind: DbKind, connId: string, messages: WireMessage[], onEvent: (e: AgentEvent) => void): Promise<void> =>
     ai.agentChat(kind, connId, messages, onEvent),
   stop: () => ai.stopChat(),
@@ -296,32 +297,49 @@ const FLUSH_MS = 50;
 /** 历史里每次查询带给 AI 的行数(之后的轮次还记得查到过什么)。 */
 const HISTORY_ROWS = 10;
 
-/** 工具步骤 → 历史里的一段文字摘要。 */
-export function stepText(s: ToolStep, withData = true): string {
+/** 发给原生侧的一段:文字,或一份结果表(由 core 渲染成文本:不允许发数据时丢掉,允许时先遮罩敏感列)。 */
+export type WirePart =
+  | { text: string }
+  | { columns: string[]; rows: (string | null)[][]; more: number; sql: string | null };
+
+/** 结果 → 历史里的结果表(只带前几行)。 */
+function tablePart(d: ToolDetail | null | undefined, sql?: string | null): WirePart | null {
+  if (!d?.columns || !d.rows) return null;
+  return {
+    columns: d.columns as string[],
+    rows: d.rows.slice(0, HISTORY_ROWS),
+    more: Math.max(0, d.rows.length - HISTORY_ROWS),
+    sql: sql ?? d.sql ?? null,
+  };
+}
+
+/** 工具步骤 → 历史里的摘要(一行说明 + 查询结果表)。 */
+export function stepParts(s: ToolStep, withData = true): WirePart[] {
   const d = s.detail;
   const head =
     s.name === "run_query" && d?.sql ? `[run_query] ${d.sql}` : `[${s.name}] ${JSON.stringify(s.args)}`;
-  if (s.state === "error") return `${head}\n→ ${s.summary}`;
-  const lines = [`${head}\n→ ${s.summary}`];
-  if (withData && d?.columns && d.rows) {
-    lines.push((d.columns as string[]).join("\t"));
-    for (const r of d.rows.slice(0, HISTORY_ROWS)) lines.push(r.map((v) => v ?? "NULL").join("\t"));
-    if (d.rows.length > HISTORY_ROWS) lines.push(`… ${d.rows.length - HISTORY_ROWS} more`);
-  }
-  return lines.join("\n");
+  const parts: WirePart[] = [{ text: `${head}\n→ ${s.summary}` }];
+  const table = s.state !== "error" && withData ? tablePart(d) : null;
+  if (table) parts.push(table);
+  return parts;
 }
 
-/** 发给 AI 的正文:带工具步骤的回复把步骤摘要按顺序嵌进去。 */
-function historyContent(m: AiMessage, withData: boolean): string {
+/** 发给 AI 的分段:带结果表的消息(卡片执行结果回灌、带工具步骤的回复);普通消息为 null。
+ *  原生侧把各段用换行拼起来,空文字段即空行。 */
+function historyParts(m: AiMessage, withData: boolean): WirePart[] | null {
   // 用户在卡片上执行的查询:把前几行也带给 AI,追问时它知道结果(不允许发数据时只带正文)
-  if (!withData && m.table) return m.content;
-  if (m.table?.columns && m.table.rows) {
-    const rows = m.table.rows.slice(0, HISTORY_ROWS).map((r) => r.map((v) => v ?? "NULL").join("\t"));
-    const more = m.table.rows.length > HISTORY_ROWS ? [`… ${m.table.rows.length - HISTORY_ROWS} more`] : [];
-    return [m.content, (m.table.columns as string[]).join("\t"), ...rows, ...more].join("\n");
+  if (m.table) {
+    const table = withData ? tablePart(m.table) : null;
+    return table ? [{ text: m.content }, table] : null;
   }
-  if (!m.parts) return m.content;
-  return m.parts.map((p) => (p.kind === "text" ? p.text : stepText(p, withData))).join("\n\n");
+  if (!m.parts) return null;
+  const out: WirePart[] = [];
+  m.parts.forEach((p, i) => {
+    if (i > 0) out.push({ text: "" });
+    if (p.kind === "text") out.push({ text: p.text });
+    else out.push(...stepParts(p, withData));
+  });
+  return out;
 }
 
 /** 能否把这个连接的数据(查询结果行)发给 AI:生产库要在设置里允许。
@@ -341,7 +359,13 @@ export function wireMessages(systemPrompt: string, history: readonly AiMessage[]
   const tail = history.slice(Math.max(0, history.length - MAX_HISTORY));
   return [
     { role: "system", content: systemPrompt },
-    ...tail.map((m) => ({ role: m.role, content: historyContent(m, withData) })),
+    ...tail.map((m): WireMessage => {
+      const parts = historyParts(m, withData);
+      if (!parts) return { role: m.role, content: m.content };
+      // content 只放文字段(兜底);数据行只在 parts 里,由原生侧遮罩后渲染
+      const text = parts.flatMap((p) => ("text" in p ? [p.text] : [])).join("\n");
+      return { role: m.role, content: text, parts };
+    }),
   ];
 }
 
@@ -441,7 +465,7 @@ export async function sendMessage(key: string, systemPrompt: string, text: strin
   };
   const runPlain = async () => {
     try {
-      await aiBackend.chat(wire, onEvent);
+      await aiBackend.chat(wire, agent?.connId ?? convoConn(key), onEvent);
     } catch (e) {
       onEvent({ type: "error", message: errorText(e) });
     }

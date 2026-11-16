@@ -3,7 +3,8 @@
 
 use crate::runtime::{from, json, spawn, state};
 use datum_core::ai::agent::{AgentEvent, Cancel};
-use datum_core::ai::chat::{ChatEvent, ChatMessage};
+use datum_core::ai::chat::ChatEvent;
+use datum_core::ai::commands::WireMessage;
 use datum_core::ai::commands as ai_cmd;
 use datum_core::ai::markdown::{Segment, parse_segments};
 use datum_core::ai::presets::PRESETS;
@@ -105,10 +106,17 @@ impl Ai {
     /// 表浏览的自然语言筛选:`columns` 为 `[{ name, dataType? }]`,`samples` 为前几行(帮模型认枚举写法)。
     /// 返回 `{ conj, filters: [{ col, op, value }], note, dropped }`;一次性请求,不进对话历史。
     /// `conn_id`:表所在的连接;生产库未允许 AI 读数据时样例行不发出。
-    pub async fn nl_filter(conn_id: String, question: String, columns: JsonValue, samples: JsonValue) -> Result<JsonValue, String> {
+    /// `table`:表浏览的表名(敏感列遮罩的手动覆盖按它匹配);样例行里的敏感列在原生侧遮罩后才发出。
+    pub async fn nl_filter(
+        conn_id: String,
+        table: Option<String>,
+        question: String,
+        columns: JsonValue,
+        samples: JsonValue,
+    ) -> Result<JsonValue, String> {
         let cols: Vec<datum_core::ai::nl_filter::ColumnInfo> = from(columns, "columns")?;
         let rows: Vec<Vec<Option<String>>> = from(samples, "samples")?;
-        spawn(async move { ai_cmd::ai_nl_filter(&state(), &conn_id, &question, &cols, rows).await })
+        spawn(async move { ai_cmd::ai_nl_filter(&state(), &conn_id, table.as_deref(), &question, &cols, rows).await })
             .await?
             .and_then(json)
     }
@@ -154,14 +162,17 @@ impl Ai {
         )
     }
 
-    /// 流式对话。`messages` 为 `[{ role, content }]`(含 system);
+    /// 流式对话。`messages` 为 `[{ role, content, parts? }]`(含 system;`parts` 见 `agent_chat`);
+    /// `conn_id`:对话绑定的连接,决定历史里的结果表能否发出、怎么遮罩(null 时结果表不发)。
     /// `on_event` 依次收到 `{ type: "delta", text }`、`{ type: "done", full }` 或 `{ type: "error", message }`。
     /// 对话结束(成功或失败)后 Promise 才完成。
     pub async fn chat(
         messages: JsonValue,
+        conn_id: Option<String>,
         #[args(event)] on_event: Callback<JsonValue>,
     ) -> Result<(), String> {
-        let wire: Vec<ChatMessage> = from(messages, "messages")?;
+        let wire: Vec<WireMessage> = from(messages, "messages")?;
+        let wire = ai_cmd::render_history(&state(), conn_id.as_deref(), wire);
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<ChatEvent>();
         let done = background(async move {
             let tx2 = tx.clone();
@@ -195,14 +206,16 @@ impl Ai {
 
     /// 带工具的流式对话(AI 自己查数据):在连接 `id`(类型 `kind`)上可列表、看表结构、跑只读查询。
     /// `on_event` 收到 delta / toolStart `{ id, name, args }` / toolEnd `{ id, ok, summary, detail }` /
-    /// done / error。
+    /// done / error。`messages` 里的结果表放在 `parts`(`[{ text } | { columns, rows, more, sql }]`)里,
+    /// 由 core 渲染成文本:不允许发数据时丢掉,允许时先遮罩敏感列。
     pub async fn agent_chat(
         kind: String,
         id: String,
         messages: JsonValue,
         #[args(event)] on_event: Callback<JsonValue>,
     ) -> Result<(), String> {
-        let wire: Vec<ChatMessage> = from(messages, "messages")?;
+        let wire: Vec<WireMessage> = from(messages, "messages")?;
+        let wire = ai_cmd::render_history(&state(), Some(&id), wire);
         let kind: DbKind = from(JsonValue::String(kind), "kind")?;
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AgentEvent>();
         let cancel = Cancel::default();

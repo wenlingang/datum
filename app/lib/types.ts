@@ -307,6 +307,34 @@ export type AgentEvent =
   | { type: "toolEnd"; id: string; ok: boolean; summary: string; detail: ToolDetail };
 
 /** 工具结果的展示数据:查询给 sql / columns / rows,表结构给 table / columns,出错给 error。 */
+// ==== 敏感数据遮罩 ====
+
+/** 敏感列的类别(决定遮罩样式)。 */
+export type MaskKind = "secret" | "email" | "phone" | "idNumber" | "card" | "address" | "name";
+
+/** 某列的手动覆盖:强制遮罩 / 永不遮罩。 */
+export type MaskOverride = "mask" | "plain";
+
+/** 连接的遮罩设置(`Mask.settings`)。 */
+export interface MaskSettingsView {
+  /** 当前生效的开关(含环境默认与演示模式) */
+  enabled: boolean;
+  /** 用户设的开关;null 为跟随环境(本地关,预发 / 生产开) */
+  explicit: boolean | null;
+  autoDetect: boolean;
+  /** `表.列` → 覆盖 */
+  overrides: Record<string, MaskOverride>;
+  demo: boolean;
+}
+
+/** 「数据与隐私」里列出的一列:按列名认出的类别,或只有手动覆盖。 */
+export interface DetectedColumn {
+  table: string;
+  column: string;
+  kind: MaskKind | null;
+  override: MaskOverride | null;
+}
+
 export interface ToolDetail {
   sql?: string;
   columns?: unknown[];

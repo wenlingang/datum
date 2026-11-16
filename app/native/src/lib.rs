@@ -9,6 +9,7 @@ mod conn;
 mod db;
 mod erd;
 mod keys;
+mod mask;
 mod dialogs;
 mod prefs;
 mod runtime;
@@ -23,6 +24,7 @@ pub use conn::Store;
 pub use db::Db;
 pub use erd::Erd;
 pub use keys::EditorKeys;
+pub use mask::Mask;
 pub use dialogs::Dialogs;
 pub use prefs::Prefs;
 pub use shell::Shell;
@@ -43,5 +45,6 @@ fn native(registry: &mut Registry) {
         .module::<Ai>()
         .module::<Shell>()
         .module::<Dialogs>()
-        .module::<Grid>();
+        .module::<Grid>()
+        .module::<Mask>();
 }

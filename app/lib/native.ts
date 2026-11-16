@@ -1,7 +1,7 @@
 // datum/native 的类型化封装:原生导出返回 `unknown`(JSON),这里断言成 lib/types 的形状。
 // 界面代码只从这里调用原生模块,不直接 import "datum/native"。
 
-import { Ai, Db, Erd, Prefs as NativePrefs, Sql, Store } from "datum/native";
+import { Ai, Db, Erd, Mask, Prefs as NativePrefs, Sql, Store } from "datum/native";
 import { AlertDialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import type {
@@ -38,6 +38,10 @@ import type {
   ValueContext,
   Plan,
   DiffReport,
+  DetectedColumn,
+  MaskKind,
+  MaskOverride,
+  MaskSettingsView,
   AlterOutcome,
   AlterPlan,
   AlterScript,
@@ -287,20 +291,43 @@ export const ai = {
   testConfig: (provider: ProviderConfig, model: string) => Ai.testConfig(provider, model),
   listModels: async (provider: ProviderConfig) => (await Ai.listModels(provider)) as string[],
   knowledge: () => Ai.knowledge() as KnowledgeDoc,
-  chat: (messages: { role: string; content: string }[], onEvent: (e: ChatEvent) => void) =>
-    Ai.chat(messages, (e) => onEvent(e as ChatEvent)),
+  /** `connId`:对话绑定的连接(历史里的结果表按它决定能否发出、怎么遮罩)。 */
+  chat: (messages: { role: string; content: string; parts?: unknown[] }[], connId: string | null, onEvent: (e: ChatEvent) => void) =>
+    Ai.chat(messages, connId, (e) => onEvent(e as ChatEvent)),
   /** 停止当前对话(回复以已收到的内容结束)。 */
   stopChat: () => Ai.stopChat(),
   /** 表浏览的自然语言筛选:一句话 → 且/或筛选条件。 */
   nlFilter: async (
     connId: string,
+    table: string | null,
     question: string,
     columns: { name: string; dataType: string | null }[],
     samples: (string | null)[][],
-  ) => (await Ai.nlFilter(connId, question, columns, samples)) as NlFilter,
+  ) => (await Ai.nlFilter(connId, table, question, columns, samples)) as NlFilter,
   /** 带工具的对话:AI 可在连接 `id` 上列表、看表结构、跑只读查询。 */
-  agentChat: (kind: DbKind, id: string, messages: { role: string; content: string }[], onEvent: (e: AgentEvent) => void) =>
+  agentChat: (kind: DbKind, id: string, messages: { role: string; content: string; parts?: unknown[] }[], onEvent: (e: AgentEvent) => void) =>
     Ai.agentChat(kind, id, messages, (e) => onEvent(e as AgentEvent)),
+};
+
+// ==== 敏感数据遮罩 ====
+
+export const mask = {
+  /** 一份结果每列的遮罩方式(null 不遮罩);`table` 为来源表(手动覆盖按 `表.列` 匹配)。 */
+  plan: (connId: string, table: string | null, columns: string[], rows: (string | null)[][]) =>
+    Mask.plan(connId, table, columns, rows) as (MaskKind | null)[],
+  /** 遮罩一个值(NULL 仍是 NULL)。 */
+  apply: (kind: MaskKind, value: string | null) => Mask.apply(kind, value) as string | null,
+  /** 按 plan 遮罩整份行(复制、导出)。 */
+  maskRows: (plan: (MaskKind | null)[], rows: (string | null)[][]) => Mask.maskRows(plan, rows) as (string | null)[][],
+  /** 单表查询的来源表,带 JOIN 的为 null。 */
+  sourceTable: (sql: string) => Mask.sourceTable(sql) as string | null,
+  settings: (connId: string) => Mask.settings(connId) as MaskSettingsView,
+  setEnabled: (connId: string, enabled: boolean | null) => Mask.setEnabled(connId, enabled),
+  setAutoDetect: (connId: string, on: boolean) => Mask.setAutoDetect(connId, on),
+  setOverride: (connId: string, key: string, mode: MaskOverride | null) => Mask.setOverride(connId, key, mode),
+  demoMode: () => Mask.demoMode() as boolean,
+  setDemoMode: (on: boolean) => Mask.setDemoMode(on),
+  detectColumns: (connId: string, columns: ColumnsByTable | null) => Mask.detectColumns(connId, columns) as DetectedColumn[],
 };
 
 /** 原生调用抛出的错误 → 给用户看的文案。 */

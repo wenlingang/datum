@@ -105,7 +105,7 @@ export function installFakes(o: FakeOptions = {}) {
     o.events
       ? o.events(messages)
       : [...chunks(REPLY).map((text) => ({ type: "delta" as const, text })), { type: "done" as const, full: REPLY }];
-  aiBackend.chat = (messages, onEvent) => {
+  aiBackend.chat = (messages, _connId, onEvent) => {
     sent.push(messages);
     return play(plainEvents(messages), onEvent);
   };
