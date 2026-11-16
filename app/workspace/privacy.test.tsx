@@ -6,6 +6,10 @@ import { expect, open, test } from "nsh/test";
 
 const desktop = { platform: "macos", width: 1200, height: 800, locale: "en-US" } as const;
 
+/** 原生侧返回 JSON(类型为 unknown),测试里按遮罩设置的形状读取。 */
+const maskSettings = (connId: string) =>
+  Mask.settings(connId) as { enabled: boolean; overrides: Record<string, "mask" | "plain" | undefined> };
+
 test("演示模式:顶栏 DEMO 徽章,面包屑不露出 SQLite 文件名;⌘⇧D 退出", async () => {
   try {
     const app = await open("./fixtures/Seeded.tsx", desktop);
@@ -19,7 +23,7 @@ test("演示模式:顶栏 DEMO 徽章,面包屑不露出 SQLite 文件名;⌘⇧
     expect(app.texts()).toContain("•••");
     expect(Mask.demoMode()).toBe(true);
     // 演示模式下所有连接强制遮罩
-    expect(Mask.settings("c-roastery")).toMatchObject({ enabled: true, demo: true });
+    expect(maskSettings("c-roastery")).toMatchObject({ enabled: true, demo: true });
     await app.keyboard.press("mod+shift+d");
     await app.waitFor("id:demo-badge", { state: "gone" });
     await app.waitUntil(() => app.texts().includes("roastery.db"), { timeout: 5000 });
@@ -61,13 +65,13 @@ test("连接菜单「数据与隐私」:列出按列名认出的敏感列,可设
   await app.waitFor("id:privacy-col:customers.email", { timeout: 10_000 });
   expect(app.shows("id:privacy-col:customers.name")).toBe(false);
   await app.press("id:privacy-choice:customers.email >> label:Don't Mask");
-  await app.waitUntil(() => Mask.settings("c-roastery").overrides["customers.email"] === "plain", { timeout: 3000 });
+  await app.waitUntil(() => maskSettings("c-roastery").overrides["customers.email"] === "plain", { timeout: 3000 });
   await app.press("id:privacy-choice:customers.email >> label:Auto");
-  await app.waitUntil(() => Mask.settings("c-roastery").overrides["customers.email"] === undefined, { timeout: 3000 });
+  await app.waitUntil(() => maskSettings("c-roastery").overrides["customers.email"] === undefined, { timeout: 3000 });
   // 本地连接默认不遮罩;打开后生效
-  expect(Mask.settings("c-roastery").enabled).toBe(false);
+  expect(maskSettings("c-roastery").enabled).toBe(false);
   await app.press("id:privacy-enabled");
-  await app.waitUntil(() => Mask.settings("c-roastery").enabled === true, { timeout: 3000 });
+  await app.waitUntil(() => maskSettings("c-roastery").enabled === true, { timeout: 3000 });
   Mask.setEnabled("c-roastery", null);
   app.dispose();
 });
