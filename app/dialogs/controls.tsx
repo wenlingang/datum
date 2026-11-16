@@ -116,8 +116,6 @@ export function Dropdown(props: {
   placeholder?: string;
   small?: boolean;
   disabled?: boolean;
-  /** 触发器文字居中(连接表单的类型/SSL 与 GPUI 截图一致) */
-  center?: boolean;
   tooltip?: string;
   accessibilityLabel?: string;
   testID?: string;
@@ -164,7 +162,6 @@ export function Dropdown(props: {
           <Text
             class={`${props.small ? FS.xs : FS.sm} flex-1 line-clamp-1`}
             classList={{
-              "text-center": !!props.center,
               "text-foreground": !!props.label,
               "text-fg-faint": !props.label,
             }}
@@ -205,7 +202,7 @@ export function CheckBox(props: { checked: boolean; onChange: (v: boolean) => vo
       testID={props.testID}
       hitSlop={6}
       class="group"
-      indicatorClass="h-4 w-4 items-center justify-center rounded-[4px] border border-input bg-background checked:border-primary checked:bg-primary"
+      indicatorClass="h-4 w-4 items-center justify-center rounded-(--radius-sm) border border-input bg-background checked:border-primary checked:bg-primary"
       indicator={<Icon name="check" size={12} color="primary-foreground" class="opacity-0 group-checked:opacity-100" />}
     />
   );

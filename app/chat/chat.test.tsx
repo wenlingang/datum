@@ -9,7 +9,10 @@ test("未配置 AI 时引导去设置", async () => {
   const app = await open("./testing/unconfigured.tsx", SIZE);
   await app.waitFor("text:AI provider not configured. Add one in Settings.");
   expect(app.shows("id:ai-open-settings")).toBe(true);
-  expect(app.shows("text:AI isn't ready. Check Settings.")).toBe(true);
+  expect(app.shows("text:AI isn't set up yet")).toBe(true);
+  expect(app.shows("text:AI isn't ready yet")).toBe(true);
+  // 未就绪时不出建议卡片,只留去设置的入口
+  expect(app.shows("id:ai-suggestion-0")).toBe(false);
   expect(app.enabled("id:ai-input")).toBe(false);
   expect(app.enabled("id:ai-send")).toBe(false);
   expect(app.shows("text:Select Model")).toBe(true);

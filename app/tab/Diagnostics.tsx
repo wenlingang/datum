@@ -187,7 +187,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
             <Each of={shown()}>
               {(c) => (
                 <Text
-                  class={`${FS.xs} ${colWidth(c())} font-bold text-muted-foreground line-clamp-1`}
+                  class={`${FS.xs} ${colWidth(c())} font-bold text-muted-foreground line-clamp-2`}
                   classList={{ "text-right": isNumeric(c()) }}
                 >
                   {colLabel(c())}
@@ -205,7 +205,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
                         <Btn
                           testID={`diag-${a()}`}
                           small
-                          variant={a() === "terminate" || a() === "kill" ? "outline" : "ghost"}
+                          variant="ghost"
                           icon={ACTION_ICON[a()]}
                           label={t(`diag.action.${a()}`)}
                           onPress={() =>

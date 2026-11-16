@@ -1052,9 +1052,9 @@ export function RedisKeyEditor(props: {
         <If when={props.detail}>
           {(d) => (
             <>
-              <Text class={`${FS.xs} text-muted-foreground`}>{t(d().keyType === "stream" ? "rkey.size_entries" : d().keyType === "string" ? "rkey.size_bytes" : "rkey.size", { n: d().size.toLocaleString() })}</Text>
+              {/* 大小与过期时间一行读完:「8 个元素 · 永不过期」「8 个元素 · TTL 120s」 */}
               <Text testID="rkey-ttl" class={`${FS.xs} text-muted-foreground`}>
-                TTL {formatKeyTtl(d().ttl)}
+                {`${t(d().keyType === "stream" ? "rkey.size_entries" : d().keyType === "string" ? "rkey.size_bytes" : "rkey.size", { n: d().size.toLocaleString() })} · ${d().ttl >= 0 ? `TTL ${formatKeyTtl(d().ttl)}` : formatKeyTtl(d().ttl)}`}
               </Text>
             </>
           )}

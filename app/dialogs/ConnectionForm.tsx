@@ -245,7 +245,6 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
           <Field label={t("conn_form.type")}>
             <Dropdown
               testID="conn-kind"
-              center
               items={DB_KINDS.map((k) => ({ value: k, title: KIND_LABEL[k], leading: () => <DbIcon kind={k} size={14} /> }))}
               value={d().kind}
               label={KIND_LABEL[d().kind]}
@@ -344,7 +343,6 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
             <Field label={t("conn_form.ssl_mode")} class="shrink-0" style={{ width: 200 }}>
               <Dropdown
                 testID="conn-ssl"
-                center
                 items={SSL_MODES.map((m) => ({ value: m, title: sslLabel(m) }))}
                 value={d().ssl}
                 label={sslLabel(d().ssl)}

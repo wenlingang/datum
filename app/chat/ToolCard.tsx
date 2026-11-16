@@ -178,7 +178,7 @@ export function ToolCard(props: {
         onPress={() => toggled.set(!open())}
         accessibilityLabel={h().title}
       >
-        <View class="h-6 w-6 items-center justify-center rounded-[6px] border border-border bg-raised">
+        <View class="h-6 w-6 items-center justify-center rounded-(--radius) border border-border bg-raised">
           <Icon name={h().icon} size={12} color="foreground" />
         </View>
         <View class="min-w-0 flex-1">

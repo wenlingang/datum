@@ -36,7 +36,7 @@ function RowDetail(props: { m: TabModel; row: number }) {
             <View class="gap-1 border-b border-border px-3 py-2">
               <View class="flex-row items-center justify-between gap-2">
                 <Text class={`${FS.xs} font-semibold text-foreground`}>{f().c}</Text>
-                <Text class="shrink-0 text-data" style={{ fontSize: 10 }}>
+                <Text class={`shrink-0 text-data ${FS.xs}`}>
                   {types()[f().c] ?? "—"}
                 </Text>
               </View>
@@ -152,7 +152,7 @@ function TableDetailView(props: { m: TabModel; table: string }) {
       <Scroll horizontal class="min-h-0 flex-1" contentClass="min-w-[560px]">
         <View class="flex-1 min-w-[560px]">
           <Scroll class="min-h-0 flex-1">
-            <Text class="px-3 py-1 text-muted-foreground" style={{ fontSize: 10 }}>
+            <Text class={`px-3 py-1 text-muted-foreground ${FS.xs}`}>
               {t("detail.columns_n", { count: d().columns.length })}
             </Text>
             <HeadRow
@@ -200,7 +200,7 @@ function TableDetailView(props: { m: TabModel; table: string }) {
             </Each>
           </Scroll>
           <Scroll class="min-h-0 flex-1 border-t-2 border-border">
-            <Text class="px-3 py-1 text-muted-foreground" style={{ fontSize: 10 }}>
+            <Text class={`px-3 py-1 text-muted-foreground ${FS.xs}`}>
               {t("detail.indexes_n", { count: d().indexes.length })}
             </Text>
             <HeadRow

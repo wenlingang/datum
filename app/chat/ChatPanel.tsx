@@ -169,7 +169,7 @@ function Header(props: { label: string | null; hasMessages: boolean; wide: boole
 }
 
 /** 空会话:标题、说明与几条可直接发送的建议。 */
-function EmptyState(props: { canAsk: boolean }) {
+function EmptyState(props: { canAsk: boolean; setup: string | null }) {
   const suggestions = () => [
     { icon: "list-tree" as const, title: t("chat.suggest_tables"), prompt: t("chat.suggest_tables_prompt") },
     { icon: "table" as const, title: t("chat.suggest_biggest"), prompt: t("chat.suggest_biggest_prompt") },
@@ -179,12 +179,21 @@ function EmptyState(props: { canAsk: boolean }) {
   return (
     <View class={`${COLUMN} flex-1 justify-center gap-5 px-4 py-6`}>
       <View class="items-center gap-2">
-        <View class="h-11 w-11 items-center justify-center rounded-[12px] border border-border bg-raised">
+        <View class="h-11 w-11 items-center justify-center rounded-(--radius-lg) border border-border bg-raised">
           <Icon name="sparkles" size={20} color="ai" />
         </View>
-        <Text class={`${FS.base} font-bold text-foreground`}>{t("chat.empty_title")}</Text>
-        <Text class={`${FS.sm} text-center text-muted-foreground`}>{t("chat.empty_sub")}</Text>
+        <Text class={`${FS.base} font-bold text-foreground`}>
+          {props.setup !== null ? t("chat.setup_title") : t("chat.empty_title")}
+        </Text>
+        <Text class={`${FS.sm} text-center text-muted-foreground`}>{props.setup ?? t("chat.empty_sub")}</Text>
       </View>
+      {/* 未就绪:只给一个去设置的入口,建议卡片等能问了再出现 */}
+      <If when={props.setup !== null}>
+        <View class="items-center">
+          <Btn variant="outline" icon="settings" label={t("chat.open_settings")} onPress={chatDeps.openSettings} testID="ai-open-settings" />
+        </View>
+      </If>
+      <If when={props.setup === null}>
       <View class="flex-row flex-wrap gap-2">
         <Each of={suggestions()}>
           {(s, i) => (
@@ -198,12 +207,13 @@ function EmptyState(props: { canAsk: boolean }) {
             >
               <Icon name={s().icon} size={15} color="ai" />
               <Text class={`${FS.sm} font-bold text-foreground`}>{s().title}</Text>
-              <Text class={`${FS.xs} text-muted-foreground line-clamp-2`}>{s().prompt}</Text>
+              <Text class={`${FS.xs} text-muted-foreground`}>{s().prompt}</Text>
             </View>
           )}
         </Each>
       </View>
       <Text class={`${FS.xs} text-center text-fg-faint`}>{t("chat.empty_confirm")}</Text>
+      </If>
     </View>
   );
 }
@@ -311,7 +321,7 @@ function MessageRow(props: {
       </If>
       <If when={!props.msg.hidden && props.msg.role === "user"}>
         <View class="flex-row justify-end">
-          <View class="max-w-[85%] rounded-[14px] rounded-br-[5px] border border-border bg-raised px-3 py-2">
+          <View class="max-w-[85%] rounded-(--radius-lg) rounded-br-(--radius-sm) border border-border bg-raised px-3 py-2">
             <Text class={`${FS.sm} select-text text-foreground`}>{props.msg.content}</Text>
           </View>
         </View>
@@ -386,7 +396,7 @@ function MessageRow(props: {
 
 function PendingRef(props: { sql: string }) {
   return (
-    <View class="flex-row items-start gap-1.5 rounded-[8px] border border-border bg-raised px-2 py-1.5">
+    <View class="flex-row items-start gap-1.5 rounded-(--radius) border border-border bg-raised px-2 py-1.5">
       <Text class={`${FS.xs} shrink-0 text-fg-faint`}>{t("chat.quote")}</Text>
       <View class="max-h-[60px] flex-1 overflow-hidden">
         <Text class={`${FS.xs} font-mono text-muted-foreground line-clamp-4`}>{props.sql}</Text>
@@ -507,7 +517,7 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
       </If>
       <View class="min-w-0 flex-1">
       <Header label={bound()?.label ?? null} hasMessages={messages().length > 0} wide={wide()} />
-      <If when={status() !== null && !ready()}>
+      <If when={status() !== null && !ready() && messages().length > 0}>
         <View class="gap-2 border-b border-border px-3 py-2.5">
           <Hint>{status()?.error || t("chat.unavailable")}</Hint>
           <View class="flex-row">
@@ -521,7 +531,7 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
         </View>
       </If>
       <View class="min-h-0 flex-1">
-        <If when={messages().length > 0} else={<EmptyState canAsk={canSend()} />}>
+        <If when={messages().length > 0} else={<EmptyState canAsk={canSend()} setup={status() !== null && !ready() ? status()?.error || t("chat.unavailable") : null} />}>
           <List
             ref={list}
             testID="ai-messages"
@@ -610,7 +620,7 @@ function Composer(props: {
 }) {
   return (
     <View class={`${COLUMN} shrink-0 px-3 pb-2.5 pt-1`}>
-      <View class="gap-1.5 rounded-[14px] border border-input bg-background p-1.5 focus-within:border-ring">
+      <View class="gap-1.5 rounded-(--radius-lg) border border-input bg-background p-1.5 focus-within:border-ring">
         <If when={aiStore.pendingRef()}>{(sql) => <PendingRef sql={sql()} />}</If>
         <Input
           testID="ai-input"
@@ -640,7 +650,7 @@ function Composer(props: {
             <ModelPicker />
           </View>
           {/* 提示文字占剩余空间、可被挤没,发送按钮始终留在行尾 */}
-          <Text class="min-w-0 flex-1 text-right text-[10.5px] text-fg-faint line-clamp-1">{t("chat.input_hint")}</Text>
+          <Text class={`min-w-0 flex-1 text-right ${FS.xs} text-fg-faint line-clamp-1`}>{t("chat.input_hint")}</Text>
           <SendButton disabled={props.sendDisabled} onPress={props.onSend} streaming={props.streaming} />
         </View>
       </View>

@@ -2174,7 +2174,7 @@ rkey:
     zh-CN: "显示 %{shown} / 共 %{total}"
     zh-TW: "顯示 %{shown} / 共 %{total}"
   size:
-    en: "Elements: %{n}"
+    en: "%{n} elements"
     zh-CN: "%{n} 个元素"
     zh-TW: "%{n} 個元素"
   stream_page:
@@ -2226,11 +2226,11 @@ rkey:
     zh-CN: "不支持编辑 %{type} 类型的 key"
     zh-TW: "不支援編輯 %{type} 類型的 key"
   size_entries:
-    en: "Entries: %{n}"
+    en: "%{n} entries"
     zh-CN: "%{n} 条"
     zh-TW: "%{n} 筆"
   size_bytes:
-    en: "Length: %{n} bytes"
+    en: "%{n} bytes"
     zh-CN: "长度 %{n} 字节"
     zh-TW: "長度 %{n} 位元組"
   view:

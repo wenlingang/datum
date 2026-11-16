@@ -191,7 +191,7 @@ test("单机:按类型编辑 key;删除元素先确认;TTL、重命名、新建"
   await openKey(app, "x");
   await app.waitUntil(() => has(app, "60-0") && has(app, "Page 1 · showing 50 · 60 in total"), { timeout: 5000 });
   await app.waitFor("id:rkey-groups", { timeout: 5000 });
-  expect(has(app, "Entries: 60")).toBe(true);
+  expect(has(app, "60 entries")).toBe(true);
   expect(has(app, "Consumers: 1")).toBe(true);
   // Stream 不按行列读取,状态栏不显示「0 rows」
   expect(app.shows("id:stat-rows")).toBe(false);

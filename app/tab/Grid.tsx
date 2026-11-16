@@ -46,6 +46,37 @@ function textWidth(text: string, pxPerChar: number): number {
   return w * pxPerChar;
 }
 
+type Align = "left" | "right" | "center";
+
+const NUMERIC = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/;
+
+/** 没有声明类型的列(查询结果、表达式列):采样的非空值全是数字就右对齐。按结果缓存。 */
+const inferredCache = new WeakMap<object, Align[]>();
+function inferredAligns(m: TabModel): Align[] {
+  const result = m.result();
+  if (!result) return [];
+  const hit = inferredCache.get(result);
+  if (hit) return hit;
+  const out = result.columns.map((_, ci): Align => {
+    let seen = 0;
+    for (const row of result.rows.slice(0, SAMPLE_ROWS)) {
+      const v = row[ci];
+      if (v === null || v === undefined) continue;
+      if (!NUMERIC.test(v)) return "left";
+      seen++;
+    }
+    return seen > 0 ? "right" : "left";
+  });
+  inferredCache.set(result, out);
+  return out;
+}
+
+/** 列对齐:有类型按类型,没有就按取值推断。 */
+function columnAlign(m: TabModel, col: number): Align {
+  const ty = columnTypes(m)[columnName(m, col)];
+  return ty ? (grid.colAlign(ty) as Align) : (inferredAligns(m)[col] ?? "left");
+}
+
 function columnLayout(m: TabModel): DataTableColumn[] {
   const result = m.result();
   if (!result) return [];
@@ -59,7 +90,7 @@ function columnLayout(m: TabModel): DataTableColumn[] {
     }
     return Math.min(AUTO_MAX, Math.max(AUTO_MIN, w + CELL_PAD));
   });
-  const aligns = result.columns.map((c) => grid.colAlign(types[c] ?? null));
+  const aligns = result.columns.map((_, i) => columnAlign(m, i));
   const widths = grid.columnWidths(
     autos,
     m.gridWidth(),
@@ -86,7 +117,7 @@ function GridCell(props: { m: TabModel; row: number; col: number }) {
   const value = () => viewRow(m, props.row)?.[props.col] ?? null;
   const type = () => columnTypes(m)[columnName(m, props.col)] ?? null;
   const style = () => grid.classifyCell(value(), type());
-  const align = () => grid.colAlign(type());
+  const align = () => columnAlign(m, props.col);
   const pk = () => {
     const pi = pkIndex(m);
     return pi === null ? null : (viewRow(m, props.row)?.[pi] ?? "");
@@ -136,7 +167,7 @@ function HeaderCell(props: { m: TabModel; col: number }) {
   const m = props.m;
   const name = () => columnName(m, props.col);
   const type = () => columnTypes(m)[name()] ?? null;
-  const align = () => grid.colAlign(type());
+  const align = () => columnAlign(m, props.col);
   const sorted = () => {
     const s = m.sort();
     return s && s.col === name() ? s : null;
@@ -158,7 +189,7 @@ function HeaderCell(props: { m: TabModel; col: number }) {
         <Text class={`${FS.sm} font-bold text-foreground line-clamp-1`}>{name()}</Text>
         <If when={type()}>
           {(ty) => (
-            <Text class="font-mono font-semibold text-fg-faint line-clamp-1" style={{ fontSize: 9.5 }}>
+            <Text class={`font-mono font-semibold text-fg-faint line-clamp-1 ${FS["2xs"]}`}>
               {ty().toUpperCase()}
             </Text>
           )}

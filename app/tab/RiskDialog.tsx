@@ -1,5 +1,5 @@
 // 破坏性语句执行前的审查弹窗:逐条列出命中(风险等级 + 语句 + 影响范围预估),
-// 标明目标连接与数据库,点「确认执行」放行。所有编辑器执行入口共用。对应 GPUI 版 dialogs/risk.rs。
+// 标明目标连接与数据库,点「仍要执行」放行。所有编辑器执行入口共用。对应 GPUI 版 dialogs/risk.rs。
 
 import { Clipboard, Scroll, Text, View } from "nsh";
 import { Button, Dialog, Editor } from "nsh/base";
@@ -52,7 +52,8 @@ function Impact(props: { s: ImpactState | undefined }) {
         </Text>
       </View>
       <If when={(ok()?.rows.length ?? 0) > 0}>
-        <Scroll horizontal class="max-h-[150px]">
+        {/* 只横向滚动:预览至多 10 行,不限高(限高会把末尾几行切成半截),纵向交给外层滚动 */}
+        <Scroll horizontal>
           <View class="gap-0.5">
             <View class="flex-row gap-3">
               <Each of={cols()}>
@@ -155,14 +156,13 @@ function OpRow(props: { op: AlterOpVerdict }) {
         }}
       >
         <Text
-          class="font-bold"
+          class={`${FS.xs} font-bold`}
           classList={{
             "text-success": o().algorithm === "instant",
             "text-warning": o().algorithm === "inplace",
             "text-destructive": o().algorithm === "copy",
             "text-muted-foreground": o().algorithm === null,
           }}
-          style={{ fontSize: 10 }}
         >
           {o().algorithm ? ALGORITHM[o().algorithm!] : "?"}
         </Text>
@@ -216,7 +216,7 @@ function Alter(props: { s: AlterState | undefined }) {
           <View class="gap-2">
             <View class="flex-row items-center gap-2">
               <View testID="risk-alter-risk" class={`rounded-full px-2 ${RISK_BG[a().risk]}`}>
-                <Text class={`font-bold ${RISK_FG[a().risk]}`} style={{ fontSize: 10.5 }}>
+                <Text class={`font-bold ${RISK_FG[a().risk]} ${FS.xs}`}>
                   {t(`risk.alter_risk.${a().risk}`)}
                 </Text>
               </View>
@@ -295,10 +295,10 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
                   class="flex-row gap-1.5 self-start rounded-full px-2"
                   classList={{ "bg-destructive": f().level === "danger", "bg-warning": f().level !== "danger" }}
                 >
-                  <Text class="font-bold text-destructive-foreground" style={{ fontSize: 10.5 }}>
+                  <Text class={`font-bold text-destructive-foreground ${FS.xs}`}>
                     {f().level === "danger" ? t("risk.danger") : t("risk.warning")}
                   </Text>
-                  <Text class="text-destructive-foreground" style={{ fontSize: 10.5 }}>
+                  <Text class={`text-destructive-foreground ${FS.xs}`}>
                     {f().kind}
                   </Text>
                 </View>

@@ -13,9 +13,9 @@ chat:
     zh-CN: 请先在左侧选择一个 SQL 数据库连接
     zh-TW: 請先在左側選擇一個 SQL 資料庫連線
   placeholder_not_ready:
-    en: AI isn't ready. Check Settings.
-    zh-CN: AI 未就绪,请检查设置
-    zh-TW: AI 尚未就緒,請檢查設定
+    en: AI isn't ready yet
+    zh-CN: AI 未就绪
+    zh-TW: AI 尚未就緒
   placeholder_busy:
     en: Another conversation is generating, please wait…
     zh-CN: 另一个会话正在生成中,请稍候…
@@ -209,6 +209,10 @@ chat:
     en: "Showing the first %{rows} rows and %{cols} columns"
     zh-CN: "显示前 %{rows} 行、%{cols} 列"
     zh-TW: "顯示前 %{rows} 列、%{cols} 欄"
+  setup_title:
+    en: "AI isn't set up yet"
+    zh-CN: "AI 还没配置好"
+    zh-TW: "AI 還沒設定好"
   empty_title:
     en: "Ask about this database"
     zh-CN: "问问这个库"

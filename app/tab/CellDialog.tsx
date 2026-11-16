@@ -90,7 +90,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
         <Text class={`${FS.sm} font-mono font-semibold text-foreground`}>{c.column}</Text>
         <If when={c.dataType}>
           {(ty) => (
-            <Text class="font-mono text-fg-faint" style={{ fontSize: 9.5 }}>
+            <Text class={`font-mono text-fg-faint ${FS["2xs"]}`}>
               {ty().toUpperCase()}
             </Text>
           )}

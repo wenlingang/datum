@@ -1009,9 +1009,9 @@ risk:
     zh-CN: 取消
     zh-TW: 取消
   confirm:
-    en: Confirm & Run
-    zh-CN: 确认执行
-    zh-TW: 確認執行
+    en: Run anyway
+    zh-CN: 仍要执行
+    zh-TW: 仍要執行
   alter_loading:
     en: "Assessing the schema change…"
     zh-CN: "正在评估改表结构的风险…"

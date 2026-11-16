@@ -132,7 +132,7 @@ function Rail() {
                 testID={`rail-${c().id}`}
                 accessibilityLabel={c().name}
                 tooltip={tip(() => `${c().name} · ${envLabel(c().env).toLowerCase()}`)}
-                class="relative size-8 shrink-0 items-center justify-center rounded-lg"
+                class="relative size-8 shrink-0 items-center justify-center rounded-(--radius-lg)"
                 classList={{ "bg-primary": active(), "border border-hairline hover:bg-raised": !active() }}
               >
                 <Icon name={DB_ICON[c().kind]} size={16} color={active() ? "primary-foreground" : "muted-foreground"} />
@@ -360,7 +360,7 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
 function DbList(props: { conn: Connection; loading: boolean; onPicked: () => void }) {
   const dbs = () => conns.databases(props.conn.id);
   return (
-    <View class="max-h-[260px] rounded-lg border border-border bg-panel shadow-md">
+    <View class="max-h-[260px] rounded-(--radius-lg) border border-border bg-panel shadow-md">
       <Scroll class="shrink" contentClass="p-1" testID="db-list">
         <If
           when={dbs()}
@@ -382,7 +382,7 @@ function DbList(props: { conn: Connection; loading: boolean; onPicked: () => voi
                         pickDatabase(name());
                       }}
                       accessibilityLabel={displayDb(props.conn.kind, name())}
-                      class="h-7 flex-row items-center gap-2 rounded-[5px] px-2 hover:bg-list-hover"
+                      class="h-7 flex-row items-center gap-2 rounded-(--radius) px-2 hover:bg-list-hover"
                       classList={{ "pl-7": !current() }}
                     >
                       <If when={current()}>

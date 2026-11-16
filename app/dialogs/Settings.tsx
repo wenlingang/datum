@@ -467,7 +467,7 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
         class="gap-3"
         right={
           <>
-            <View class="rounded-[4px] bg-raised px-1.5">
+            <View class="rounded-(--radius-sm) bg-raised px-1.5">
               <Text class={`${FS.xs} text-muted-foreground`}>
                 {t("settings.models_enabled_count", { enabled: enabledCount(), total: p().models.length })}
               </Text>
