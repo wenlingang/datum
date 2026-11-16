@@ -1,0 +1,414 @@
+_version: 2
+testdata:
+  menu:
+    en: "Generate Test Data…"
+    zh-CN: "生成测试数据…"
+    zh-TW: "產生測試資料…"
+  title:
+    en: "Generate Test Data — %{table}"
+    zh-CN: "生成测试数据 — %{table}"
+    zh-TW: "產生測試資料 — %{table}"
+  loading:
+    en: "Reading table structure…"
+    zh-CN: "正在读取表结构…"
+    zh-TW: "正在讀取資料表結構…"
+  rows:
+    en: Rows
+    zh-CN: 行数
+    zh-TW: 列數
+  rows_invalid:
+    en: "Enter a row count between 1 and %{max}"
+    zh-CN: "请输入 1 到 %{max} 之间的行数"
+    zh-TW: "請輸入 1 到 %{max} 之間的列數"
+  seed:
+    en: Seed
+    zh-CN: 随机种子
+    zh-TW: 隨機種子
+  seed_invalid:
+    en: "Seed must be a whole number"
+    zh-CN: "种子必须是整数"
+    zh-TW: "種子必須是整數"
+  new_seed:
+    en: "New Random Seed"
+    zh-CN: "换一个随机种子"
+    zh-TW: "換一個隨機種子"
+  seed_hint:
+    en: "The same seed generates the same data"
+    zh-CN: "同一个种子生成同样的数据"
+    zh-TW: "同一個種子產生同樣的資料"
+  language:
+    en: Language
+    zh-CN: 语言
+    zh-TW: 語言
+  locale_en:
+    en: English
+    zh-CN: English
+    zh-TW: English
+  locale_zh:
+    en: "简体中文"
+    zh-CN: "简体中文"
+    zh-TW: "简体中文"
+  ai_infer:
+    en: "Ask AI to Infer Columns"
+    zh-CN: "让 AI 推断各列"
+    zh-TW: "讓 AI 推斷各欄"
+  ai_busy:
+    en: "Asking AI…"
+    zh-CN: "正在询问 AI…"
+    zh-TW: "正在詢問 AI…"
+  ai_not_ready:
+    en: "Set up an AI provider in Settings first"
+    zh-CN: "请先在设置里配置 AI 服务商"
+    zh-TW: "請先在設定裡設定 AI 服務商"
+  ai_privacy:
+    en: "AI sees the table structure only, never its rows"
+    zh-CN: "只把表结构发给 AI,不发送任何行数据"
+    zh-TW: "只把資料表結構傳給 AI,不傳送任何列資料"
+  ai_applied:
+    en: "AI updated %{count} columns"
+    zh-CN: "AI 调整了 %{count} 列"
+    zh-TW: "AI 調整了 %{count} 欄"
+  ai_dropped:
+    en: "Ignored: %{items}"
+    zh-CN: "已忽略:%{items}"
+    zh-TW: "已忽略:%{items}"
+  col_column:
+    en: Column
+    zh-CN: 列
+    zh-TW: 欄位
+  col_generator:
+    en: Generator
+    zh-CN: 生成方式
+    zh-TW: 產生方式
+  col_options:
+    en: Options
+    zh-CN: 参数
+    zh-TW: 參數
+  col_null:
+    en: "NULL %"
+    zh-CN: "空值 %"
+    zh-TW: "空值 %"
+  null_ratio_label:
+    en: "NULL percentage of %{column}"
+    zh-CN: "%{column} 的空值比例"
+    zh-TW: "%{column} 的空值比例"
+  generator_label:
+    en: "Generator for %{column}"
+    zh-CN: "%{column} 的生成方式"
+    zh-TW: "%{column} 的產生方式"
+  badge:
+    pk:
+      en: PK
+      zh-CN: 主键
+      zh-TW: 主鍵
+    unique:
+      en: Unique
+      zh-CN: 唯一
+      zh-TW: 唯一
+    not_null:
+      en: NOT NULL
+      zh-CN: 非空
+      zh-TW: 非空
+  auto:
+    identity:
+      en: "Identity — numbered by the database"
+      zh-CN: "标识列,由数据库编号"
+      zh-TW: "識別欄位,由資料庫編號"
+    autoIncrement:
+      en: "Auto-increment — numbered by the database"
+      zh-CN: "自增列,由数据库编号"
+      zh-TW: "自動遞增,由資料庫編號"
+    rowId:
+      en: "Row ID — numbered by the database"
+      zh-CN: "rowid 别名,由数据库编号"
+      zh-TW: "rowid 別名,由資料庫編號"
+    generated:
+      en: "Generated column — computed by the database"
+      zh-CN: "生成列,由数据库计算"
+      zh-TW: "產生欄位,由資料庫計算"
+  uses_default:
+    en: "Left to the column default"
+    zh-CN: "使用列的默认值"
+    zh-TW: "使用欄位的預設值"
+  left_null:
+    en: "Left NULL"
+    zh-CN: "留空(NULL)"
+    zh-TW: "留空(NULL)"
+  fk_from:
+    en: "Existing keys of %{target}"
+    zh-CN: "取 %{target} 已有的键"
+    zh-TW: "取 %{target} 已有的鍵"
+  param:
+    min:
+      en: Min
+      zh-CN: 最小
+      zh-TW: 最小
+    max:
+      en: Max
+      zh-CN: 最大
+      zh-TW: 最大
+    start:
+      en: Start
+      zh-CN: 起始
+      zh-TW: 起始
+    step:
+      en: Step
+      zh-CN: 步长
+      zh-TW: 步長
+    from:
+      en: From
+      zh-CN: 从
+      zh-TW: 從
+    to:
+      en: To
+      zh-CN: 到
+      zh-TW: 到
+    min_len:
+      en: Min Length
+      zh-CN: 最短
+      zh-TW: 最短
+    max_len:
+      en: Max Length
+      zh-CN: 最长
+      zh-TW: 最長
+    len:
+      en: Bytes
+      zh-CN: 字节数
+      zh-TW: 位元組數
+    value:
+      en: Value
+      zh-CN: 值
+      zh-TW: 值
+    values:
+      en: "Values, comma-separated"
+      zh-CN: "取值,逗号分隔"
+      zh-TW: "取值,逗號分隔"
+  kind:
+    skip:
+      en: "Skip"
+      zh-CN: "不写入"
+      zh-TW: "不寫入"
+    "null":
+      en: "Always NULL"
+      zh-CN: "总是 NULL"
+      zh-TW: "總是 NULL"
+    fixed:
+      en: "Fixed Value"
+      zh-CN: "固定值"
+      zh-TW: "固定值"
+    pickList:
+      en: "Pick from List"
+      zh-CN: "从列表里选"
+      zh-TW: "從清單裡選"
+    foreignKey:
+      en: "Existing Parent Key"
+      zh-CN: "父表已有的键"
+      zh-TW: "父表已有的鍵"
+    fullName:
+      en: "Full Name"
+      zh-CN: "姓名"
+      zh-TW: "姓名"
+    firstName:
+      en: "First Name"
+      zh-CN: "名"
+      zh-TW: "名"
+    lastName:
+      en: "Last Name"
+      zh-CN: "姓"
+      zh-TW: "姓"
+    username:
+      en: "Username"
+      zh-CN: "用户名"
+      zh-TW: "使用者名稱"
+    email:
+      en: "Email"
+      zh-CN: "邮箱"
+      zh-TW: "電子郵件"
+    phone:
+      en: "Phone"
+      zh-CN: "电话"
+      zh-TW: "電話"
+    address:
+      en: "Address"
+      zh-CN: "地址"
+      zh-TW: "地址"
+    city:
+      en: "City"
+      zh-CN: "城市"
+      zh-TW: "城市"
+    country:
+      en: "Country"
+      zh-CN: "国家"
+      zh-TW: "國家"
+    postalCode:
+      en: "Postal Code"
+      zh-CN: "邮编"
+      zh-TW: "郵遞區號"
+    company:
+      en: "Company"
+      zh-CN: "公司"
+      zh-TW: "公司"
+    url:
+      en: "URL"
+      zh-CN: "网址"
+      zh-TW: "網址"
+    ip:
+      en: "IP Address"
+      zh-CN: "IP 地址"
+      zh-TW: "IP 位址"
+    uuid:
+      en: "UUID"
+      zh-CN: "UUID"
+      zh-TW: "UUID"
+    word:
+      en: "Word"
+      zh-CN: "词"
+      zh-TW: "詞"
+    title:
+      en: "Title"
+      zh-CN: "标题"
+      zh-TW: "標題"
+    sentence:
+      en: "Sentence"
+      zh-CN: "句子"
+      zh-TW: "句子"
+    paragraph:
+      en: "Paragraph"
+      zh-CN: "段落"
+      zh-TW: "段落"
+    text:
+      en: "Random Text"
+      zh-CN: "随机字符"
+      zh-TW: "隨機字元"
+    integer:
+      en: "Integer"
+      zh-CN: "整数"
+      zh-TW: "整數"
+    sequence:
+      en: "Sequence"
+      zh-CN: "递增序列"
+      zh-TW: "遞增序列"
+    decimal:
+      en: "Decimal"
+      zh-CN: "小数"
+      zh-TW: "小數"
+    float:
+      en: "Float"
+      zh-CN: "浮点数"
+      zh-TW: "浮點數"
+    boolean:
+      en: "Boolean"
+      zh-CN: "布尔"
+      zh-TW: "布林"
+    date:
+      en: "Date"
+      zh-CN: "日期"
+      zh-TW: "日期"
+    timestamp:
+      en: "Date & Time"
+      zh-CN: "日期时间"
+      zh-TW: "日期時間"
+    time:
+      en: "Time"
+      zh-CN: "时间"
+      zh-TW: "時間"
+    json:
+      en: "JSON Object"
+      zh-CN: "JSON 对象"
+      zh-TW: "JSON 物件"
+    bytes:
+      en: "Random Bytes"
+      zh-CN: "随机字节"
+      zh-TW: "隨機位元組"
+  parent_empty:
+    en: "%{columns} references %{parent}, which has no rows yet."
+    zh-CN: "%{columns} 引用的表 %{parent} 还没有数据。"
+    zh-TW: "%{columns} 參照的資料表 %{parent} 還沒有資料。"
+  parent_empty_null:
+    en: "%{columns} references %{parent}, which has no rows yet; it will be left NULL."
+    zh-CN: "%{columns} 引用的表 %{parent} 还没有数据,将留空(NULL)。"
+    zh-TW: "%{columns} 參照的資料表 %{parent} 還沒有資料,將留空(NULL)。"
+  generate_parent:
+    en: "Generate for %{parent}"
+    zh-CN: "先为 %{parent} 生成"
+    zh-TW: "先為 %{parent} 產生"
+  preview:
+    en: Preview
+    zh-CN: 预览
+    zh-TW: 預覽
+  preview_of:
+    en: "First %{count} of %{rows} rows"
+    zh-CN: "%{rows} 行中的前 %{count} 行"
+    zh-TW: "%{rows} 列中的前 %{count} 列"
+  preview_loading:
+    en: "Generating preview…"
+    zh-CN: "正在生成预览…"
+    zh-TW: "正在產生預覽…"
+  refresh:
+    en: "Refresh Preview"
+    zh-CN: "刷新预览"
+    zh-TW: "重新整理預覽"
+  single_tx:
+    en: "All rows go in one transaction; Cancel rolls everything back."
+    zh-CN: "所有行在一个事务里插入,取消即全部回滚。"
+    zh-TW: "所有列在一個交易裡插入,取消即全部復原。"
+  batched:
+    en: "Over %{max} rows: committed every %{every} rows. Cancel keeps batches already committed."
+    zh-CN: "超过 %{max} 行:每 %{every} 行提交一次。取消时已提交的批次会保留。"
+    zh-TW: "超過 %{max} 列:每 %{every} 列提交一次。取消時已提交的批次會保留。"
+  copy_sql:
+    en: "Copy as INSERT SQL"
+    zh-CN: "复制为 INSERT 语句"
+    zh-TW: "複製為 INSERT 陳述式"
+  open_editor:
+    en: "Open in Editor"
+    zh-CN: "在编辑器中打开"
+    zh-TW: "在編輯器中開啟"
+  sql_limit:
+    en: "Available for up to %{max} rows"
+    zh-CN: "不超过 %{max} 行时可用"
+    zh-TW: "不超過 %{max} 列時可用"
+  copied:
+    en: "INSERT statements copied"
+    zh-CN: "已复制 INSERT 语句"
+    zh-TW: "已複製 INSERT 陳述式"
+  generate:
+    en: "Generate %{count} Rows"
+    zh-CN: "生成 %{count} 行"
+    zh-TW: "產生 %{count} 列"
+  generating:
+    en: "Generating…"
+    zh-CN: "正在生成…"
+    zh-TW: "正在產生…"
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+    zh-TW: 取消
+  close:
+    en: Close
+    zh-CN: 关闭
+    zh-TW: 關閉
+  progress:
+    en: "%{rows} of %{total} rows · %{percent}%"
+    zh-CN: "%{rows} / %{total} 行 · %{percent}%"
+    zh-TW: "%{rows} / %{total} 列 · %{percent}%"
+  done:
+    en: "Inserted %{count} rows into %{table}"
+    zh-CN: "已向 %{table} 插入 %{count} 行"
+    zh-TW: "已向 %{table} 插入 %{count} 列"
+  cancelled:
+    en: "Cancelled; nothing was inserted"
+    zh-CN: "已取消,没有插入任何行"
+    zh-TW: "已取消,沒有插入任何列"
+  cancelled_partial:
+    en: "Cancelled; %{count} rows from committed batches were kept"
+    zh-CN: "已取消;已提交批次中的 %{count} 行保留"
+    zh-TW: "已取消;已提交批次中的 %{count} 列保留"
+  failed_partial:
+    en: "%{count} rows from committed batches were kept."
+    zh-CN: "已提交批次中的 %{count} 行保留。"
+    zh-TW: "已提交批次中的 %{count} 列保留。"
+  risk_note:
+    en: "Inserts %{count} generated rows into %{table}."
+    zh-CN: "将向 %{table} 插入 %{count} 行生成的数据。"
+    zh-TW: "將向 %{table} 插入 %{count} 列產生的資料。"

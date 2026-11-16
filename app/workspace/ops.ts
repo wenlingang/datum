@@ -309,3 +309,16 @@ export function showAlterTable(connId: string, table: string) {
   if (!conn || conn.kind !== "sqlite") return;
   alterView.set({ connId, table });
 }
+
+/** 正在生成测试数据的表(TestDataDialog 读取);`key` 每次打开都换,内容重建。 */
+const testDataView = signal<{ connId: string; table: string; key: number } | null>(null);
+let testDataKey = 1;
+export const testDataTarget = () => testDataView();
+export const closeTestData = () => testDataView.set(null);
+
+/** 右键表「生成测试数据…」(PG / MySQL / SQLite)。 */
+export function showTestData(connId: string, table: string) {
+  const conn = conns.get(connId);
+  if (!conn || !supportsSql(conn.kind)) return;
+  testDataView.set({ connId, table, key: testDataKey++ });
+}

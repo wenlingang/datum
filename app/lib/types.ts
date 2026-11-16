@@ -1269,3 +1269,106 @@ export interface ImportProgress {
   /** 追加时表里没有、被跳过的列 */
   skipped: string[];
 }
+
+// ==== 测试数据生成 ====
+
+/** 列的基础类型(决定能生成什么值、值的上下限)。 */
+export type TdBaseType =
+  | { kind: "int"; min: number; max: number }
+  | { kind: "decimal"; precision: number | null; scale: number }
+  | { kind: "text"; maxLen: number | null }
+  | { kind: "bytes"; maxLen: number | null }
+  | { kind: "float" | "bool" | "date" | "time" | "timestamp" | "json" | "uuid" | "inet" | "enum" | "other" };
+
+export interface TdColumnMeta {
+  name: string;
+  dataType: string;
+  base: TdBaseType;
+  nullable: boolean;
+  hasDefault: boolean;
+  /** 不写入的列:标识 / 自增 / rowid 别名 / 生成列 */
+  auto: "identity" | "autoIncrement" | "rowId" | "generated" | null;
+  primary: boolean;
+  unique: boolean;
+  values: string[];
+  checkMin: number | null;
+  checkMax: number | null;
+  /** 所在外键约束名 */
+  fk: string | null;
+}
+
+export interface TdFkGroup {
+  constraint: string;
+  columns: string[];
+  refTable: string;
+  refColumns: string[];
+}
+
+export interface TdTableMeta {
+  table: string;
+  columns: TdColumnMeta[];
+  uniques: string[][];
+  fks: TdFkGroup[];
+}
+
+/** 一列的生成方式;`kind` 之外的字段是该类生成器的参数。 */
+export interface TdGenerator {
+  kind: string;
+  value?: string;
+  values?: string[];
+  min?: number;
+  max?: number;
+  scale?: number;
+  start?: number;
+  step?: number;
+  from?: string;
+  to?: string;
+  minLen?: number;
+  maxLen?: number;
+  len?: number;
+}
+
+export interface TdColumnPlan {
+  name: string;
+  generator: TdGenerator;
+  nullRatio: number;
+}
+
+export type TdLocale = "en" | "zh";
+
+export interface TdPlan {
+  table: string;
+  rows: number;
+  seed: number;
+  locale: TdLocale;
+  columns: TdColumnPlan[];
+}
+
+export interface TdAnalysis {
+  meta: TdTableMeta;
+  plan: TdPlan;
+  /** 父表还没有数据的外键 */
+  parentEmpty: { columns: string[]; parent: string; nullable: boolean }[];
+  kinds: string[];
+}
+
+export interface TdPreview {
+  columns: string[];
+  rows: (string | null)[][];
+}
+
+export interface TdProgress {
+  rows: number;
+  committed: number;
+  total: number;
+  batched: boolean;
+  done: boolean;
+  cancelled: boolean;
+  error: string | null;
+}
+
+export interface TdAiSuggestion {
+  columns: TdColumnPlan[];
+  dropped: string[];
+  note: string | null;
+}

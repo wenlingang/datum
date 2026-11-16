@@ -256,6 +256,11 @@ impl MyPool {
             .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))
     }
 
+    /// 从连接池取一条独立连接(长时间的批量写入用,如造测试数据):不占编辑器会话,用完丢弃即归还。
+    pub async fn dedicated_conn(&self, id: &str) -> AppResult<mysql_async::Conn> {
+        self.pool(id).await?.get_conn().await.map_err(qerr)
+    }
+
     /// 断开并移除连接池(不存在时静默):先移出映射再优雅关闭,
     /// 服务器侧会话随之结束 —— 删库前强制断开残留连接用。
     pub async fn disconnect(&self, id: &str) {

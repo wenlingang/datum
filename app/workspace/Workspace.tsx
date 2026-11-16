@@ -8,6 +8,7 @@ import { PANEL, setPanelWidth, workspace } from "../store/workspace";
 import { DetailPanel, TabView } from "../tab";
 import { installAppCommands } from "./commands";
 import { AlterTableDialog } from "./AlterTableDialog";
+import { TestDataDialog } from "./TestDataDialog";
 import { DdlDialog } from "./DdlDialog";
 import { EmptyWorkspace } from "./EmptyWorkspace";
 import { Sidebar } from "./Sidebar";
@@ -113,6 +114,7 @@ export function Workspace() {
       <StatusBar />
       <DdlDialog />
       <AlterTableDialog />
+      <TestDataDialog />
     </View>
   );
 }

@@ -26,6 +26,8 @@ pub struct AppState {
     pub sqlite_imports: crate::sqlite::import_data::Jobs,
     /// 数据对比任务(按任务 id)
     pub data_diffs: crate::data_diff::Jobs,
+    /// 造测试数据的后台插入任务(按连接 id)
+    pub testdata_jobs: crate::testdata::job::Jobs,
     /// 已连接的 SSH 隧道(按连接 id)
     pub tunnels: crate::ssh::TunnelPool,
 }
@@ -44,6 +46,7 @@ impl AppState {
             sqlite_pool: SqlitePool::default(),
             sqlite_imports: Default::default(),
             data_diffs: Default::default(),
+            testdata_jobs: Default::default(),
             tunnels: Default::default(),
         }
     }

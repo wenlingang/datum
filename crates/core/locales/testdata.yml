@@ -1,0 +1,59 @@
+_version: 2
+testdata:
+  err:
+    row_count:
+      en: "Row count must be between 1 and %{max}"
+      zh-CN: "行数要在 1 到 %{max} 之间"
+      zh-TW: "列數要在 1 到 %{max} 之間"
+    unknown_column:
+      en: "Column %{column} doesn't exist in this table"
+      zh-CN: "表里没有列 %{column}"
+      zh-TW: "資料表裡沒有欄位 %{column}"
+    generated_column:
+      en: "%{column} is a generated column and can't be written"
+      zh-CN: "%{column} 是生成列,不能写入"
+      zh-TW: "%{column} 是產生欄位,不能寫入"
+    not_null_skipped:
+      en: "%{column} is NOT NULL and has no default; choose a generator for it"
+      zh-CN: "%{column} 不可为空且没有默认值,请给它选一个生成方式"
+      zh-TW: "%{column} 不可為空且沒有預設值,請給它選一個產生方式"
+    generator_mismatch:
+      en: "Generator “%{generator}” doesn't fit the type of %{column}"
+      zh-CN: "生成方式「%{generator}」不适合列 %{column} 的类型"
+      zh-TW: "產生方式「%{generator}」不適合欄位 %{column} 的型別"
+    unique_domain:
+      en: "%{column} must be unique, but its generator only has %{count} possible values for %{rows} rows"
+      zh-CN: "%{column} 要求唯一,但它的生成方式只有 %{count} 种取值,不够 %{rows} 行"
+      zh-TW: "%{column} 要求唯一,但它的產生方式只有 %{count} 種取值,不夠 %{rows} 列"
+    unique_exhausted:
+      en: "Couldn't find a new unique value for %{column} at row %{row}; widen its range or generate fewer rows"
+      zh-CN: "第 %{row} 行时 %{column} 找不到新的不重复值;请放宽取值范围或减少行数"
+      zh-TW: "第 %{row} 列時 %{column} 找不到新的不重複值;請放寬取值範圍或減少列數"
+    parent_empty:
+      en: "%{column} references %{parent}, which has no rows yet. Generate data for %{parent} first"
+      zh-CN: "%{column} 引用的表 %{parent} 还没有数据,请先为 %{parent} 生成数据"
+      zh-TW: "%{column} 參照的資料表 %{parent} 還沒有資料,請先為 %{parent} 產生資料"
+    no_columns:
+      en: "No columns to write; choose a generator for at least one column"
+      zh-CN: "没有要写入的列,请至少给一列选择生成方式"
+      zh-TW: "沒有要寫入的欄位,請至少給一欄選擇產生方式"
+    insert_failed:
+      en: "Insert failed"
+      zh-CN: "插入失败"
+      zh-TW: "插入失敗"
+    rows_failed:
+      en: "Inserting rows %{from}–%{to} failed; the current transaction was rolled back"
+      zh-CN: "插入第 %{from}–%{to} 行时失败,当前事务已回滚"
+      zh-TW: "插入第 %{from}–%{to} 列時失敗,目前交易已復原"
+    cancelled:
+      en: "Cancelled"
+      zh-CN: "已取消"
+      zh-TW: "已取消"
+    running:
+      en: "Test data is already being generated on this connection"
+      zh-CN: "这个连接上已有造数任务在进行"
+      zh-TW: "這個連線上已有產生資料的工作在進行"
+    sql_too_many:
+      en: "SQL text is limited to %{max} rows; insert directly for more"
+      zh-CN: "生成 SQL 文本最多 %{max} 行,更多请直接插入"
+      zh-TW: "產生 SQL 文字最多 %{max} 列,更多請直接插入"

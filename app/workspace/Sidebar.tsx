@@ -30,6 +30,7 @@ import {
   showAlterTable,
   showDdl,
   showTableDetail,
+  showTestData,
 } from "./ops";
 
 const DB_ICON: Record<DbKind, IconName> = {
@@ -99,6 +100,7 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
       <If when={kind === "sqlite"}>
         <MItem label={t("sidebar.alter_table")} onSelect={() => showAlterTable(connId, table)} />
       </If>
+      <MItem label={t("testdata.menu")} onSelect={() => showTestData(connId, table)} />
       <MSep />
       {EXPORT_FORMATS.map((f) => (
         <MItem label={exportTableLabel(f)} onSelect={() => void exportTable(connId, table, f)} />
