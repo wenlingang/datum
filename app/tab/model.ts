@@ -22,6 +22,7 @@ import {
   type JsonKind,
   type JsonPath,
   type KeyDetail,
+  type MaskKind,
   type Plan,
   type RedisKeyValue,
   type QueryResult,
@@ -36,6 +37,7 @@ import {
 import { conns, refreshTables } from "../store/conns";
 import { forgetUndo, recordHistory } from "../store/history";
 import { maxRows } from "../store/prefs";
+import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
 import { setDetailOpen, type WorkTab } from "../store/workspace";
 import { caretOf, primaryRange } from "./textpos";
@@ -127,6 +129,8 @@ export interface CellDialogState {
   dataType: string | null;
   value: string | null;
   editable: boolean;
+  /** 遮罩中的格子:`value` 是遮罩后的值,只读,点「显示原值」后重开 */
+  masked?: MaskKind | null;
 }
 
 export interface TabModel {
@@ -206,6 +210,8 @@ export interface TabModel {
 
   /** 结果区实测宽度(列宽铺满用) */
   readonly gridWidth: Signal<number>;
+  /** 点过「显示原值」的遮罩单元格(`结果行下标:列下标`);`of` 不是当前结果时全部作废 */
+  readonly revealed: Signal<{ of: QueryResult | null; keys: string[] }>;
 
 
   /** 恢复会话得到的表浏览 tab:第一次显示且连接就绪时再加载数据 */
@@ -302,6 +308,7 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     multi: signal<StmtResult[] | null>(null),
     multiIndex: signal(0),
     gridWidth: signal(0),
+    revealed: signal<{ of: QueryResult | null; keys: string[] }>({ of: null, keys: [] }),
     pendingLoad: false,
     token: 0,
     filterSeq: 0,
@@ -565,7 +572,8 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
       // 转为由用户在确认框里明确决定:不再沿用免确认的只读标记,
       // 也避免取消后标记残留到下一次手动执行
       m.readOnlyNext = false;
-      const database = conn ? (conn.kind === "sqlite" ? (conn.filePath ?? "") : conn.database) : "";
+      // SQLite 是文件路径:演示模式下不露出
+      const database = conn ? (conn.kind === "sqlite" ? hideInDemo(conn.filePath ?? "") : conn.database) : "";
       const relational = supportsSql(m.dbKind);
       const gate: RiskGate = {
         findings,
@@ -1078,16 +1086,6 @@ export function openRowDetail(m: TabModel, viewIx: number) {
   setDetailOpen(true);
 }
 
-/** 复制结果某一行的 INSERT(真实值)。 */
-export async function copyInsertRow(m: TabModel, viewIx: number, write: (text: string) => Promise<void>) {
-  const result = m.result();
-  const row = viewRow(m, viewIx);
-  if (!result || !row || !supportsSql(m.dbKind)) return;
-  const table = m.table ?? "table";
-  await write(grid.buildInsertRow(table, result.columns, row, m.dbKind));
-  toast.success(t("tab.copied"));
-}
-
 export function clearSelection(m: TabModel) {
   m.selectedRow.set(null);
 }
@@ -1191,7 +1189,7 @@ export async function filterFromText(m: TabModel, text: string) {
     // 生产库默认不把数据发给 AI:不带样例行,只按列名与类型翻译
     const prodDataOff = conns.get(m.connId)?.env === "prod" && !ai.settings().allowProdData;
     const samples = prodDataOff ? [] : result.rows.slice(0, NL_SAMPLE_ROWS);
-    const r = await ai.nlFilter(m.connId, question, columns, samples);
+    const r = await ai.nlFilter(m.connId, m.table, question, columns, samples);
     // 等待期间结果被换掉(翻页、刷新、重新执行):条件可能已不适用,丢弃
     if (token !== m.token) return;
     if (r.filters.length === 0) {

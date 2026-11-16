@@ -9,16 +9,14 @@ import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
 import { grid } from "../lib/native";
 import { supportsSql } from "../lib/types";
-import { Icon } from "../ui/kit";
+import { Icon, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { isJsonType } from "./values";
 import {
   columnTypes,
-  copyInsertRow,
   cycleSort,
   dirtyKey,
   isJsonDoc,
-  openCell,
   openRowDetail,
   pkIndex,
   toggleDelete,
@@ -26,6 +24,8 @@ import {
   viewRow,
   type TabModel,
 } from "./model";
+import { columnMask, copyInsertDisplayed, copyRowDisplayed, copyValueDisplayed, displayValue, isMaskedCell, openCellView, revealCell, toggleColumnMask } from "./mask";
+import { privacy } from "../store/privacy";
 
 /** 自适应列宽的边界与采样。 */
 const AUTO_MIN = 64;
@@ -114,7 +114,9 @@ function columnName(m: TabModel, col: number): string {
 
 function GridCell(props: { m: TabModel; row: number; col: number }) {
   const m = props.m;
-  const value = () => viewRow(m, props.row)?.[props.col] ?? null;
+  // 展示值:敏感列遮罩(点过「显示原值」的格子除外)
+  const value = () => displayValue(m, props.row, props.col);
+  const masked = () => isMaskedCell(m, props.row, props.col);
   const type = () => columnTypes(m)[columnName(m, props.col)] ?? null;
   const style = () => grid.classifyCell(value(), type());
   const align = () => columnAlign(m, props.col);
@@ -141,19 +143,20 @@ function GridCell(props: { m: TabModel; row: number; col: number }) {
   // 行高撑满格子,暂存态的底色才铺满整格
   return (
     <Text
+      testID={masked() ? `masked:${props.row}:${columnName(m, props.col)}` : undefined}
       class={`self-stretch px-3 line-clamp-1 ${isNull() ? `${FS.xs} font-semibold` : FS.sm}`}
       style={{ lineHeight: 36 }}
       classList={{
         "text-right": align() === "right",
         "text-center": align() === "center",
-        "text-cell-strong": style().tier === "strong",
-        "text-cell": style().tier === "normal",
-        "text-cell-dim": style().tier === "dim",
+        "text-cell-strong": !masked() && style().tier === "strong",
+        "text-cell": !masked() && style().tier === "normal",
+        "text-cell-dim": masked() || style().tier === "dim",
         "text-cell-hash": style().tier === "hash",
         "text-cell-null": style().tier === "null",
         "text-negative": style().tier === "negative",
         // JSON 列压成一行的文本用等宽,结构更好认(双击展开成树)
-        "font-mono": style().mono || isJsonType(type()),
+        "font-mono": masked() || style().mono || isJsonType(type()),
         "bg-deleted opacity-55 line-through": deleted(),
         "bg-dirty border border-primary": dirty(),
       }}
@@ -172,12 +175,19 @@ function HeaderCell(props: { m: TabModel; col: number }) {
     const s = m.sort();
     return s && s.col === name() ? s : null;
   };
+  const masked = () => columnMask(m, props.col) !== null;
   return (
     <View
       testID={`th:${name()}`}
       onPress={() => cycleSort(m, name())}
+      onContextMenu={(e) => showHeaderMenu(m, props.col, e.pagePosition)}
       class="flex-1 self-stretch flex-row items-center gap-1.5 px-3"
     >
+      <If when={masked()}>
+        <View testID={`th-masked:${name()}`} tooltip={tip(t("mask.column_masked_tip"))}>
+          <Icon name="eye-off" size={12} color="fg-faint" />
+        </View>
+      </If>
       <View
         class="min-w-0 flex-1 gap-0.5"
         classList={{
@@ -202,22 +212,42 @@ function HeaderCell(props: { m: TabModel; col: number }) {
   );
 }
 
+/** 表头右键:遮罩此列 / 取消遮罩(写进连接的手动覆盖)。 */
+function showHeaderMenu(m: TabModel, col: number, at: { x: number; y: number }) {
+  const masked = columnMask(m, col) !== null;
+  void NativeMenu.popup(
+    [
+      masked
+        ? { label: t("mask.unmask_column"), disabled: privacy.demo(), onSelect: () => toggleColumnMask(m, col) }
+        : { label: t("mask.mask_column"), onSelect: () => toggleColumnMask(m, col) },
+    ],
+    at,
+  );
+}
+
 function showRowMenu(m: TabModel, row: number, col: number, at: { x: number; y: number }) {
   const editable = pkIndex(m) !== null;
   const deletable = editable && m.table !== null;
   const pi = pkIndex(m);
   const pk = pi === null ? null : (viewRow(m, row)?.[pi] ?? "");
   const deleted = pk !== null && m.deletes().includes(pk);
-  const json = isJsonDoc(viewRow(m, row)?.[col] ?? null);
+  const masked = isMaskedCell(m, row, col);
+  const json = !masked && isJsonDoc(viewRow(m, row)?.[col] ?? null);
   void NativeMenu.popup(
     [
       { label: t("grid.view_detail"), onSelect: () => openRowDetail(m, row) },
       // JSON 对象 / 数组:弹窗默认就是树形,这里点明入口
-      json && { label: t("grid.expand_json"), onSelect: () => openCell(m, row, col) },
-      { label: editable ? t("grid.edit") : t("grid.view"), onSelect: () => openCell(m, row, col) },
+      json && { label: t("grid.expand_json"), onSelect: () => openCellView(m, row, col) },
+      { label: editable ? t("grid.edit") : t("grid.view"), onSelect: () => openCellView(m, row, col) },
+      // 遮罩的格子:显式点「显示原值」才看到(演示模式下不可用)
+      masked && { label: t("mask.reveal"), disabled: privacy.demo(), onSelect: () => revealCell(m, row, col) },
+      { type: "separator" },
+      // 复制的是展示值:遮罩的列复制出来也是遮罩后的
+      { label: t("grid.copy_value"), onSelect: () => void copyValueDisplayed(m, row, col, (s) => Clipboard.writeText(s)) },
+      { label: t("grid.copy_row"), onSelect: () => void copyRowDisplayed(m, row, (s) => Clipboard.writeText(s)) },
       supportsSql(m.dbKind) && {
         label: t("grid.copy_insert"),
-        onSelect: () => void copyInsertRow(m, row, (s) => Clipboard.writeText(s)),
+        onSelect: () => void copyInsertDisplayed(m, row, (s) => Clipboard.writeText(s)),
       },
       deletable && { type: "separator" },
       deletable && {
@@ -263,7 +293,7 @@ export function ResultGrid(props: { m: TabModel }) {
         selection={m.selectedRow() === null ? null : { row: m.selectedRow() }}
         onSelectionChange={({ selection }) => m.selectedRow.set(selection?.row ?? null)}
         onDoublePress={({ target }) => {
-          if (target.row != null && target.column != null) openCell(m, target.row, target.column);
+          if (target.row != null && target.column != null) openCellView(m, target.row, target.column);
         }}
         onContextMenu={(e) => {
           if (e.row == null) return;

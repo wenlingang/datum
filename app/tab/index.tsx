@@ -25,6 +25,7 @@ import {
   toggleFilter,
   viewRows,
 } from "./model";
+import { hasMaskedColumns, maskedRows } from "./mask";
 import { TabStatusView } from "./TabStatus";
 import { TabBody } from "./TabView";
 
@@ -272,7 +273,13 @@ setResultToolsProvider((tab) => {
     exportData: () => {
       const result = m.result();
       const rows = viewRows(m);
-      return result && rows.length > 0 ? { table: exportName(m), columns: result.columns, rows } : null;
+      if (!result || rows.length === 0) return null;
+      return {
+        table: exportName(m),
+        columns: result.columns,
+        rows,
+        maskedRows: hasMaskedColumns(m) ? () => maskedRows(m, rows) : null,
+      };
     },
   };
 });

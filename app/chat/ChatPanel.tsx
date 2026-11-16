@@ -9,6 +9,7 @@ import { t } from "nsh/i18n";
 import { chat as chatNative } from "../lib/native";
 import type { DbKind } from "../lib/types";
 import { type AiMessage, aiStore, setPendingRef, stopStreaming, type ToolStep } from "../store/ai";
+import { maskTable } from "../store/privacy";
 import { toast } from "../store/toast";
 import { toggleAiFullscreen } from "../store/workspace";
 import { Btn, Hint, Icon, IconButton, tip } from "../ui/kit";
@@ -294,6 +295,8 @@ function MessageRow(props: {
   last: boolean;
   kind: DbKind;
   target: string;
+  /** 对话绑定的连接(结果表遮罩用) */
+  connId: string | null;
   wide: boolean;
   onOpenQuery: (sql: string) => void;
 }) {
@@ -309,13 +312,18 @@ function MessageRow(props: {
         <View class="gap-1.5">
           <Text class={`${FS.xs} px-1 text-fg-faint`}>{props.msg.content}</Text>
           <If when={props.msg.table}>
-            {(tb) => (
-              <View testID="ai-result" class="gap-1.5 rounded-(--radius) border border-border bg-background px-3 py-2">
-                <ResultTable columns={(tb().columns ?? []) as string[]} rows={tb().rows ?? []} wide={props.wide} />
-                <ShownNote columns={tb().columns?.length ?? 0} rows={tb().rows?.length ?? 0} wide={props.wide} />
-                <ResultActions columns={(tb().columns ?? []) as string[]} rows={tb().rows ?? []} testID="ai-result-actions" />
-              </View>
-            )}
+            {(tb) => {
+              // 执行结果表:敏感列按对话所绑连接的规则遮罩(显示、复制、导出都用遮罩后的值)
+              const cols = () => (tb().columns ?? []) as string[];
+              const rows = () => maskTable(props.connId, cols(), tb().rows ?? [], tb().sql);
+              return (
+                <View testID="ai-result" class="gap-1.5 rounded-(--radius) border border-border bg-background px-3 py-2">
+                  <ResultTable columns={cols()} rows={rows()} wide={props.wide} />
+                  <ShownNote columns={cols().length} rows={rows().length} wide={props.wide} />
+                  <ResultActions columns={cols()} rows={rows()} testID="ai-result-actions" />
+                </View>
+              );
+            }}
           </If>
         </View>
       </If>
@@ -563,6 +571,7 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
                 last={m().id === lastAssistant()}
                 kind={cardTarget()?.kind ?? "pg"}
                 target={cardTarget()?.label ?? ""}
+                connId={cardTarget()?.connId ?? null}
                 wide={wide()}
                 onOpenQuery={(sql) => {
                   const to = cardTarget();

@@ -16,6 +16,7 @@ import {
   siblings,
   switchDatabase,
 } from "../store/conns";
+import { privacy } from "../store/privacy";
 import { toast } from "../store/toast";
 import { closeConnTabs, setDetailOpen, workspace } from "../store/workspace";
 import { openTable } from "../tab";
@@ -77,12 +78,18 @@ const fileName = (base: string, ext: string) => `${base}_${shell.fileTimestamp()
 
 // ------------------------------------------------------------ 导出
 
-/** 导出当前结果(已应用筛选后的行)。 */
+/** 导出时遮罩敏感列(结果栏导出菜单里的勾选项,默认勾选;演示模式下强制)。 */
+const exportMask = signal(true);
+export const exportMasked = () => exportMask() || privacy.demo();
+export const toggleExportMask = () => exportMask.update((v) => !v);
+
+/** 导出当前结果(已应用筛选后的行);有敏感列且勾选了「遮罩敏感列」时导出遮罩后的值。 */
 export async function exportFiltered(format: ExportFormat) {
   const tab = workspace.activeTab();
   const data = workspace.resultTools()?.exportData();
   if (!tab || !data || data.rows.length === 0) return;
-  await saveRows(format, data.table, data.columns, data.rows, tab.dbKind);
+  const rows = data.maskedRows && exportMasked() ? data.maskedRows() : data.rows;
+  await saveRows(format, data.table, data.columns, rows, tab.dbKind);
 }
 
 /** 整表 / 整库导出是长任务,防重入。 */

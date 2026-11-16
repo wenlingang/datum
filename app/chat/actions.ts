@@ -17,6 +17,7 @@ import {
   setPendingRef,
   takeLastUserTurn,
 } from "../store/ai";
+import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
 import { setAiOpen } from "../store/workspace";
 import { clearCards } from "./cards";
@@ -34,7 +35,7 @@ export function connLabel(c: Connection): string {
   let db: string;
   if (c.kind === "sqlite") {
     const name = (c.filePath ?? "").split(/[\\/]/).pop();
-    db = name || "—";
+    db = name ? hideInDemo(name) : "—";
   } else {
     db = c.database || "—";
   }

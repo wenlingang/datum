@@ -14,6 +14,8 @@ import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { JsonTree } from "./JsonTree";
 import { canFilterJson, filterByJson, isJsonDoc, stageEdit, type CellDialogState, type TabModel } from "./model";
+import { revealOpenCell } from "./mask";
+import { privacy } from "../store/privacy";
 import { isJsonType } from "./values";
 
 /** 值能解析为 JSON 对象 / 数组时返回 2 空格缩进的格式化文本(键顺序、数字写法不变)。 */
@@ -29,9 +31,12 @@ export function jsonErrorText(e: JsonError): string {
 
 function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
   const c = props.cell;
+  /** 遮罩中的格子:只读显示遮罩值,点「显示原值」后重开成原值才能修改 */
+  const masked = !!c.masked;
+  const editable = c.editable && !masked;
   /** json 列:内容必须是合法 JSON 才能暂存;JSON 形态的文本只是展开显示,不强制 */
-  const jsonCol = isJsonType(c.dataType);
-  const json = jsonCol || isJsonDoc(c.value);
+  const jsonCol = !masked && isJsonType(c.dataType);
+  const json = jsonCol || (!masked && isJsonDoc(c.value));
   // JSON 值默认以格式化形态展示;基准值同步取格式化文本,避免刚打开就判为已修改
   const initial = tryFormatJson(c.value ?? "") ?? c.value ?? "";
   const draft = signal(initial);
@@ -58,7 +63,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
   const blocked = () => jsonCol && jsonError() !== null;
 
   const stage = () => {
-    if (!c.editable || !dirty() || blocked()) return;
+    if (!editable || !dirty() || blocked()) return;
     stageEdit(props.m, c.viewIx, c.colIx, draft());
     base.set(draft());
     staged.set(true);
@@ -120,6 +125,24 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
           </View>
         </If>
       </View>
+      <If when={masked}>
+        <View testID="cell-masked" class="mb-2 flex-row items-center gap-2 rounded-(--radius) border border-border bg-panel px-3 py-2">
+          <Icon name="eye-off" size={14} color="muted-foreground" />
+          <Text class={`${FS.sm} min-w-0 flex-1 text-muted-foreground`}>
+            {privacy.demo() ? t("mask.cell_masked_demo") : c.editable ? t("mask.cell_masked_edit") : t("mask.cell_masked")}
+          </Text>
+          <Btn
+            small
+            testID="cell-reveal"
+            variant="outline"
+            icon="eye"
+            label={t("mask.reveal")}
+            disabled={privacy.demo()}
+            tooltip={privacy.demo() ? t("mask.reveal_disabled_demo") : t("mask.reveal_tooltip")}
+            onPress={() => revealOpenCell(props.m)}
+          />
+        </View>
+      </If>
       <View class="min-h-0 flex-1 overflow-hidden rounded-(--radius) border border-border">
         <If when={view() === "tree"}>
           <If
@@ -146,7 +169,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
             ref={draftText.ref}
             defaultValue={draftText.defaultValue}
             onChange={draftText.onChange}
-            readOnly={!c.editable}
+            readOnly={!editable}
             language={json ? "json" : undefined}
             lineNumbers={false}
             folding={false}
@@ -210,7 +233,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
             label={copied() ? t("cell.copied") : t("cell.copy")}
             onPress={() => void copy()}
           />
-          <If when={c.editable}>
+          <If when={editable}>
             <Btn
               small
               testID="cell-stage"
@@ -241,19 +264,20 @@ export function CellDialog(props: { m: TabModel }) {
       backdropClass="bg-overlay"
       class="m-auto w-[880px] max-w-[92%] rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
     >
-      <If when={m.cell()}>
+      {/* 按格子与遮罩状态重建:「显示原值」后编辑器(不受控)要换成原值 */}
+      <Each of={m.cell() ? [m.cell()!] : []} key={(c) => `${c.viewIx}:${c.colIx}:${c.masked ? "m" : "v"}`}>
         {(c) => (
           <View class="gap-3">
             <View class="flex-row items-center justify-between">
               <Text class={`${FS.base} font-bold text-popover-foreground`}>
-                {c().editable ? t("cell.edit_title") : t("cell.view_title")}
+                {c().editable && !c().masked ? t("cell.edit_title") : t("cell.view_title")}
               </Text>
               <IconButton icon="x" size={14} onPress={close} />
             </View>
             <CellEditor m={m} cell={c()} />
           </View>
         )}
-      </If>
+      </Each>
     </Dialog>
   );
 }

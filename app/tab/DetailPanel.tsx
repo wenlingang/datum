@@ -8,10 +8,11 @@ import { grid } from "../lib/native";
 import { type KeyDetail, supportsSql, type TableDetail } from "../lib/types";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { SectionLabel } from "../ui/kit";
+import { Icon, SectionLabel } from "../ui/kit";
 import { FS } from "../ui/text";
 import { JsonTree } from "./JsonTree";
 import { canFilterJson, columnTypes, filterByJson, isJsonDoc, modelOf, viewRow, type TabModel } from "./model";
+import { displayValue, isMaskedCell } from "./mask";
 
 function Header(props: { children: string }) {
   return (
@@ -24,9 +25,10 @@ function Header(props: { children: string }) {
 function RowDetail(props: { m: TabModel; row: number }) {
   const m = props.m;
   const columns = () => m.result()?.columns ?? [];
-  const values = () => viewRow(m, props.row) ?? [];
   const types = () => columnTypes(m);
-  const fields = () => columns().map((c, i) => ({ c, v: values()[i] ?? null }));
+  // 展示值:敏感列遮罩(与网格一致,点过「显示原值」的格子除外)
+  const fields = () =>
+    columns().map((c, i) => ({ c, v: displayValue(m, props.row, i), masked: isMaskedCell(m, props.row, i) }));
   return (
     <View class="flex-1">
       <Header>{t("detail.row_detail")}</Header>
@@ -35,18 +37,24 @@ function RowDetail(props: { m: TabModel; row: number }) {
           {(f) => (
             <View class="gap-1 border-b border-border px-3 py-2">
               <View class="flex-row items-center justify-between gap-2">
-                <Text class={`${FS.xs} font-semibold text-foreground`}>{f().c}</Text>
+                <View class="min-w-0 flex-row items-center gap-1">
+                  <Text class={`${FS.xs} font-semibold text-foreground`}>{f().c}</Text>
+                  <If when={f().masked}>
+                    <Icon name="eye-off" size={11} color="fg-faint" />
+                  </If>
+                </View>
                 <Text class={`shrink-0 text-data ${FS.xs}`}>
                   {types()[f().c] ?? "—"}
                 </Text>
               </View>
               {/* JSON 对象 / 数组展开成树(PG 上可点字段生成筛选),其余原样显示 */}
               <If
-                when={isJsonDoc(f().v) ? f().v : null}
+                when={!f().masked && isJsonDoc(f().v) ? f().v : null}
                 else={
                   <Text
+                    testID={f().masked ? `row-masked:${f().c}` : undefined}
                     class={`${FS.xs} font-mono`}
-                    classList={{ "text-foreground": f().v !== null, "text-muted-foreground": f().v === null }}
+                    classList={{ "text-foreground": f().v !== null && !f().masked, "text-muted-foreground": f().v === null || f().masked }}
                   >
                     {f().v ?? "NULL"}
                   </Text>

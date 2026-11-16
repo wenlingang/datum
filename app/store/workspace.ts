@@ -48,7 +48,13 @@ export interface ResultTools {
   /** 筛选栏是否展开(过滤按钮的按下态) */
   filterOpen: boolean;
   /** 导出用的数据:已应用筛选后的行;没有行时返回 null(导出按钮置灰) */
-  exportData: () => { table: string; columns: string[]; rows: (string | null)[][] } | null;
+  exportData: () => {
+    table: string;
+    columns: string[];
+    rows: (string | null)[][];
+    /** 有敏感列时:敏感列遮罩后的行(导出菜单「遮罩敏感列」勾选时用);没有敏感列为 null */
+    maskedRows?: (() => (string | null)[][]) | null;
+  } | null;
 }
 
 /** 侧栏 / 详情栏 / AI 面板的宽度与范围(GPUI 版 h_resizable 的 size / size_range)。 */

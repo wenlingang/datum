@@ -40,6 +40,8 @@ if want workspace; then
   sqlite3 "$D/shop.db" "create table items(id integer primary key, title text); insert into items(title) values('a');"
   printf '[%s,%s]\n' "$(conn c-roastery roastery "$D/roastery.db")" "$(conn c-shop shop "$D/shop.db")" > "$D/connections.json"
   run workspace "$D" workspace/Workspace.test.tsx
+  # 演示模式与连接的「数据与隐私」:同一套夹具(customers 表有 email 列)
+  run workspace-privacy "$D" workspace/privacy.test.tsx
   # SQLite 改表结构:独立的库(带索引、视图与一行外键违规数据),跑完核对文件里的结果
   D="$ROOT/alter"; mkdir -p "$D"
   sqlite3 "$D/alter.db" "create table products(id integer primary key, name text not null, country text, price real); create index products_country on products(country); insert into products(name,country,price) values('Boquete','Panama',12),('Nyeri','Kenya',9); create view v_kenya as select name from products where country = 'Kenya'; create table order_items(id integer primary key, product_id int, qty int); insert into order_items values(1,1,2),(2,99,1);"
@@ -56,6 +58,17 @@ if want tab; then
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
   run tab-unit "$D" tab/placeholders.test.ts
+  # 敏感数据遮罩:同一份库加一张客户表,连接的遮罩打开(本地连接默认不遮罩)
+  D="$ROOT/tab-mask"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
+  sqlite3 "$D/roastery.db" "create table customers(id integer primary key, name text, email text, phone text, password text, tier text);
+    insert into customers(name,email,phone,password,tier) values
+      ('Alice','alice@example.com','13812345678','hunter2','gold'),
+      ('Bob','bob@example.org','13987654321','pa55word','basic'),
+      ('Carol','carol@example.net','15011112222','s3cret!','basic');"
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
+  printf '%s' '{"connections":{"dev-sqlite":{"enabled":true}}}' > "$D/mask_settings.json"
+  run tab-mask "$D" tab/mask.test.tsx
   # 自然语言筛选:本地起一个 OpenAI 兼容的假服务,固定回一段筛选 JSON
   D="$ROOT/tab-nl"; mkdir -p "$D"
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"

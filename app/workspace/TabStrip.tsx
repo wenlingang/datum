@@ -14,10 +14,11 @@ import {
 } from "../store/workspace";
 import { runTabCommand } from "../tab";
 import { Icon, IconButton, TextField } from "../ui/kit";
-import { CtxMenu, DropMenu, MItem, MSep } from "../ui/menu";
+import { CtxMenu, DropMenu, MCheck, MItem, MSep } from "../ui/menu";
+import { privacy } from "../store/privacy";
 import { FS } from "../ui/text";
 import { newQuery } from "./commands";
-import { EXPORT_FORMATS, exportFiltered, exportMenuLabel } from "./ops";
+import { EXPORT_FORMATS, exportFiltered, exportMasked, exportMenuLabel, toggleExportMask } from "./ops";
 
 /** 重命名输入框:出现即聚焦并全选;回车或失焦提交。 */
 function RenameField(props: { tab: WorkTab }) {
@@ -167,6 +168,16 @@ function ResultTools() {
             {EXPORT_FORMATS.map((f) => (
               <MItem label={exportMenuLabel(f)} onSelect={() => void exportFiltered(f)} />
             ))}
+            {/* 结果里有敏感列时:导出遮罩后的值(默认勾选,演示模式下强制) */}
+            <If when={tools().exportData()?.maskedRows}>
+              <MSep />
+              <MCheck
+                label={t("mask.export_masked")}
+                checked={exportMasked()}
+                disabled={privacy.demo()}
+                onSelect={toggleExportMask}
+              />
+            </If>
           </DropMenu>
         </View>
       )}

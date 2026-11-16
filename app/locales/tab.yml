@@ -512,6 +512,14 @@ grid:
     en: "View"
     zh-CN: "查看"
     zh-TW: "檢視"
+  copy_value:
+    en: "Copy Value"
+    zh-CN: "复制值"
+    zh-TW: "複製值"
+  copy_row:
+    en: "Copy Row as CSV"
+    zh-CN: "复制整行(CSV)"
+    zh-TW: "複製整列(CSV)"
   copy_insert:
     en: "Copy INSERT Statement"
     zh-CN: "复制 INSERT 语句"

@@ -1,8 +1,9 @@
 // 弹出菜单(下拉 / 右键)的 Datum 外观:在 nsh/base 的 Menu、ContextMenu、MenuItem 之上套样式。
 // 对应 GPUI 版 gpui-component 的 PopupMenu。菜单项在每次打开时才构建,可在里面读当前数据。
 
-import { Text, type JSX } from "nsh";
+import { Text, View, type JSX } from "nsh";
 import { ContextMenu, Menu, MenuItem, MenuSeparator, type Align, type Placement } from "nsh/base";
+import { Icon } from "./kit";
 import { FS } from "./text";
 
 const POPUP = "min-w-44 rounded-(--radius-lg) border border-border bg-popover p-1 shadow-lg";
@@ -55,6 +56,25 @@ export function MItem(props: { label: string; onSelect?: () => void; disabled?: 
       class="h-7 flex-row items-center rounded-(--radius) px-2 hover:bg-accent focus:bg-accent active:bg-secondary-active disabled:opacity-40"
     >
       <Text class={`${FS.sm} ${props.danger ? "text-destructive" : "text-popover-foreground"}`}>{props.label}</Text>
+    </MenuItem>
+  );
+}
+
+/** 可勾选的菜单项:左侧对勾表示开启。 */
+export function MCheck(props: { label: string; checked: boolean; onSelect: () => void; disabled?: boolean }) {
+  return (
+    <MenuItem
+      onSelect={() => setTimeout(() => props.onSelect(), 0)}
+      disabled={props.disabled}
+      accessibilityLabel={props.label}
+      class="h-7 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-accent focus:bg-accent active:bg-secondary-active disabled:opacity-40"
+    >
+      <View class="size-3.5 items-center justify-center">
+        <If when={props.checked}>
+          <Icon name="check" size={13} color="popover-foreground" />
+        </If>
+      </View>
+      <Text class={`${FS.sm} text-popover-foreground`}>{props.label}</Text>
     </MenuItem>
   );
 }
