@@ -486,7 +486,9 @@ function record(
 /** 编辑器里执行的这段会不会改数据(写操作记录只记写操作)。 */
 function isWrite(m: TabModel, sql: string): boolean {
   if (m.dbKind === "redis") return sqlText.redisMayWrite(sql);
-  return supportsSql(m.dbKind) && !sqlText.isReadOnly(sql);
+  // 只读判断是给免确认用的,遇到注释就从严当成写;留痕只看开头的注释之后是什么,免得把带说明注释的查询记成写操作
+  const body = sql.replace(/^(\s|--[^\n]*(\n|$)|\/\*[\s\S]*?\*\/)*/, "");
+  return supportsSql(m.dbKind) && !!body && !sqlText.isReadOnly(body);
 }
 
 /** 会改表结构的语句(建 / 改 / 删表、视图、索引等):执行后要重新加载表清单、列与外键(补全用)。

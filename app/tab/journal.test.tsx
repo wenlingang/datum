@@ -29,13 +29,16 @@ test("编辑器的 UPDATE 记进写操作记录,可从记录撤销并标为已�
   const app = await start();
   const update = "UPDATE products SET origin = 'Journal test' WHERE id <= 2";
   await runSql(app, update, "✓ Executed successfully · 2 rows affected");
-  // 只读语句不记
+  // 只读语句不记(开头带注释的查询也不记)
+  await runSql(app, "-- 说明\nSELECT 'no' || 'ted' AS c", "noted");
+  current = "SELECT 'no' || 'ted' AS c";
   await runSql(app, "SELECT COUNT(*) || ' journal' AS n FROM products WHERE origin = 'Journal test'", "2 journal");
 
   await app.press("id:open-journal");
   await app.waitFor("id:journal-view", { timeout: 5000 });
   await app.waitUntil(() => app.texts().includes(update), { timeout: 5000 });
   expect(app.texts().some((x) => x.startsWith("SELECT COUNT(*) || ' journal'"))).toBe(false);
+  expect(app.texts().some((x) => x.includes("SELECT 'no' || 'ted'"))).toBe(false);
   expect(app.texts()).toContain("Today");
   expect(app.texts()).toContain("Can Undo");
 
