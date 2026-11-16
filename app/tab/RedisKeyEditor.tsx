@@ -15,6 +15,7 @@ import { DialogFrame, Field, Segmented } from "../dialogs/controls";
 import { db, errorText } from "../lib/native";
 import type { KeyDetail, RedisEdit, RedisKeyValue, RedisStreamGroup, RedisStreamPage } from "../lib/types";
 import { conns } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { viewFormat } from "../store/redisFormats";
 import { toast } from "../store/toast";
 import { editorText } from "../ui/editor";
@@ -78,11 +79,15 @@ function createGate(connId: string, node: () => string | null) {
       if (!go) return false;
     }
     busy.set(true);
+    const started = Date.now();
     try {
       await op.run();
+      // 写操作留痕:记给人看的那条命令
+      recordWrite({ connId, source: "redis", sql: op.command, ok: true, elapsedMs: Date.now() - started });
       toast.success(op.done ?? t("rkey.saved"));
       return true;
     } catch (e) {
+      recordWrite({ connId, source: "redis", sql: op.command, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
       toast.error(errorText(e));
       return false;
     } finally {

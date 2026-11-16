@@ -2,6 +2,7 @@
 // 运行前把 DATUM_CONFIG_DIR 指向临时配置目录,其中 connections.json 的第一个连接是
 // 含 products / orders 等表的本地 SQLite(见报告里的 mkcfg.sh);绝不要指向真实配置。
 
+import { Journal } from "datum/native";
 import { expect, open, test } from "nsh/test";
 
 // 界面语言随测试默认的 en-US
@@ -146,4 +147,31 @@ test("重启后恢复上次打开的标签与内容(不自动执行)", async () 
   // 表浏览 tab 还在:切过去后自动加载数据
   await second.press("text:products");
   await second.waitFor("text:Boquete", { timeout: 10_000 });
+});
+
+// 放最后:会删掉 c-shop 连接
+test("连接菜单打开写操作记录;删除连接时可连同写操作记录一起删", async () => {
+  await Journal.record({ connId: "c-shop", connName: "shop", kind: "sqlite", source: "editor", sql: "UPDATE items SET title = 'b' WHERE id = 1", ok: true, affected: 1 });
+  const app = await open("../App.tsx", desktop);
+  await app.press("id:rail-c-shop");
+  await app.waitFor("label:items");
+  await app.rightClick("id:rail-c-shop");
+  await app.press("label:Write Journal");
+  await app.waitFor("id:journal-view", { timeout: 5000 });
+  await app.waitUntil(() => app.texts().includes("UPDATE items SET title = 'b' WHERE id = 1"), { timeout: 5000 });
+  expect(app.texts()).toContain("Write Journal · shop");
+
+  app.onDialog(() => "Delete with Journal");
+  await app.rightClick("id:rail-c-shop");
+  await app.press("label:Delete");
+  await app.waitUntil(() => app.count("id:rail-c-shop") === 0, { timeout: 5000 });
+  const d = app.dialogs();
+  expect(d[d.length - 1]?.buttons).toEqual(["Cancel", "Delete, Keep Journal", "Delete with Journal"]);
+  let left: unknown[] = [{}];
+  for (let i = 0; i < 30 && left.length > 0; i++) {
+    left = (await Journal.list("c-shop", null)) as unknown[];
+    if (left.length > 0) await app.wait(100);
+  }
+  expect(left.length).toBe(0);
+  app.dispose();
 });

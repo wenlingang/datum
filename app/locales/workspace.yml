@@ -384,6 +384,10 @@ ops:
     zh-CN: 复制
     zh-TW: 複製
 alter:
+  fk_violations_journal:
+    en: "Rolled back: %{count} foreign key violations"
+    zh-CN: "已回滚:%{count} 处外键违规"
+    zh-TW: "已復原交易:%{count} 處外鍵違規"
   title:
     en: "Alter Table · %{name}"
     zh-CN: "修改表结构 · %{name}"

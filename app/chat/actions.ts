@@ -202,6 +202,9 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
   const multi = stmts.length > 1;
   const parts: string[] = [];
   let ok = true;
+  let affected = 0;
+  let failure: string | null = null;
+  const started = Date.now();
   /** 最后一条带结果集的查询:在对话里直接显示成表 */
   let table: ToolDetail | undefined;
   for (let i = 0; i < stmts.length; i++) {
@@ -212,15 +215,30 @@ export async function executeSql(sql: string): Promise<{ ok: boolean; summary: s
         ? await chatDeps.queryReadOnly(bound.kind, bound.connId, stmt)
         : await chatDeps.query(bound.kind, bound.connId, stmt);
       if (r.columns.length > 0) table = { sql: stmt, columns: r.columns, rows: r.rows.slice(0, RESULT_ROWS) };
+      affected += r.affected ?? 0;
       const brief = sqlNative.isQuery(stmt)
         ? t("chat.returned_rows", { count: r.rows.length })
         : `${t("chat.succeeded")}${r.affected ? t("chat.affected_rows", { count: r.affected }) : ""}`;
       parts.push(label ? t("chat.labeled", { label, brief }) : brief);
     } catch (e) {
       parts.push(t("chat.failed", { label: label || t("chat.execution"), error: errorText(e) }));
+      failure = errorText(e);
       ok = false;
       break;
     }
+  }
+  // 写操作留痕(只读的不记;写操作记录的内容不会交给 AI)
+  if (!readOnly) {
+    chatDeps.recordWrite({
+      connId: bound.connId,
+      source: "ai",
+      sql,
+      ok,
+      affected: ok ? affected : null,
+      error: failure,
+      elapsedMs: Date.now() - started,
+      undo: ok ? undo : null,
+    });
   }
   const summary = parts.join(" · ");
   appendMessage(
@@ -242,11 +260,16 @@ export async function undoCard(cardKeyValue: string, undo: UndoPrep): Promise<bo
   const key = convoKey();
   const bound = key ? aiStore.convo(key)?.bound : null;
   if (!key || !bound) return false;
+  const sql = undo.statements.join(";\n");
+  const undoes = chatDeps.journalIdsOf(undo);
+  const started = Date.now();
   try {
     await chatDeps.importSql(bound.kind, bound.connId, undo.statements);
+    chatDeps.recordWrite({ connId: bound.connId, source: "undo", sql, ok: true, affected: undo.rows, elapsedMs: Date.now() - started, undoes });
     appendMessage(key, "user", `${t("chat.undone_tag")} ${t("chat.undone_rows", { rows: undo.rows })}`, true);
     return true;
   } catch (e) {
+    chatDeps.recordWrite({ connId: bound.connId, source: "undo", sql, ok: false, error: errorText(e), elapsedMs: Date.now() - started, undoes });
     toast.error(t("undo.failed", { error: errorText(e) }));
     return false;
   }

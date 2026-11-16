@@ -1,6 +1,7 @@
 // AI 面板:未配置引导、发送后流式拼接、错误追加、SQL 卡片渲染与风险确认。
 // 入口在 testing/ 下,装的是假的 AI 后端与连接依赖,不碰真实配置与服务。
 
+import { Journal } from "datum/native";
 import { expect, open, test } from "nsh/test";
 
 const SIZE = { width: 1000, height: 760, platform: "macos" as const };
@@ -227,6 +228,20 @@ test("AI 卡片上执行的写操作可撤销,撤销结果告知 AI", async () =
   await app.waitFor("text:✓ Undone: 2 rows restored", { timeout: 10_000 });
   // 撤销以隐藏消息记进对话
   expect(app.texts().some((x) => x.startsWith("[Undone]"))).toBe(true);
+  // 写操作记录:AI 执行的写操作带撤销数据记下,撤销后标为已撤销(记录内容不进对话)
+  type Row = { source: string; sql: string; undoRows: number | null; undoneBy: string | null };
+  let list: Row[] = [];
+  for (let i = 0; i < 30; i++) {
+    list = (await Journal.list("c1", null)) as Row[];
+    if (list.some((e) => e.source === "ai" && e.undoneBy)) break;
+    await app.wait(100);
+  }
+  const aiEntry = list.find((e) => e.source === "ai");
+  expect(aiEntry?.sql.startsWith("DELETE FROM orders")).toBe(true);
+  expect(aiEntry?.undoRows).toBe(2);
+  expect(aiEntry?.undoneBy).not.toBe(null);
+  expect(list.some((e) => e.source === "undo")).toBe(true);
+  expect(app.texts().some((x) => x.includes("Write Journal"))).toBe(false);
   app.dispose();
 });
 
