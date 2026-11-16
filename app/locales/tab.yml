@@ -1807,6 +1807,191 @@ plan:
     en: "Executed in %{ms} ms"
     zh-CN: "实际执行耗时 %{ms} ms"
     zh-TW: "實際執行耗時 %{ms} ms"
+ddiff:
+  title:
+    en: Compare Data
+    zh-CN: 数据对比
+    zh-TW: 資料比對
+  title_table:
+    en: "Compare Data: %{table}"
+    zh-CN: "数据对比:%{table}"
+    zh-TW: "資料比對:%{table}"
+  subtitle:
+    en: Compares rows by key and generates SQL that makes the target table match the source
+    zh-CN: 按键逐行比较数据,生成让目标表与源表一致的 SQL
+    zh-TW: 按鍵逐列比較資料,產生讓目標資料表與來源資料表一致的 SQL
+  source:
+    en: Source
+    zh-CN: 源
+    zh-TW: 來源
+  target:
+    en: Target
+    zh-CN: 目标
+    zh-TW: 目標
+  source_table:
+    en: Source Table
+    zh-CN: 源表
+    zh-TW: 來源資料表
+  target_conn:
+    en: Target Connection
+    zh-CN: 目标连接
+    zh-TW: 目標連線
+  target_table:
+    en: Target Table
+    zh-CN: 目标表
+    zh-TW: 目標資料表
+  pick_table:
+    en: Pick a table
+    zh-CN: 选择表
+    zh-TW: 選擇資料表
+  swap:
+    en: Swap Direction
+    zh-CN: 交换方向
+    zh-TW: 交換方向
+  swap_tooltip:
+    en: Swap source and target (sync the other way)
+    zh-CN: 交换源与目标(反方向同步)
+    zh-TW: 交換來源與目標(反方向同步)
+  key:
+    en: Key
+    zh-CN: 键
+    zh-TW: 鍵
+  primary_key:
+    en: primary key
+    zh-CN: 主键
+    zh-TW: 主鍵
+  unique_key:
+    en: Match Rows By
+    zh-CN: 按唯一键对齐
+    zh-TW: 按唯一鍵對齊
+  unique_key_tooltip:
+    en: The source table has no primary key; rows are matched by this unique key. Rows with NULL in it are skipped
+    zh-CN: 源表没有主键,按这个唯一键对齐行;键里有 NULL 的行会跳过
+    zh-TW: 來源資料表沒有主鍵,按這個唯一鍵對齊列;鍵裡有 NULL 的列會略過
+  no_key:
+    en: No primary key or unique key — can't match rows
+    zh-CN: 没有主键或唯一键,无法对齐行
+    zh-TW: 沒有主鍵或唯一鍵,無法對齊列
+  no_key_hint:
+    en: Rows are matched by primary key or a unique key. Add one to the source table (or pick another table) to compare its data
+    zh-CN: 数据对比按主键或唯一键对齐两边的行。给源表加一个(或换一张表)后才能对比
+    zh-TW: 資料比對按主鍵或唯一鍵對齊兩邊的列。給來源資料表加一個(或換一張資料表)後才能比對
+  filter_placeholder:
+    en: "Optional filter on both sides, e.g. created_at >= '2024-01-01'"
+    zh-CN: "可选:两边都加的筛选条件,如 created_at >= '2024-01-01'"
+    zh-TW: "可選:兩邊都加的篩選條件,如 created_at >= '2024-01-01'"
+  max_rows:
+    en: Max Rows per Side
+    zh-CN: 每边最多行数
+    zh-TW: 每邊最多列數
+  run:
+    en: Compare
+    zh-CN: 开始对比
+    zh-TW: 開始比對
+  rerun:
+    en: Compare Again
+    zh-CN: 重新对比
+    zh-TW: 重新比對
+  cancel:
+    en: Stop
+    zh-CN: 停止
+    zh-TW: 停止
+  running:
+    en: "Comparing… source %{source} rows · target %{target} rows read"
+    zh-CN: "正在对比… 已读源表 %{source} 行 · 目标表 %{target} 行"
+    zh-TW: "正在比對… 已讀來源資料表 %{source} 列 · 目標資料表 %{target} 列"
+  empty:
+    en: Pick the source and target tables, then Compare. Reads run in read-only sessions with a time limit
+    zh-CN: 选好源表与目标表,再点「开始对比」。读取在只读会话里进行,并限时
+    zh-TW: 選好來源與目標資料表,再點「開始比對」。讀取在唯讀工作階段裡進行,並限時
+  cols_only_source:
+    en: "Only in source (not compared): %{cols}"
+    zh-CN: "只在源表的列(不比较):%{cols}"
+    zh-TW: "只在來源資料表的欄位(不比較):%{cols}"
+  cols_only_target:
+    en: "Only in target (not compared): %{cols}"
+    zh-CN: "只在目标表的列(不比较):%{cols}"
+    zh-TW: "只在目標資料表的欄位(不比較):%{cols}"
+  summary:
+    en: "%{identical} identical · read %{source} source rows and %{target} target rows"
+    zh-CN: "一致 %{identical} 行 · 读了源表 %{source} 行、目标表 %{target} 行"
+    zh-TW: "一致 %{identical} 列 · 讀了來源資料表 %{source} 列、目標資料表 %{target} 列"
+  cat_all:
+    en: "All Differences %{n}"
+    zh-CN: "全部差异 %{n}"
+    zh-TW: "全部差異 %{n}"
+  cat_only_source:
+    en: "Only in Source %{n}"
+    zh-CN: "仅源表 %{n}"
+    zh-TW: "僅來源 %{n}"
+  cat_only_target:
+    en: "Only in Target %{n}"
+    zh-CN: "仅目标表 %{n}"
+    zh-TW: "僅目標 %{n}"
+  cat_different:
+    en: "Different %{n}"
+    zh-CN: "值不同 %{n}"
+    zh-TW: "值不同 %{n}"
+  kind_onlySource:
+    en: Only in source
+    zh-CN: 仅源表
+    zh-TW: 僅來源
+  kind_onlyTarget:
+    en: Only in target
+    zh-CN: 仅目标表
+    zh-TW: 僅目標
+  kind_different:
+    en: Different
+    zh-CN: 值不同
+    zh-TW: 值不同
+  col_status:
+    en: Status
+    zh-CN: 状态
+    zh-TW: 狀態
+  identical:
+    en: No differences — the data is identical
+    zh-CN: 没有差异,数据一致
+    zh-TW: 沒有差異,資料一致
+  none_in_category:
+    en: No rows in this category
+    zh-CN: 这一类没有行
+    zh-TW: 這一類沒有列
+  capped:
+    en: "Row limit reached (%{n} per side): only rows up to that point (in key order) were compared"
+    zh-CN: "达到行数上限(每边 %{n} 行):只对比了按键排序的前面这一段"
+    zh-TW: "達到列數上限(每邊 %{n} 列):只比對了按鍵排序的前面這一段"
+  truncated:
+    en: "Only the first %{kept} differences are listed and scripted; counts are exact. Narrow the filter to see the rest"
+    zh-CN: "只列出并生成前 %{kept} 处差异的脚本,计数是准确的。缩小筛选范围查看其余的"
+    zh-TW: "只列出並產生前 %{kept} 處差異的腳本,計數是準確的。縮小篩選範圍查看其餘的"
+  cancelled:
+    en: Stopped — results cover only the rows read so far
+    zh-CN: 已停止,结果只包含已读到的行
+    zh-TW: 已停止,結果只包含已讀到的列
+  script:
+    en: Sync script (run on the target)
+    zh-CN: 同步脚本(在目标库执行)
+    zh-TW: 同步腳本(在目標庫執行)
+  include_deletes:
+    en: Include Deletes
+    zh-CN: 包含删除
+    zh-TW: 包含刪除
+  copy:
+    en: Copy
+    zh-CN: 复制
+    zh-TW: 複製
+  copied:
+    en: Script copied
+    zh-CN: 脚本已复制
+    zh-TW: 腳本已複製
+  open_in_editor:
+    en: Open in Target's Editor
+    zh-CN: 在目标库编辑器中打开
+    zh-TW: 在目標庫編輯器中開啟
+  open_tooltip:
+    en: Opens a query tab on the target with the script; nothing runs until you run it (with the usual review, impact preview and undo)
+    zh-CN: 在目标库新开查询标签并放入脚本;要你自己执行(照常经过危险语句审查、影响预估与撤销)
+    zh-TW: 在目標庫新開查詢標籤並放入腳本;要你自己執行(照常經過危險語句審查、影響預估與復原)
 sdiff:
   title:
     en: Compare Schema

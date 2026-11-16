@@ -47,6 +47,12 @@ if want workspace; then
   run workspace-alter "$D" workspace/alter-sqlite.test.tsx
   [ "$(sqlite3 "$D/alter.db" "select count(*) from products where country is not null; select name from v_kenya; select count(*) from sqlite_master where name = 'products_country'; select count(*) from pragma_foreign_key_list('line_items'); select count(*) from line_items")" = "$(printf '2\nNyeri\n1\n0\n2')" ] \
     || { echo "alter: 数据、视图、索引或外键回滚不符合预期"; FAILED=1; }
+  # 数据对比:两个 SQLite 库里的同名表(各类差异各一行),再加一张没有键的表
+  D="$ROOT/ddiff"; mkdir -p "$D"
+  sqlite3 "$D/src.db" "create table items(id integer primary key, name text, qty int, price real, data blob); insert into items values(1,'beans',1,1.0,x'ff00'),(2,'cups',2,2.5,x'01'),(3,'filters',3,3,null),(4,'grinder',4,40,x'02'),(5,'kettle',5,25,x'03'); create table nopk(a int, b text); insert into nopk values(1,'x');"
+  sqlite3 "$D/dst.db" "create table items(id integer primary key, name text, qty int, price real, data blob); insert into items values(1,'beans',1,1,x'ff00'),(2,'cups ',2,2.5,x'01'),(3,'filters',null,3,null),(5,'kettle',5,25,x'03'),(6,'scale',6,15,null); create table nopk(a int, b text);"
+  printf '[%s,%s]\n' "$(conn c-src src "$D/src.db")" "$(conn c-dst dst "$D/dst.db")" > "$D/connections.json"
+  run workspace-ddiff "$D" tab/data-diff.test.tsx
 fi
 
 if want tab; then

@@ -25,7 +25,9 @@ export type TabKind =
   /** 关系库诊断(PG / MySQL / SQLite):会话、锁等待、长事务、慢 SQL、索引与空间 */
   | "diag"
   /** 表结构对比:本连接(源)对比另一个同类型的库(目标),生成迁移脚本 */
-  | "diff";
+  | "diff"
+  /** 数据对比:本连接的一张表(源)对比同类型库里的一张表(目标),生成同步脚本 */
+  | "ddiff";
 
 export interface WorkTab {
   /** 稳定 id(标签条 key、记忆激活 tab) */

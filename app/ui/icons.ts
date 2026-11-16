@@ -2,6 +2,7 @@
 // 新增图标:把 svg 放进 assets/icons/ 后在这里补一行。
 
 import activity from "../assets/icons/activity.svg";
+import arrowLeftRight from "../assets/icons/arrow-left-right.svg";
 import arrowUp from "../assets/icons/arrow-up.svg";
 import bookmark from "../assets/icons/bookmark.svg";
 import braces from "../assets/icons/braces.svg";
@@ -81,6 +82,7 @@ import zoomOut from "../assets/icons/zoom-out.svg";
 
 export const ICONS = {
   "activity": activity,
+  "arrow-left-right": arrowLeftRight,
   "arrow-up": arrowUp,
   "bookmark": bookmark,
   "braces": braces,
