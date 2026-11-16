@@ -29,6 +29,9 @@ pub struct HistoryEntry {
     pub elapsed_ms: u64,
     pub row_count: Option<u64>,
     pub affected: Option<u64>,
+    /// 写语句在写操作记录里的那一条(重启后从历史撤销靠它找回撤销数据)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub journal_id: Option<String>,
 }
 
 /// 仿 ConnectionRepo:config_dir + 固定文件名的 JSON 读写。
@@ -64,6 +67,7 @@ impl HistoryRepo {
                 head.elapsed_ms = entry.elapsed_ms;
                 head.row_count = entry.row_count;
                 head.affected = entry.affected;
+                head.journal_id = entry.journal_id;
             }
             _ => {
                 entries.insert(0, entry);
@@ -125,6 +129,7 @@ mod tests {
             elapsed_ms: 12,
             row_count: Some(3),
             affected: None,
+            journal_id: None,
         }
     }
 

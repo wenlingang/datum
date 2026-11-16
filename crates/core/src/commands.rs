@@ -1,6 +1,7 @@
 use crate::core::connection::Connection;
 use crate::core::credentials::{self, KeyringBackend};
 use crate::core::history::{HistoryEntry, HistoryRepo};
+use crate::core::journal::{Journal, JournalDetail, JournalEntry, JournalFilter, JournalSettings, JournalSummary};
 use crate::core::repository::ConnectionRepo;
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::my::client::MyPool;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub backend: KeyringBackend,
     pub lock: Mutex<()>,         // 串行化配置文件写入
     pub history_lock: Mutex<()>, // 历史写盘独立锁:每次执行 SQL 都会写,不与连接保存竞争
+    pub journal_lock: Mutex<()>, // 写操作记录的追加 / 整理 / 清空互斥
     pub pg_pool: PgPool,
     pub redis_pool: RedisPool,
     pub my_pool: MyPool,
@@ -33,6 +35,7 @@ impl AppState {
             backend: KeyringBackend,
             lock: Mutex::new(()),
             history_lock: Mutex::new(()),
+            journal_lock: Mutex::new(()),
             pg_pool: PgPool::default(),
             redis_pool: RedisPool::default(),
             my_pool: MyPool::default(),
@@ -68,6 +71,9 @@ impl AppState {
     }
     fn history_repo(&self) -> HistoryRepo {
         HistoryRepo::new(&self.config_dir)
+    }
+    pub fn journal(&self) -> Journal {
+        Journal::new(&self.config_dir)
     }
 }
 
@@ -396,4 +402,50 @@ mod tests {
         assert_ne!(switched.id, "b");
         assert_eq!(switched.ssl_mode, crate::core::connection::SslMode::Require);
     }
+}
+
+// ---------------------------------------------------------------- 写操作记录
+
+/// 追加一条写操作记录;写日志关掉时返回 None。
+pub fn journal_append(state: &AppState, entry: JournalEntry) -> AppResult<Option<String>> {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().append(entry)
+}
+
+pub fn journal_list(state: &AppState, conn_id: &str, filter: &JournalFilter) -> Vec<JournalSummary> {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().list(conn_id, filter)
+}
+
+pub fn journal_get(state: &AppState, conn_id: &str, id: &str) -> Option<JournalDetail> {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().get(conn_id, id)
+}
+
+pub fn journal_undoable(state: &AppState, conn_id: &str) -> Vec<(String, usize)> {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().undoable(conn_id)
+}
+
+pub fn journal_export(state: &AppState, conn_id: &str, filter: &JournalFilter, format: &str) -> String {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().export(conn_id, filter, format)
+}
+
+/// conn_id 为 None 时清空全部连接的写日志。
+pub fn journal_clear(state: &AppState, conn_id: Option<&str>) -> AppResult<()> {
+    let _g = state.journal_lock.lock().unwrap();
+    match conn_id {
+        Some(id) => state.journal().clear(id),
+        None => state.journal().clear_all(),
+    }
+}
+
+pub fn journal_settings(state: &AppState) -> JournalSettings {
+    state.journal().settings()
+}
+
+pub fn journal_save_settings(state: &AppState, s: &JournalSettings) -> AppResult<JournalSettings> {
+    let _g = state.journal_lock.lock().unwrap();
+    state.journal().save_settings(s)
 }
