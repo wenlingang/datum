@@ -193,17 +193,25 @@ impl DbTools<'_> {
             };
         }
         match service::query_read_only_timeout(self.state, &self.kind, &self.id, sql, UI_ROWS, QUERY_TIMEOUT_MS).await {
-            Ok(r) => {
+            Ok(mut r) => {
                 let capped = r.rows.len() as u32 >= UI_ROWS;
+                // 敏感列在交给模型(以及界面上的工具结果)之前遮罩:在 core 里强制,不依赖界面
+                let policy = crate::mask::policy(self.state, &self.id);
+                let table = crate::mask::source_table(sql);
+                let masked = policy.mask_result(table.as_deref(), &r.columns, &mut r.rows);
+                let mut for_model = result_for_model(&r, capped);
+                if masked {
+                    for_model.push_str("\n(Some columns are masked by the user's privacy settings; do not try to recover or guess the original values.)");
+                }
                 ToolOutput {
-                    for_model: result_for_model(&r, capped),
+                    for_model,
                     ok: true,
                     summary: if capped {
                         t!("ai.tool.rows_capped", n = r.rows.len()).to_string()
                     } else {
                         t!("ai.tool.rows", n = r.rows.len()).to_string()
                     },
-                    detail: json!({ "sql": sql, "columns": r.columns, "rows": r.rows, "capped": capped }),
+                    detail: json!({ "sql": sql, "columns": r.columns, "rows": r.rows, "capped": capped, "masked": masked }),
                 }
             }
             Err(e) => {
@@ -226,7 +234,7 @@ impl ToolRunner for DbTools<'_> {
                 LIST_TABLES => self.list_tables().await,
                 DESCRIBE_TABLE => self.describe_table(args).await,
                 RUN_QUERY if !self.allow_data => fail(t!("ai.tool.prod_data_off").to_string()),
-        RUN_QUERY => self.run_query(args).await,
+                RUN_QUERY => self.run_query(args).await,
                 other => fail(t!("ai.tool.unknown", name = other).to_string()),
             }
         })

@@ -164,16 +164,101 @@ pub fn data_allowed(state: &AppState, settings: &crate::ai::settings::AiSettings
         .unwrap_or(false)
 }
 
-/// 一句话筛选:生产库未允许发数据时丢掉样例行,只按列名与类型翻译。
+/// 一句话筛选:生产库未允许发数据时丢掉样例行,只按列名与类型翻译;
+/// 允许时样例行里的敏感列先遮罩(`table` 为表浏览的表名,手动覆盖按它匹配)。
 pub async fn ai_nl_filter(
     state: &AppState,
     conn_id: &str,
+    table: Option<&str>,
     question: &str,
     columns: &[crate::ai::nl_filter::ColumnInfo],
     samples: Vec<Vec<Option<String>>>,
 ) -> Result<crate::ai::nl_filter::NlFilter, String> {
-    let samples = if data_allowed(state, &repo(state).load(), conn_id) { samples } else { vec![] };
+    let samples = nl_samples(state, conn_id, table, columns, samples);
     crate::ai::nl_filter::translate(state, question, columns, &samples).await
+}
+
+/// 一句话筛选实际发出的样例行(拆出来便于测试):不允许发数据 → 空;否则遮罩敏感列。
+pub fn nl_samples(
+    state: &AppState,
+    conn_id: &str,
+    table: Option<&str>,
+    columns: &[crate::ai::nl_filter::ColumnInfo],
+    mut samples: Vec<Vec<Option<String>>>,
+) -> Vec<Vec<Option<String>>> {
+    if !data_allowed(state, &repo(state).load(), conn_id) {
+        return vec![];
+    }
+    let names: Vec<String> = columns.iter().map(|c| c.name.clone()).collect();
+    crate::mask::policy(state, conn_id).mask_result(table, &names, &mut samples);
+    samples
+}
+
+/// 界面发来的一条对话消息:正文,或按顺序排列的文字段与结果表(执行结果、工具查询结果)。
+/// 结果表由 core 渲染成文本:不允许发数据时丢掉,允许时先遮罩敏感列——历史里的数据行同样受保护。
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WireMessage {
+    pub role: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub parts: Vec<WirePart>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+pub enum WirePart {
+    Table {
+        columns: Vec<String>,
+        rows: Vec<Vec<Option<String>>>,
+        /// 没带上的行数(只带前几行)
+        #[serde(default)]
+        more: usize,
+        /// 产生这份结果的 SQL(手动覆盖按来源表匹配)
+        #[serde(default)]
+        sql: Option<String>,
+    },
+    Text {
+        text: String,
+    },
+}
+
+/// 把界面发来的对话渲染成发给服务商的消息。`conn_id`:对话绑定的连接(决定能否发数据、怎么遮罩);
+/// 没有连接时结果表一律不发。
+pub fn render_history(state: &AppState, conn_id: Option<&str>, wire: Vec<WireMessage>) -> Vec<ChatMessage> {
+    let allow = conn_id.is_some_and(|id| data_allowed(state, &repo(state).load(), id));
+    let policy = match conn_id {
+        Some(id) if allow => crate::mask::policy(state, id),
+        _ => crate::mask::Policy::off(),
+    };
+    wire.into_iter()
+        .map(|m| {
+            if m.parts.is_empty() {
+                return ChatMessage { role: m.role, content: m.content };
+            }
+            let mut out: Vec<String> = vec![];
+            for p in m.parts {
+                match p {
+                    WirePart::Text { text } => out.push(text),
+                    WirePart::Table { .. } if !allow => {}
+                    WirePart::Table { columns, mut rows, more, sql } => {
+                        let table = sql.as_deref().and_then(crate::mask::source_table);
+                        policy.mask_result(table.as_deref(), &columns, &mut rows);
+                        let mut lines = vec![columns.join("\t")];
+                        lines.extend(rows.iter().map(|r| {
+                            r.iter().map(|v| v.as_deref().unwrap_or("NULL")).collect::<Vec<_>>().join("\t")
+                        }));
+                        if more > 0 {
+                            lines.push(format!("… {more} more"));
+                        }
+                        out.push(lines.join("\n"));
+                    }
+                }
+            }
+            ChatMessage { role: m.role, content: out.join("\n") }
+        })
+        .collect()
 }
 
 /// 带工具的对话:模型可自行列表、看表结构、跑只读查询(在 `id` 这个连接上),

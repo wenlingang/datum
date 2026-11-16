@@ -585,6 +585,11 @@ pub async fn distinct_values(
     if not_enum_like(data_type) {
         return Ok(None);
     }
+    // 敏感列(遮罩开着时)不提示实际取值:补全列表也是「离开只有自己看着」的地方(演示、录屏)
+    let policy = crate::mask::policy(state, id);
+    if policy.column_kind(Some(table), column, std::iter::empty()).is_some() {
+        return Ok(None);
+    }
     let sql = format!(
         "SELECT DISTINCT v FROM (SELECT {col} AS v FROM {table} LIMIT {DISTINCT_SAMPLE_ROWS}) s WHERE v IS NOT NULL LIMIT {}",
         DISTINCT_MAX + 1,
@@ -594,6 +599,9 @@ pub async fn distinct_values(
     let r = query_meta_read_only_timeout(state, kind, id, &sql, DISTINCT_MAX as u32 + 1, DISTINCT_TIMEOUT_MS).await?;
     let mut values: Vec<String> = r.rows.into_iter().filter_map(|row| row.into_iter().next().flatten()).collect();
     if values.len() > DISTINCT_MAX || values.iter().any(|v| v.chars().count() > DISTINCT_MAX_CHARS || v.contains('\n')) {
+        return Ok(None);
+    }
+    if policy.column_kind(Some(table), column, values.iter().map(String::as_str)).is_some() {
         return Ok(None);
     }
     values.sort_by(|a, b| crate::grid::compare_cells(a, b));
