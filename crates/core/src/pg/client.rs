@@ -266,6 +266,15 @@ impl PgPool {
             .ok_or_else(|| AppError::new(ErrorKind::Connection, t!("core.err.not_connected")))
     }
 
+    /// 按该连接的配置另开一条独立会话(长时间的批量写入用,如造测试数据):
+    /// 不占用户会话与辅助会话,调用方用完丢弃即断开。
+    pub async fn dial_dedicated(&self, id: &str) -> AppResult<Client> {
+        let conn = self.get(id)?;
+        dial(&conn.config, &conn.target, conn.ssl).await.map_err(|e| {
+            AppError::new(ErrorKind::Connection, t!("core.err.connect_failed", db = "PostgreSQL")).with_detail(e)
+        })
+    }
+
     #[allow(dead_code)] // 目前仅测试使用,保留备将来重连/状态显示
     pub async fn is_connected(&self, id: &str) -> bool {
         self.conns.lock().unwrap().contains_key(id)

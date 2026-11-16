@@ -22,6 +22,8 @@ pub struct AppState {
     pub sqlite_pool: SqlitePool,
     /// SQLite 的 CSV / JSON 导入任务(按连接 id)
     pub sqlite_imports: crate::sqlite::import_data::Jobs,
+    /// 造测试数据的后台插入任务(按连接 id)
+    pub testdata_jobs: crate::testdata::job::Jobs,
     /// 已连接的 SSH 隧道(按连接 id)
     pub tunnels: crate::ssh::TunnelPool,
 }
@@ -38,6 +40,7 @@ impl AppState {
             my_pool: MyPool::default(),
             sqlite_pool: SqlitePool::default(),
             sqlite_imports: Default::default(),
+            testdata_jobs: Default::default(),
             tunnels: Default::default(),
         }
     }
