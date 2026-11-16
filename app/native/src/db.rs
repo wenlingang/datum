@@ -132,6 +132,18 @@ impl Db {
             .and_then(json)
     }
 
+    /// 表格提交前的撤销准备:暂存的改动写成等价 SQL 抓快照。
+    /// `{ statements: 等价 SQL, undo: { statements, rows, reason, snapshots } }`。
+    pub async fn grid_undo_prepare(kind: String, id: String, edits: JsonValue, deletes: JsonValue) -> Result<JsonValue, String> {
+        let k = kind_of(&kind)?;
+        let edits: Vec<CellEdit> = from(edits, "edits")?;
+        let deletes: Vec<RowDelete> = from(deletes, "deletes")?;
+        let (sql, undo) = spawn(async move { service::grid_undo_prepare(&state(), &k, &id, &edits, &deletes).await })
+            .await?
+            .map_err(err)?;
+        json(serde_json::json!({ "statements": sql, "undo": undo }))
+    }
+
     /// 表结构:列、主键、索引等。
     pub async fn table_detail(kind: String, id: String, table: String) -> Result<JsonValue, String> {
         let k = kind_of(&kind)?;

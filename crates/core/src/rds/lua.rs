@@ -62,6 +62,22 @@ const READ_COMMANDS: &[&str] = &[
     "PFCOUNT", "GEOPOS", "GEODIST", "GEOHASH", "GEOSEARCH", "GEORADIUS_RO", "GEORADIUSBYMEMBER_RO",
 ];
 
+/// 编辑器里的一条 Redis 命令会不会改数据:第一个词在只读清单里(或是连接 / 查看类命令)才算只读,
+/// 其余(写命令、认不出的)都按会写处理。
+pub fn command_may_write(cmd: &str) -> bool {
+    const SAFE: &[&str] = &["SELECT", "CLIENT", "CONFIG", "SLOWLOG", "COMMAND", "CLUSTER", "LATENCY", "ROLE", "LASTSAVE", "AUTH", "HELLO"];
+    let Some(first) = cmd.split_whitespace().next() else {
+        return false;
+    };
+    let name = first.to_ascii_uppercase();
+    if name == "CONFIG" {
+        // CONFIG SET / REWRITE / RESETSTAT 会改服务器
+        let sub = cmd.split_whitespace().nth(1).unwrap_or("").to_ascii_uppercase();
+        return sub != "GET";
+    }
+    !(READ_COMMANDS.contains(&name.as_str()) || SAFE.contains(&name.as_str()))
+}
+
 /// 要特别标出的危险命令:清库、换库,以及 KEYS(不管模式是什么都要遍历整个库,大库上会长时间阻塞实例)。
 const DANGEROUS_COMMANDS: &[&str] = &["FLUSHALL", "FLUSHDB", "SWAPDB", "KEYS"];
 
@@ -665,6 +681,16 @@ mod tests {
         assert_eq!(a.writes, vec!["SET", "HSET"]);
         assert!(a.dangerous.is_empty() && a.unknown.is_empty() && !a.dynamic);
         assert!(a.may_write);
+    }
+
+    #[test]
+    fn editor_commands_that_may_write() {
+        for w in ["SET k v", "del k", "FLUSHDB", "CONFIG SET maxmemory 1", "SOMETHINGNEW x"] {
+            assert!(command_may_write(w), "{w}");
+        }
+        for r in ["GET k", "hgetall h", "SCAN 0", "INFO", "CONFIG GET maxmemory", "  ", "SELECT 1"] {
+            assert!(!command_may_write(r), "{r}");
+        }
     }
 
     #[test]

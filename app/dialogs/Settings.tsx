@@ -2,9 +2,9 @@
 // 对应 GPUI 版 dialogs/settings.rs。
 
 import { Scroll, signal, Text, View, type JSX, type Signal } from "nsh";
-import { Button } from "nsh/base";
+import { AlertDialog, Button } from "nsh/base";
 import { t } from "nsh/i18n";
-import { ai, chat, dialogsNative, errorText } from "../lib/native";
+import { ai, chat, dialogsNative, errorText, journal } from "../lib/native";
 import type { LanguagePreference, ProviderConfig, ThemePreference } from "../lib/types";
 import {
   currentPrefs,
@@ -16,6 +16,8 @@ import {
   updatePrefs,
 } from "../store/prefs";
 import { checkUpdates, installUpdate, updates } from "../store/update";
+import { journalSettings, saveJournalSettings } from "../store/journal";
+import { toast } from "../store/toast";
 import { Btn, color, Hint, Icon, IconButton, NavRow, SectionLabel, TextField, type IconName } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import {
@@ -679,8 +681,76 @@ function PrivacySection(props: { ctx: Ctx }) {
         <Text class={`${FS.sm} text-foreground`}>{t("settings.allow_prod_data")}</Text>
       </View>
       <Hint>{t("settings.allow_prod_data_hint")}</Hint>
+      <JournalCard ctx={props.ctx} />
       <NoticeLine ctx={props.ctx} />
     </View>
+  );
+}
+
+const RETENTION_DAYS = [30, 90, 180, 365];
+
+/** 写操作记录:开关、是否保存撤销用的行数据、保留天数、清空全部。 */
+function JournalCard(props: { ctx: Ctx }) {
+  const { notice } = props.ctx;
+  const current = signal(journalSettings());
+  function update(patch: Partial<ReturnType<typeof journalSettings>>) {
+    try {
+      current.set(saveJournalSettings({ ...current(), ...patch }));
+      notice.set(null);
+    } catch (e) {
+      notice.set({ ok: false, text: errorText(e) });
+    }
+  }
+  async function clearAll() {
+    const { action } = await AlertDialog.show({
+      title: t("journal.clear_all_title"),
+      description: t("journal.clear_desc"),
+      actions: [
+        { id: "cancel", label: t("journal.cancel"), role: "cancel" },
+        { id: "clear", label: t("journal.settings_clear_all"), role: "destructive" },
+      ],
+      closeOnEscape: true,
+    });
+    if (action !== "clear") return;
+    try {
+      await journal.clear(null);
+      toast.success(t("journal.cleared_all"));
+    } catch (e) {
+      notice.set({ ok: false, text: errorText(e) });
+    }
+  }
+  const days = (n: number) => t("journal.settings_days", { n });
+  return (
+    <Card title={t("journal.settings_title")} class="mt-2 gap-3">
+      <Toggle
+        testID="journal-enabled"
+        checked={current().enabled}
+        onChange={(v) => update({ enabled: v })}
+        label={t("journal.settings_enabled")}
+      />
+      <Toggle
+        testID="journal-store-rows"
+        checked={current().storeRows}
+        onChange={(v) => update({ storeRows: v })}
+        label={t("journal.settings_store_rows")}
+      />
+      <Hint>{t("journal.settings_store_rows_hint")}</Hint>
+      <Row label={t("journal.settings_retention")}>
+        <Dropdown
+          testID="journal-retention"
+          small
+          items={[...new Set([...RETENTION_DAYS, current().retentionDays])].sort((a, b) => a - b).map((n) => ({ value: String(n), title: days(n) }))}
+          value={String(current().retentionDays)}
+          label={days(current().retentionDays)}
+          onChange={(v) => update({ retentionDays: Number(v) })}
+          style={{ width: 160 }}
+        />
+      </Row>
+      <Hint>{t("journal.settings_hint")}</Hint>
+      <View class="flex-row">
+        <Btn testID="journal-clear-all" small variant="outline" icon="trash" label={t("journal.settings_clear_all")} onPress={() => void clearAll()} />
+      </View>
+    </Card>
   );
 }
 

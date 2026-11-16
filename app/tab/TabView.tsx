@@ -20,6 +20,7 @@ import { modelOf, refresh, refreshRedisKey, type TabModel } from "./model";
 import { RedisKeyEditor } from "./RedisKeyEditor";
 import { Results, StatusLine } from "./Results";
 import { Diagnostics } from "./Diagnostics";
+import { JournalView } from "./Journal";
 import { SchemaDiff } from "./SchemaDiff";
 import { RedisInsight } from "./RedisInsight";
 import { RedisLive } from "./RedisLive";
@@ -130,6 +131,7 @@ export function TabBody(props: { tab: WorkTab }) {
   }
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
+  if (props.tab.kind === "journal") return <JournalView connId={props.tab.connId} />;
   if (!m) return <Placeholder icon="network" text={t("erd.wip")} />;
   return <ModelView m={m} tabId={props.tab.id} />;
 }

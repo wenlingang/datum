@@ -6,10 +6,11 @@ import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { HistoryEntry } from "../lib/types";
 import { conns } from "../store/conns";
-import { clearHistory, history, historyUndo } from "../store/history";
+import { clearHistory, history, historyJournalUndo, historyUndo, loadJournalUndo } from "../store/history";
 import { toast } from "../store/toast";
 import { Btn, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
+import { checkJournalUndo, journalUndoPrep } from "./journalUndo";
 import { run, setSql, type TabModel } from "./model";
 
 /** 多行 SQL 压缩为单行用于列表展示。 */
@@ -47,8 +48,22 @@ function pick(m: TabModel, e: HistoryEntry) {
   else toast.info(t("history.from_other_conn", { name: e.connName }));
 }
 
+/** 重启前的写操作:从写操作记录取回撤销,打开确认框并在后台核对现在的行。 */
+async function undoFromJournal(m: TabModel, journalId: string) {
+  m.historyOpen.set(false);
+  const u = await journalUndoPrep(m.connId, journalId);
+  if (!u) return;
+  m.undo.set(u);
+  m.undoOpen.set(true);
+  checkJournalUndo(m.dbKind, m.connId, u, (next) => {
+    if (m.undo()?.journalId === next.journalId) m.undo.set(next);
+  });
+}
+
 export function HistoryPanel(props: { m: TabModel }) {
   const m = props.m;
+  // 之前运行的写操作:撤销数据在写操作记录里
+  void loadJournalUndo(m.connId);
   const expanded = signal<string | null>(null);
   const entries = () => history().filter((e) => e.connId === m.connId);
   const height = () => Math.min(420, entries().length * 50 + (expanded() ? 150 : 0));
@@ -107,6 +122,18 @@ export function HistoryPanel(props: { m: TabModel }) {
                         m.undo.set(u());
                         m.undoOpen.set(true);
                       }}
+                    />
+                  )}
+                </If>
+                <If when={historyJournalUndo(e())}>
+                  {(rows) => (
+                    <Btn
+                      small
+                      variant="ghost"
+                      icon="undo-2"
+                      testID={`hist-undo:${e().id}`}
+                      label={t("history.undo", { rows: rows() })}
+                      onPress={() => void undoFromJournal(m, e().journalId ?? "")}
                     />
                   )}
                 </If>
