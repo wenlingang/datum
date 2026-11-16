@@ -930,6 +930,43 @@ core:
       en: "Couldn't tell which columns the UPDATE changes, so it can't be undone"
       zh-CN: 看不出这条 UPDATE 改了哪些列,不能撤销
       zh-TW: 看不出這條 UPDATE 改了哪些欄,無法復原
+  journal:
+    write_failed:
+      en: "Couldn't write the write journal"
+      zh-CN: 写操作记录写入失败
+      zh-TW: 寫入操作紀錄失敗
+    rows_not_stored:
+      en: "Row data isn't kept in the journal (turned off in Settings), so this can't be undone from here"
+      zh-CN: 设置里关掉了保存行数据,这条只记了语句,不能从这里撤销
+      zh-TW: 設定裡關閉了儲存資料列,這筆只記了陳述式,無法從這裡復原
+    undo_too_large:
+      en: "The undo data is too large to keep in the journal"
+      zh-CN: 撤销数据太大,没有存进写操作记录
+      zh-TW: 復原資料太大,沒有存進寫入操作紀錄
+    status_ok:
+      en: Succeeded
+      zh-CN: 成功
+      zh-TW: 成功
+    status_error:
+      en: Failed
+      zh-CN: 失败
+      zh-TW: 失敗
+    status_undone:
+      en: Undone
+      zh-CN: 已撤销
+      zh-TW: 已復原
+    export_title:
+      en: "Write Journal · %{name}"
+      zh-CN: 写操作记录 · %{name}
+      zh-TW: 寫入操作紀錄 · %{name}
+    export_affected:
+      en: "%{n} rows affected"
+      zh-CN: 影响 %{n} 行
+      zh-TW: 影響 %{n} 列
+    not_found:
+      en: "This entry is no longer in the write journal"
+      zh-CN: 写操作记录里已经没有这一条了
+      zh-TW: 寫入操作紀錄裡已經沒有這一筆了
   charset:
     warning:
       en: "WARNING:"

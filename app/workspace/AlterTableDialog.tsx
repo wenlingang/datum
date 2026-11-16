@@ -10,6 +10,7 @@ import { db, errorText, sql as sqlText } from "../lib/native";
 import type { AlterFk, AlterOutcome, AlterPlan, AlterScript, RiskFinding } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
 import { hideInDemo } from "../store/privacy";
+import { recordWrite } from "../store/journal";
 import { toast } from "../store/toast";
 import { closeTab, findTableTab } from "../store/workspace";
 import { openTable } from "../tab";
@@ -241,8 +242,18 @@ function AlterForm(props: { connId: string; table: string }) {
     busy.set(true);
     applyError.set(null);
     violations.set([]);
+    const started = Date.now();
     try {
       const out = await db.sqliteAlterApply(connId, plan(), s.sql);
+      // 写操作留痕:生成的整段脚本;外键检查不过(已回滚)记为失败
+      recordWrite({
+        connId,
+        source: "alter",
+        sql: s.sql,
+        ok: out.applied,
+        error: out.applied ? null : t("alter.fk_violations_journal", { count: out.violations.length }),
+        elapsedMs: Date.now() - started,
+      });
       if (out.applied) {
         const name = newName().trim();
         toast.success(t("alter.done", { name }));
@@ -263,6 +274,7 @@ function AlterForm(props: { connId: string; table: string }) {
       }
       violations.set(out.violations);
     } catch (e) {
+      recordWrite({ connId, source: "alter", sql: s.sql, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
       applyError.set(errorText(e));
     } finally {
       busy.set(false);

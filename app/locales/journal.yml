@@ -1,0 +1,323 @@
+_version: 2
+journal:
+  title:
+    en: "Write Journal"
+    zh-CN: "写操作记录"
+    zh-TW: "寫入操作紀錄"
+  heading:
+    en: "Write Journal · %{name}"
+    zh-CN: "写操作记录 · %{name}"
+    zh-TW: "寫入操作紀錄 · %{name}"
+  menu:
+    en: "Write Journal"
+    zh-CN: "写操作记录"
+    zh-TW: "寫入操作紀錄"
+  refresh:
+    en: "Refresh"
+    zh-CN: "刷新"
+    zh-TW: "重新整理"
+  export:
+    en: "Export"
+    zh-CN: "导出"
+    zh-TW: "匯出"
+  export_md:
+    en: "Export as Markdown Change Log"
+    zh-CN: "导出为 Markdown 变更记录"
+    zh-TW: "匯出為 Markdown 變更紀錄"
+  export_csv:
+    en: "Export as CSV"
+    zh-CN: "导出为 CSV"
+    zh-TW: "匯出為 CSV"
+  exported:
+    en: "Journal exported"
+    zh-CN: "已导出写操作记录"
+    zh-TW: "已匯出寫入操作紀錄"
+  clear:
+    en: "Clear Journal"
+    zh-CN: "清空记录"
+    zh-TW: "清除紀錄"
+  clear_title:
+    en: "Clear the write journal of %{name}?"
+    zh-CN: "清空 %{name} 的写操作记录?"
+    zh-TW: "清除 %{name} 的寫入操作紀錄?"
+  clear_desc:
+    en: "Every recorded write of this connection is removed, including the data kept for undo. This can't be reversed."
+    zh-CN: "这个连接记下的全部写操作都会删掉,包括撤销用的数据。删掉后不能恢复。"
+    zh-TW: "這個連線記下的全部寫入操作都會刪除,包括復原用的資料。刪除後無法還原。"
+  cancel:
+    en: "Cancel"
+    zh-CN: "取消"
+    zh-TW: "取消"
+  cleared:
+    en: "Journal cleared"
+    zh-CN: "已清空写操作记录"
+    zh-TW: "已清除寫入操作紀錄"
+  search:
+    en: "Search statements and errors"
+    zh-CN: "搜索语句与错误信息"
+    zh-TW: "搜尋陳述式與錯誤訊息"
+  source_all:
+    en: "All Sources"
+    zh-CN: "全部来源"
+    zh-TW: "全部來源"
+  source:
+    editor:
+      en: "SQL Editor"
+      zh-CN: "SQL 编辑器"
+      zh-TW: "SQL 編輯器"
+    ai:
+      en: "AI"
+      zh-CN: "AI"
+      zh-TW: "AI"
+    grid:
+      en: "Grid Edit"
+      zh-CN: "表格编辑"
+      zh-TW: "表格編輯"
+    undo:
+      en: "Undo"
+      zh-CN: "撤销"
+      zh-TW: "復原"
+    import:
+      en: "Import"
+      zh-CN: "导入"
+      zh-TW: "匯入"
+    alter:
+      en: "Alter Table"
+      zh-CN: "修改表结构"
+      zh-TW: "修改資料表結構"
+    redis:
+      en: "Redis"
+      zh-CN: "Redis"
+      zh-TW: "Redis"
+    lua:
+      en: "Lua Script"
+      zh-CN: "Lua 脚本"
+      zh-TW: "Lua 腳本"
+  range_all:
+    en: "Any Time"
+    zh-CN: "全部时间"
+    zh-TW: "全部時間"
+  range_today:
+    en: "Today"
+    zh-CN: "今天"
+    zh-TW: "今天"
+  range_7d:
+    en: "Last 7 Days"
+    zh-CN: "最近 7 天"
+    zh-TW: "最近 7 天"
+  range_30d:
+    en: "Last 30 Days"
+    zh-CN: "最近 30 天"
+    zh-TW: "最近 30 天"
+  status_all:
+    en: "All"
+    zh-CN: "全部"
+    zh-TW: "全部"
+  status_ok:
+    en: "Succeeded"
+    zh-CN: "成功"
+    zh-TW: "成功"
+  status_error:
+    en: "Failed"
+    zh-CN: "失败"
+    zh-TW: "失敗"
+  empty:
+    en: "No writes recorded on this connection yet"
+    zh-CN: "这个连接还没有记下写操作"
+    zh-TW: "這個連線還沒有記下寫入操作"
+  empty_filtered:
+    en: "No writes match the filters"
+    zh-CN: "没有符合筛选条件的写操作"
+    zh-TW: "沒有符合篩選條件的寫入操作"
+  empty_hint:
+    en: "Every write Datum runs here — from the editor, AI, grid edits, imports and undo — is kept on this computer with what it changed, and can be undone later, even after a restart."
+    zh-CN: "Datum 在这里执行的每次写操作(编辑器、AI、表格编辑、导入、撤销)都记在本机,连同改动了什么;之后也能撤销,重启之后也行。"
+    zh-TW: "Datum 在這裡執行的每次寫入操作(編輯器、AI、表格編輯、匯入、復原)都記在本機,連同變動了什麼;之後也能復原,重新啟動之後也行。"
+  loading:
+    en: "Loading…"
+    zh-CN: "加载中…"
+    zh-TW: "載入中…"
+  pick:
+    en: "Select an entry to see the full statement and the rows before the change"
+    zh-CN: "选一条记录,查看完整语句与改动前的行"
+    zh-TW: "選一筆紀錄,查看完整陳述式與變動前的資料列"
+  today:
+    en: "Today"
+    zh-CN: "今天"
+    zh-TW: "今天"
+  yesterday:
+    en: "Yesterday"
+    zh-CN: "昨天"
+    zh-TW: "昨天"
+  rows:
+    en: "%{n} rows"
+    zh-CN: "%{n} 行"
+    zh-TW: "%{n} 列"
+  chip_failed:
+    en: "Failed"
+    zh-CN: "失败"
+    zh-TW: "失敗"
+  chip_undone:
+    en: "Undone"
+    zh-CN: "已撤销"
+    zh-TW: "已復原"
+  chip_undoable:
+    en: "Can Undo"
+    zh-CN: "可撤销"
+    zh-TW: "可復原"
+  copy_sql:
+    en: "Copy SQL"
+    zh-CN: "复制 SQL"
+    zh-TW: "複製 SQL"
+  copied:
+    en: "Copied"
+    zh-CN: "已复制"
+    zh-TW: "已複製"
+  open_in_editor:
+    en: "Open in Editor"
+    zh-CN: "在编辑器中打开"
+    zh-TW: "在編輯器中開啟"
+  undo:
+    en: "Undo (%{rows} rows)…"
+    zh-CN: "撤销(%{rows} 行)…"
+    zh-TW: "復原(%{rows} 列)…"
+  undo_title:
+    en: "Undo a Recorded Change"
+    zh-CN: "撤销记录里的改动"
+    zh-TW: "復原紀錄裡的變動"
+  undone_note:
+    en: "This change was undone"
+    zh-CN: "这次改动已撤销"
+    zh-TW: "這次變動已復原"
+  show_undo:
+    en: "Show Undo"
+    zh-CN: "查看撤销"
+    zh-TW: "查看復原"
+  is_undo_of:
+    en: "This undid %{count} earlier change(s)"
+    zh-CN: "这条撤销了之前的 %{count} 次改动"
+    zh-TW: "這筆復原了之前的 %{count} 次變動"
+  show_original:
+    en: "Show Original"
+    zh-CN: "查看原记录"
+    zh-TW: "查看原紀錄"
+  truncated:
+    en: "The statement was longer than 64 KB; only the beginning is kept."
+    zh-CN: "语句超过 64 KB,只保留了开头。"
+    zh-TW: "陳述式超過 64 KB,只保留了開頭。"
+  rows_before:
+    en: "Rows before the change · %{table}"
+    zh-CN: "改动前的行 · %{table}"
+    zh-TW: "變動前的資料列 · %{table}"
+  rows_deleted:
+    en: "Deleted rows · %{table}"
+    zh-CN: "删掉的行 · %{table}"
+    zh-TW: "刪除的資料列 · %{table}"
+  preview_of:
+    en: "Showing %{shown} of %{total} rows"
+    zh-CN: "共 %{total} 行,显示前 %{shown} 行"
+    zh-TW: "共 %{total} 列,顯示前 %{shown} 列"
+  check_running:
+    en: "Comparing with the rows in the database now…"
+    zh-CN: "正在与库里现在的行核对…"
+    zh-TW: "正在與資料庫裡現在的資料列核對…"
+  check_previous_session:
+    en: "This change was made before Datum last restarted. The rows may have changed since."
+    zh-CN: "这次改动发生在 Datum 上次重启之前,之后这些行可能又被改过。"
+    zh-TW: "這次變動發生在 Datum 上次重新啟動之前,之後這些資料列可能又被改過。"
+  check_later_writes:
+    en: "%{count} later writes to the same table are in the journal; undoing overwrites what they changed in these rows."
+    zh-CN: "写操作记录里之后还有 %{count} 次改到同一张表;撤销会覆盖它们对这些行的改动。"
+    zh-TW: "寫入操作紀錄裡之後還有 %{count} 次改到同一張資料表;復原會覆蓋它們對這些資料列的變動。"
+  check_missing:
+    en: "%{count} rows to restore no longer exist; those statements will change nothing."
+    zh-CN: "有 %{count} 行已经不在了,恢复它们的语句不会改到任何行。"
+    zh-TW: "有 %{count} 列已經不在了,還原它們的陳述式不會改到任何資料列。"
+  check_existing:
+    en: "%{count} deleted rows have been added again with the same key; putting them back will likely fail, and then nothing is changed."
+    zh-CN: "有 %{count} 行删掉后又插进了同主键的行;插回去多半会失败,失败时什么都不会改。"
+    zh-TW: "有 %{count} 列刪除後又插入了同主鍵的資料列;插回去多半會失敗,失敗時什麼都不會改。"
+  check_error:
+    en: "Couldn't compare with the current rows: %{error}"
+    zh-CN: "无法与现在的行核对:%{error}"
+    zh-TW: "無法與現在的資料列核對:%{error}"
+  check_unverified:
+    en: "The table has no primary key, so the current rows can't be compared; changes made since can't be detected."
+    zh-CN: "这张表没有主键,没法逐行核对现在的状态;之后的改动发现不了。"
+    zh-TW: "這張資料表沒有主鍵,無法逐列核對現在的狀態;之後的變動偵測不到。"
+  check_rows_ok:
+    en: "Checked by primary key: every row to restore is in place."
+    zh-CN: "已按主键核对:要恢复的行都在。"
+    zh-TW: "已按主鍵核對:要還原的資料列都在。"
+  gone:
+    en: "This entry is no longer in the write journal"
+    zh-CN: "写操作记录里已经没有这一条了"
+    zh-TW: "寫入操作紀錄裡已經沒有這一筆了"
+  already_undone:
+    en: "This change has already been undone"
+    zh-CN: "这次改动已经撤销过了"
+    zh-TW: "這次變動已經復原過了"
+  grid_commit_summary:
+    en: "Grid edits on %{table}: %{edits} cells changed, %{deletes} rows deleted"
+    zh-CN: "表格编辑 %{table}:改了 %{edits} 个单元格,删了 %{deletes} 行"
+    zh-TW: "表格編輯 %{table}:改了 %{edits} 個儲存格,刪了 %{deletes} 列"
+  import_summary:
+    en: "Import %{file} into %{table} (%{mode})"
+    zh-CN: "导入 %{file} 到 %{table}(%{mode})"
+    zh-TW: "匯入 %{file} 到 %{table}(%{mode})"
+  sql_file_summary:
+    en: "-- Import SQL file: %{count} statements"
+    zh-CN: "-- 导入 SQL 文件:%{count} 条语句"
+    zh-TW: "-- 匯入 SQL 檔案:%{count} 條陳述式"
+  settings_title:
+    en: "Write Journal"
+    zh-CN: "写操作记录"
+    zh-TW: "寫入操作紀錄"
+  settings_enabled:
+    en: "Record every write in the Write Journal"
+    zh-CN: "把每次写操作记进写操作记录"
+    zh-TW: "把每次寫入操作記進寫入操作紀錄"
+  settings_store_rows:
+    en: "Keep row data for undo"
+    zh-CN: "保存撤销用的行数据"
+    zh-TW: "儲存復原用的資料列"
+  settings_store_rows_hint:
+    en: "With this on, the rows before each change are kept so it can be undone later, even after a restart. Turn it off to keep only the statements."
+    zh-CN: "打开时保存每次改动前的行,之后(重启之后也行)能撤销;关掉只记语句。"
+    zh-TW: "開啟時儲存每次變動前的資料列,之後(重新啟動之後也行)能復原;關閉只記陳述式。"
+  settings_retention:
+    en: "Keep entries for"
+    zh-CN: "保留时长"
+    zh-TW: "保留時長"
+  settings_days:
+    en: "%{n} days"
+    zh-CN: "%{n} 天"
+    zh-TW: "%{n} 天"
+  settings_hint:
+    en: "The journal stays on this computer (readable only by you), at most 50 MB per connection; the oldest entries are dropped first. It is never sent to AI."
+    zh-CN: "写操作记录只存在本机(仅你自己可读),每个连接最多 50 MB,超出从最旧的丢起;从不发给 AI。"
+    zh-TW: "寫入操作紀錄只存在本機(僅你自己可讀),每個連線最多 50 MB,超出從最舊的丟起;從不傳給 AI。"
+  settings_clear_all:
+    en: "Clear All Journals"
+    zh-CN: "清空全部记录"
+    zh-TW: "清除全部紀錄"
+  clear_all_title:
+    en: "Clear the write journal of every connection?"
+    zh-CN: "清空所有连接的写操作记录?"
+    zh-TW: "清除所有連線的寫入操作紀錄?"
+  cleared_all:
+    en: "All journals cleared"
+    zh-CN: "已清空全部写操作记录"
+    zh-TW: "已清除全部寫入操作紀錄"
+  delete_conn_keep:
+    en: "Delete, Keep Journal"
+    zh-CN: "删除,保留记录"
+    zh-TW: "刪除,保留紀錄"
+  delete_conn_with_journal:
+    en: "Delete with Journal"
+    zh-CN: "连同记录一起删除"
+    zh-TW: "連同紀錄一起刪除"
+  delete_conn_journal_note:
+    en: "This connection has a write journal. Delete it as well?"
+    zh-CN: "这个连接有写操作记录,要一起删掉吗?"
+    zh-TW: "這個連線有寫入操作紀錄,要一起刪除嗎?"

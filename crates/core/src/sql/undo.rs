@@ -106,6 +106,40 @@ pub fn binary_safe_snapshot(
     }
 }
 
+/// 给人看的值:数据库写好的字面量还原成原值('a''b' → a'b,NULL → 空值;X'…' 与数字原样)。
+pub fn display_value(s: &Snapshot, row: &[Option<String>], i: usize) -> Option<String> {
+    let v = row.get(i)?.as_deref()?;
+    if !s.literal.get(i).copied().unwrap_or(false) || !plain_literal(v) {
+        return Some(v.to_string());
+    }
+    if v.eq_ignore_ascii_case("NULL") {
+        return None;
+    }
+    match v.strip_prefix('\'').and_then(|r| r.strip_suffix('\'')) {
+        Some(body) => Some(body.replace("''", "'")),
+        None => Some(v.to_string()),
+    }
+}
+
+/// 各行主键列的值,写成 SQL 字面量(撤销前核对这些行现在还在不在用)。`key` 里有列不在快照里时返回 None。
+pub fn key_literals(s: &Snapshot, key: &[String], d: Dialect) -> Option<Vec<Vec<String>>> {
+    let idx: Vec<usize> = key.iter().map(|k| index_of(&s.columns, k)).collect::<Option<_>>()?;
+    Some(s.rows.iter().map(|r| idx.iter().map(|&i| value(s, r, i, d)).collect()).collect())
+}
+
+/// 统计 `keys` 里有几行现在还在表里的查询(按主键逐行 OR,调用方分批)。
+pub fn count_keys_sql(table: &str, key: &[String], keys: &[Vec<String>], d: Dialect) -> String {
+    let cond = keys
+        .iter()
+        .map(|vals| {
+            let parts: Vec<String> = key.iter().zip(vals).map(|(k, v)| format!("{} = {v}", ident(k, d))).collect();
+            format!("({})", parts.join(" AND "))
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    format!("SELECT COUNT(*) FROM {table} WHERE {cond}")
+}
+
 fn index_of(columns: &[String], name: &str) -> Option<usize> {
     columns
         .iter()
@@ -234,6 +268,21 @@ mod tests {
                 "UPDATE public.\"Orders\" SET \"status\" = 'it''s' WHERE \"id\" = '2'",
             ]
         );
+    }
+
+    #[test]
+    fn display_values_and_key_literals() {
+        let mut s = snap(WriteOp::Delete, &["id"]);
+        s.literal = vec![true, true, true];
+        s.rows = vec![vec![Some("7".into()), Some("'it''s'".into()), Some("NULL".into())]];
+        assert_eq!(display_value(&s, &s.rows[0], 0).as_deref(), Some("7"));
+        assert_eq!(display_value(&s, &s.rows[0], 1).as_deref(), Some("it's"));
+        assert_eq!(display_value(&s, &s.rows[0], 2), None);
+        let keys = key_literals(&s, &["ID".into()], Sqlite).unwrap();
+        assert_eq!(keys, vec![vec!["7".to_string()]]);
+        assert!(key_literals(&s, &["missing".into()], Sqlite).is_none());
+        let sql = count_keys_sql("t", &["id".into(), "k".into()], &[vec!["1".into(), "'a'".into()], vec!["2".into(), "'b'".into()]], Pg);
+        assert_eq!(sql, "SELECT COUNT(*) FROM t WHERE (\"id\" = 1 AND \"k\" = 'a') OR (\"id\" = 2 AND \"k\" = 'b')");
     }
 
     #[test]

@@ -17,6 +17,7 @@ import {
   newQueryTab,
   openDiagnostics,
   openErd,
+  openJournal,
   openTable,
   runTabCommand,
   TabStatus,
@@ -88,7 +89,7 @@ function TabStrip() {
             selected={workspace.activeTab()?.id === t().id}
             class="h-8 flex-row items-center gap-1.5 rounded-(--radius) px-3 hover:bg-list-hover selected:bg-tab-active"
           >
-            <Icon name={t().kind === "query" ? "terminal" : t().kind === "erd" ? "network" : "table"} size={13} />
+            <Icon name={t().kind === "query" ? "terminal" : t().kind === "erd" ? "network" : t().kind === "journal" ? "scroll-text" : "table"} size={13} />
             <Text class={`${FS.sm} font-semibold text-foreground`}>{t().title()}</Text>
           </Button>
         )}
@@ -105,6 +106,9 @@ function TabStrip() {
       <IconButton icon="network" tooltip="erd" onPress={() => connId && openErd(connId)} />
       <Button testID="open-diag" onPress={() => connId && openDiagnostics(connId)} class="px-1.5">
         <Icon name="stethoscope" size={13} />
+      </Button>
+      <Button testID="open-journal" onPress={() => connId && openJournal(connId)} class="px-1.5">
+        <Icon name="scroll-text" size={13} />
       </Button>
       <IconButton icon="panel-left" tooltip="detail" active={workspace.detailOpen()} onPress={toggleDetail} />
     </View>

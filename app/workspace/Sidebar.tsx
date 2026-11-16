@@ -9,7 +9,7 @@ import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import { activate, conns, loadDatabases, loadTables, refreshTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { workspace } from "../store/workspace";
-import { openDataDiff, openDiagnostics, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
+import { openDataDiff, openDiagnostics, openJournal, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
 import { NewKeyDialog } from "../tab/RedisKeyEditor";
 import { MiddleEllipsis } from "../ui/ellipsis";
 import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
@@ -74,6 +74,7 @@ function ConnMenuItems(props: { conn: Connection }) {
         <MItem label={t("sidebar.schema_diff")} onSelect={() => openSchemaDiff(c.id)} />
         <MItem label={t("sidebar.data_diff")} onSelect={() => openDataDiff(c.id)} />
       </If>
+      <MItem label={t("journal.menu")} onSelect={() => openJournal(c.id)} />
       <MSep />
       <MItem label={t("sidebar.delete")} danger onSelect={() => void confirmDeleteConnection(c)} />
     </>

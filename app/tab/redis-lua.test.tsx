@@ -3,7 +3,7 @@
 // 只读脚本直接执行,字符串结果走格式识别;语法错误给出说明;危险命令要勾选;prod 连接一律确认;
 // 只读死循环超过 busy 阈值后显示 SCRIPT KILL,另开连接终止;脚本存进片段并标记为 Lua。
 
-import { Db, Store } from "datum/native";
+import { Db, Journal, Store } from "datum/native";
 import { expect, open, type App } from "nsh/test";
 import { test } from "nsh/test";
 
@@ -53,6 +53,11 @@ test("写命令先确认;KEYS / ARGV 逐个传参;结果按类型显示;换 tab 
   expect(has(app, "array · items: 3")).toBe(true);
   // 带空格的参数原样作为一个参数传过去,写在连接设置的库 11 上
   expect(await Db.redisExec("rl", `GET ${k}`)).toBe("hello world");
+  // 会写入的脚本记进写操作记录(脚本与 KEYS / ARGV);取消的那次不记
+  const lua = ((await Journal.list("rl", { source: "lua" })) as { sql: string; ok: boolean }[]).filter((e) => e.sql.includes(k));
+  expect(lua.length).toBe(1);
+  expect(lua[0].ok).toBe(true);
+  expect(lua[0].sql).toContain("redis.call('SET', KEYS[1], ARGV[1])");
 
   // 换到别的标签页再回来:脚本、KEYS、ARGV 都还在
   await app.press("label:Redis Live (Pub/Sub, MONITOR)");

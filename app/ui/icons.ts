@@ -59,6 +59,7 @@ import refreshCw from "../assets/icons/refresh-cw.svg";
 import rotateCcwClock from "../assets/icons/rotate-ccw-clock.svg";
 import rotateCcw from "../assets/icons/rotate-ccw.svg";
 import scanSearch from "../assets/icons/scan-search.svg";
+import scrollText from "../assets/icons/scroll-text.svg";
 import search from "../assets/icons/search.svg";
 import send from "../assets/icons/send.svg";
 import settings from "../assets/icons/settings.svg";
@@ -139,6 +140,7 @@ export const ICONS = {
   "rotate-ccw-clock": rotateCcwClock,
   "rotate-ccw": rotateCcw,
   "scan-search": scanSearch,
+  "scroll-text": scrollText,
   "search": search,
   "send": send,
   "settings": settings,

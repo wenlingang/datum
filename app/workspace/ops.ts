@@ -5,7 +5,7 @@ import { Clipboard, signal } from "nsh";
 import { AlertDialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import { openConnectionForm } from "../dialogs";
-import { db, errorText, type ExportFormat, shell, sql } from "../lib/native";
+import { db, errorText, type ExportFormat, journal, shell, sql } from "../lib/native";
 import { type Connection, type DbKind, supportsSql } from "../lib/types";
 import {
   activate,
@@ -267,19 +267,32 @@ export async function showDdl(connId: string, table: string) {
 
 /** 删除连接:确认后删除并关闭它的全部 tab。 */
 export async function confirmDeleteConnection(conn: Connection) {
+  // 有写操作记录时问一句要不要一起删(默认保留:删掉的连接上做过什么仍可追溯)
+  const hasJournal = await journal
+    .list(conn.id, { limit: 1 })
+    .then((l) => l.length > 0)
+    .catch(() => false);
+  const base = conn.env !== "local" ? t("ops.delete_conn_desc_keychain") : t("ops.delete_conn_desc");
   const { action } = await AlertDialog.show({
     title: t("ops.delete_conn_title", { name: conn.name }),
-    description: conn.env !== "local" ? t("ops.delete_conn_desc_keychain") : t("ops.delete_conn_desc"),
-    actions: [
-      { id: "cancel", label: t("ops.cancel"), role: "cancel" },
-      { id: "delete", label: t("ops.delete"), role: "destructive" },
-    ],
+    description: hasJournal ? `${base}\n\n${t("journal.delete_conn_journal_note")}` : base,
+    actions: hasJournal
+      ? [
+          { id: "cancel", label: t("ops.cancel"), role: "cancel" },
+          { id: "delete", label: t("journal.delete_conn_keep") },
+          { id: "delete-all", label: t("journal.delete_conn_with_journal"), role: "destructive" },
+        ]
+      : [
+          { id: "cancel", label: t("ops.cancel"), role: "cancel" },
+          { id: "delete", label: t("ops.delete"), role: "destructive" },
+        ],
     closeOnEscape: true,
   });
-  if (action !== "delete") return;
+  if (action !== "delete" && action !== "delete-all") return;
   try {
     deleteConnection(conn.id);
     closeConnTabs(conn.id);
+    if (action === "delete-all") await journal.clear(conn.id);
   } catch (e) {
     toast.error(errorText(e));
   }

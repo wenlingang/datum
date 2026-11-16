@@ -16,6 +16,7 @@ import type {
   ImportSource,
 } from "../lib/types";
 import { conns, loadTables, refreshTables } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { formatBytes } from "../tab/RedisInsight";
 import { Btn, DbIcon, IconButton, TextField, color } from "../ui/kit";
 import { ErrorText } from "../ui/error";
@@ -185,10 +186,18 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
   const target = () => (mode() === "create" ? tableName().trim() : (appendTable() ?? ""));
   const canRun = () => !!current() && !!preview() && included().length > 0 && !!target() && !busy();
 
+  /** 这次导入的说明(写操作记录里的「语句」):文件、目标表、新建 / 追加。 */
+  let journalNote: { connId: string; sql: string; started: number } | null = null;
+
   function finish(p: ImportProgress) {
     if (timer) clearInterval(timer);
     timer = undefined;
     props.running.set(false);
+    if (journalNote && !p.cancelled) {
+      const n = journalNote;
+      recordWrite({ connId: n.connId, source: "import", sql: n.sql, ok: !p.error, affected: p.error ? null : p.rows, error: p.error, elapsedMs: Date.now() - n.started });
+    }
+    journalNote = null;
     if (p.cancelled) report.set({ ok: false, text: t("import_data.cancelled") });
     else if (p.error) report.set({ ok: false, text: t("import.failed", { error: p.error }) });
     else {
@@ -206,6 +215,15 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
     props.running.set(true);
     report.set(null);
     progress.set(null);
+    journalNote = {
+      connId: conn.id,
+      sql: t("journal.import_summary", {
+        file: source().path.split(/[\\/]/).pop() ?? source().path,
+        table: target(),
+        mode: mode() === "create" ? "CREATE TABLE" : "INSERT",
+      }),
+      started: Date.now(),
+    };
     try {
       await db.connect(conn.kind, conn.id);
       await db.sqliteImportStart(conn.id, {
@@ -215,6 +233,7 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
         columns: columns().map((c) => ({ ...c, name: c.name.trim() })),
       });
     } catch (e) {
+      journalNote = null;
       props.running.set(false);
       if (alive) report.set({ ok: false, text: t("import.failed", { error: errorText(e) }) });
       return;

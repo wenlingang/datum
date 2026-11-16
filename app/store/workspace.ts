@@ -29,7 +29,9 @@ export type TabKind =
   /** 数据对比:本连接的一张表(源)对比同类型库里的一张表(目标),生成同步脚本 */
   | "ddiff"
   /** 索引建议:一条语句的候选索引与验证结果(PG / MySQL / SQLite) */
-  | "index";
+  | "index"
+  /** 写操作记录:这个连接上执行过的写操作(可撤销、导出) */
+  | "journal";
 
 export interface WorkTab {
   /** 稳定 id(标签条 key、记忆激活 tab) */

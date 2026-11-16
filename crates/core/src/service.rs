@@ -359,6 +359,14 @@ pub struct UndoPrep {
     pub rows: usize,
     /// 不能撤销的原因(给界面显示);能撤销为 None
     pub reason: Option<String>,
+    /// 各条写语句改动前的行(按执行顺序):写操作记录里的预览与撤销前核对用
+    pub snapshots: Vec<crate::core::journal::UndoSnapshot>,
+}
+
+impl From<&UndoPrep> for crate::core::journal::UndoData {
+    fn from(p: &UndoPrep) -> Self {
+        Self { statements: p.statements.clone(), rows: p.rows, snapshots: p.snapshots.clone() }
+    }
 }
 
 fn unsupported_reason(u: crate::sql::undo::Unsupported) -> String {
@@ -381,11 +389,12 @@ const UNDO_TIMEOUT_MS: u32 = 30_000;
 /// 只读语句跳过;有一条写语句不能撤销,整段就不提供撤销(给出原因)。
 pub async fn undo_prepare(state: &AppState, kind: &DbKind, id: &str, sql: &str) -> AppResult<UndoPrep> {
     use crate::sql::undo::{self, Snapshot, Unsupported};
-    let no = |reason: String| UndoPrep { statements: vec![], rows: 0, reason: Some(reason) };
+    let no = |reason: String| UndoPrep { statements: vec![], rows: 0, reason: Some(reason), snapshots: vec![] };
     let Some(dialect) = Dialect::from_kind(kind) else {
         return Ok(no(unsupported_reason(Unsupported::Statement)));
     };
     let mut per_statement: Vec<Vec<String>> = Vec::new();
+    let mut snapshots = Vec::new();
     let mut rows = 0usize;
     for stmt in crate::sql::stmt::statements(sql) {
         if crate::sql::risk::is_read_only(&stmt) {
@@ -409,24 +418,154 @@ pub async fn undo_prepare(state: &AppState, kind: &DbKind, id: &str, sql: &str) 
         if r.rows.len() > undo::MAX_ROWS {
             return Ok(no(unsupported_reason(Unsupported::TooManyRows)));
         }
-        let primary_key = if matches!(q.op, crate::sql::impact::WriteOp::Update { .. }) {
-            detail.map(|d| d.columns.into_iter().filter(|c| c.is_pk).map(|c| c.name).collect()).unwrap_or_default()
-        } else {
-            vec![]
-        };
+        let table_key: Vec<String> =
+            detail.map(|d| d.columns.into_iter().filter(|c| c.is_pk).map(|c| c.name).collect()).unwrap_or_default();
+        let is_delete = matches!(q.op, crate::sql::impact::WriteOp::Delete);
+        let primary_key = if matches!(q.op, crate::sql::impact::WriteOp::Update { .. }) { table_key.clone() } else { vec![] };
         let snap = Snapshot { table: q.table, op: q.op, columns: r.columns, rows: r.rows, primary_key, literal };
         rows += snap.rows.len();
         match undo::statements(&snap, dialect) {
             Ok(s) => per_statement.push(s),
             Err(u) => return Ok(no(unsupported_reason(u))),
         }
+        snapshots.push(journal_snapshot(&snap, is_delete, &table_key, dialect));
     }
     if per_statement.is_empty() {
         return Ok(no(unsupported_reason(Unsupported::Statement)));
     }
     // 后执行的先撤销
     let statements = per_statement.into_iter().rev().flatten().collect();
-    Ok(UndoPrep { statements, rows, reason: None })
+    Ok(UndoPrep { statements, rows, reason: None, snapshots })
+}
+
+/// 快照 → 写操作记录里存的形状:前几行给人看,主键值留着撤销前核对。
+fn journal_snapshot(
+    snap: &crate::sql::undo::Snapshot,
+    delete: bool,
+    key: &[String],
+    d: Dialect,
+) -> crate::core::journal::UndoSnapshot {
+    use crate::sql::undo;
+    let keys = if key.is_empty() { None } else { undo::key_literals(snap, key, d) };
+    crate::core::journal::UndoSnapshot {
+        table: snap.table.clone(),
+        delete,
+        columns: snap.columns.clone(),
+        rows: snap
+            .rows
+            .iter()
+            .take(crate::core::journal::PREVIEW_ROWS)
+            .map(|r| (0..r.len()).map(|i| undo::display_value(snap, r, i)).collect())
+            .collect(),
+        total: snap.rows.len(),
+        primary_key: if keys.is_some() { key.to_vec() } else { vec![] },
+        keys: keys.unwrap_or_default(),
+    }
+}
+
+/// 表格里暂存的编辑 / 删除写成等价的 SQL(写操作记录与撤销准备用;真正提交仍走绑定参数)。
+pub fn grid_statements(kind: &DbKind, edits: &[CellEdit], deletes: &[RowDelete]) -> Vec<String> {
+    use crate::sql::build::{ident, literal};
+    let Some(d) = Dialect::from_kind(kind) else {
+        return vec![];
+    };
+    let mut out: Vec<String> = edits
+        .iter()
+        .map(|e| {
+            format!(
+                "UPDATE {} SET {} = {} WHERE {} = {}",
+                ident(&e.table, d),
+                ident(&e.column, d),
+                literal(&e.new_value, d),
+                ident(&e.pk_col, d),
+                literal(&e.pk_value, d)
+            )
+        })
+        .collect();
+    out.extend(deletes.iter().map(|x| {
+        format!("DELETE FROM {} WHERE {} = {}", ident(&x.table, d), ident(&x.pk_col, d), literal(&x.pk_value, d))
+    }));
+    out
+}
+
+/// 表格提交前的撤销准备:把暂存的改动写成等价 SQL,逐条抓快照。
+/// 返回 (等价 SQL, 撤销);编辑和删除涉及同一行时,按提交顺序(先改后删)抓。
+pub async fn grid_undo_prepare(
+    state: &AppState,
+    kind: &DbKind,
+    id: &str,
+    edits: &[CellEdit],
+    deletes: &[RowDelete],
+) -> AppResult<(Vec<String>, UndoPrep)> {
+    let statements = grid_statements(kind, edits, deletes);
+    let prep = undo_prepare(state, kind, id, &statements.join(";\n")).await?;
+    Ok((statements, prep))
+}
+
+/// 从写操作记录里撤销前的核对结果。
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoCheck {
+    /// 是上次运行(重启之前)的记录
+    pub previous_session: bool,
+    /// 之后又记了几条改到同一张表的写操作
+    pub later_writes: usize,
+    /// 已经被撤销过(撤销记录的 id)
+    pub undone_by: Option<String>,
+    /// 按主键逐行核对过(表有主键)
+    pub checked: bool,
+    /// UPDATE 的撤销:要改回去的行,现在已经不在了的行数
+    pub missing: usize,
+    /// DELETE 的撤销:要插回去的行,现在又有了同主键的行数(插回去会冲突)
+    pub existing: usize,
+    /// 核对查询出错(给人看的原因);出错不拦着撤销,只提醒
+    pub error: Option<String>,
+}
+
+/// 撤销写操作记录里的一条之前:看它是不是上次运行的、之后有没有别的写操作改过同一张表,
+/// 并按主键核对要恢复的行现在的状态(UPDATE 的行还在不在、DELETE 的行有没有被插回来)。
+pub async fn journal_undo_check(state: &AppState, kind: &DbKind, id: &str, entry_id: &str) -> AppResult<UndoCheck> {
+    let Some(detail) = crate::commands::journal_get(state, id, entry_id) else {
+        return Err(AppError::new(ErrorKind::Config, t!("core.journal.not_found")));
+    };
+    let mut check = UndoCheck {
+        previous_session: detail.previous_session,
+        later_writes: detail.later_writes,
+        undone_by: detail.undone_by.clone(),
+        ..Default::default()
+    };
+    let Some(dialect) = Dialect::from_kind(kind) else {
+        return Ok(check);
+    };
+    let Some(undo) = detail.entry.undo.as_ref() else {
+        return Ok(check);
+    };
+    check.checked = !undo.snapshots.is_empty() && undo.snapshots.iter().all(|s| !s.primary_key.is_empty() && s.keys.len() == s.total);
+    if !check.checked {
+        return Ok(check);
+    }
+    for s in &undo.snapshots {
+        let mut found = 0usize;
+        for chunk in s.keys.chunks(200) {
+            let sql = crate::sql::undo::count_keys_sql(&s.table, &s.primary_key, chunk, dialect);
+            match query_read_only_timeout(state, kind, id, &sql, 1, UNDO_TIMEOUT_MS).await {
+                Ok(r) => {
+                    found += r.rows.first().and_then(|row| row.first()).and_then(|v| v.as_deref()).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+                }
+                Err(e) => {
+                    check.error = Some(e.display());
+                    check.checked = false;
+                    return Ok(check);
+                }
+            }
+        }
+        if s.delete {
+            check.existing += found;
+        } else {
+            check.missing += s.total.saturating_sub(found);
+        }
+    }
+    Ok(check)
 }
 
 pub async fn table_detail(

@@ -6,6 +6,7 @@ import { openSettings } from "../dialogs/index";
 import { chat as chatNative, db, type ExportFormat, grid } from "../lib/native";
 import type { ColumnsByTable, Connection, DbKind, QueryResult, TableDetail } from "../lib/types";
 import { activate, conns, loadTables, refreshTables } from "../store/conns";
+import { journalIdsOf, recordWrite } from "../store/journal";
 import { maxRows } from "../store/prefs";
 import { setAiFullscreen, workspace } from "../store/workspace";
 import { activeSelectionText, insertAndRun, newQueryTab } from "../tab/index";
@@ -40,6 +41,9 @@ export const chatDeps = {
   undoPrepare: db.undoPrepare,
   /** 在一个事务里执行若干语句(撤销用)。 */
   importSql: (kind: DbKind, connId: string, statements: string[]): Promise<unknown> => db.importSql(kind, connId, statements),
+  /** 写操作留痕(写操作记录;内容从不交给 AI)。 */
+  recordWrite,
+  journalIdsOf,
   /** 写语句的影响范围预估(执行确认框用);改写不了的语句为 null。 */
   writeImpact: db.writeImpact,
   /** 「在编辑器中打开」:退出对话工作台,在该连接上新开查询 tab 并填入 SQL(不执行)。 */

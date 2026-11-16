@@ -84,6 +84,8 @@ function rebuild(s: SessionTab): WorkTab | null {
       return supportsSql(conn.kind) ? { ...base, title: signal(t("diag.title")), state: null } : null;
     case "redis":
       return conn.kind === "redis" ? { ...base, title: signal(t("rinsight.title")), state: null } : null;
+    case "journal":
+      return { ...base, table: null, title: signal(t("journal.title")), state: null };
     case "rlua": {
       if (conn.kind !== "redis") return null;
       const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);

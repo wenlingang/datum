@@ -36,6 +36,7 @@ import {
 } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
 import { forgetUndo, recordHistory } from "../store/history";
+import { journalIdsOf, newJournalId, recordWrite } from "../store/journal";
 import { maxRows } from "../store/prefs";
 import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
@@ -472,6 +473,7 @@ function record(
   rowCount: number | null,
   affected: number | null,
   undo: UndoPrep | null = null,
+  journalId: string | null = null,
 ) {
   recordHistory(
     {
@@ -483,9 +485,18 @@ function record(
       elapsedMs: elapsed,
       rowCount,
       affected,
+      journalId,
     },
     undo,
   );
+}
+
+/** 编辑器里执行的这段会不会改数据(写操作记录只记写操作)。 */
+function isWrite(m: TabModel, sql: string): boolean {
+  if (m.dbKind === "redis") return sqlText.redisMayWrite(sql);
+  // 只读判断是给免确认用的,遇到注释就从严当成写;留痕只看开头的注释之后是什么,免得把带说明注释的查询记成写操作
+  const body = sql.replace(/^(\s|--[^\n]*(\n|$)|\/\*[\s\S]*?\*\/)*/, "");
+  return supportsSql(m.dbKind) && !!body && !sqlText.isReadOnly(body);
 }
 
 /** 会改表结构的语句(建 / 改 / 删表、视图、索引等):执行后要重新加载表清单、列与外键(补全用)。
@@ -501,7 +512,13 @@ function prepareUndo(m: TabModel, sql: string): Promise<UndoPrep> {
 }
 
 /** 执行一条 SQL;成功走 `onOk`,失败把错误挂到结果区。 */
-async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elapsed: number) => void) {
+async function spawnQuery(
+  m: TabModel,
+  sql: string,
+  onOk: (r: QueryResult, elapsed: number) => void,
+  /** 执行结束就调(结果过期被丢弃时也调):写操作留痕用 */
+  onSettled?: (r: QueryResult | null, error: string | null, elapsed: number) => void,
+) {
   const token = ++m.token;
   m.multi.set(null);
   m.plan.set(null);
@@ -514,6 +531,7 @@ async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elaps
     const r = readOnly
       ? await db.queryReadOnly(m.dbKind, m.connId, sql, maxRows())
       : await db.query(m.dbKind, m.connId, sql, maxRows());
+    onSettled?.(r, null, Date.now() - started);
     if (token !== m.token) return;
     batch(() => {
       m.running.set(false);
@@ -521,6 +539,8 @@ async function spawnQuery(m: TabModel, sql: string, onOk: (r: QueryResult, elaps
       onOk(r, Date.now() - started);
     });
   } catch (e) {
+    // 写操作出错也留痕(界面上丢弃的过期结果不算:那次执行仍然发生了)
+    onSettled?.(null, errorText(e), Date.now() - started);
     if (token !== m.token) return;
     batch(() => {
       m.running.set(false);
@@ -609,10 +629,16 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
     return;
   }
   const query = sqlText.isQuery(sql);
+  const write = isWrite(m, sql);
   m.lastRun.set({ sql, explain: false });
   m.undo.set(null);
-  const go = (undo: UndoPrep | null) =>
-    spawnQuery(m, sql, (r, elapsed) => {
+  const go = (undo: UndoPrep | null) => {
+    let jid: string | null = null;
+    // 写操作:执行结束就留痕(成功带撤销数据,失败带错误)
+    const settled = (r: QueryResult | null, error: string | null, elapsed: number) => {
+      jid = recordWrite({ connId: m.connId, source: "editor", sql, ok: !error, affected: r?.affected ?? null, error, elapsedMs: elapsed, undo: error ? null : undo });
+    };
+    return spawnQuery(m, sql, (r, elapsed) => {
       m.browseTable.set(null);
       m.page.set(0);
       m.resultIsQuery.set(query);
@@ -623,8 +649,9 @@ export function run(m: TabModel, override?: string, skipHistory = false, skipRis
       m.undo.set(undo);
       // 改了表结构:刷新表清单、列与外键(补全的 JOIN … ON 推荐跟着变)
       if (!query && changesSchema(sql) && conns.tables(m.connId)) void refreshTables(m.connId);
-      if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null), undo);
-    });
+      if (!skipHistory) record(m, sql, elapsed, query ? r.rows.length : null, query ? null : (r.affected ?? null), undo, jid);
+    }, write ? settled : undefined);
+  };
   // 写语句:先抓会被改动的原始行,生成撤销用的反向语句,再执行
   if (supportsSql(m.dbKind) && !sqlText.isReadOnly(sql)) {
     const token = m.token;
@@ -682,6 +709,8 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
   let failed = false;
   let schemaChanged = false;
   const undos: UndoPrep[] = [];
+  // 同一次执行里的写操作在写操作记录里同属一批
+  const batchId = newJournalId();
   for (const sql of statements) {
     const isQuery = sqlText.isQuery(sql);
     if (failed) {
@@ -700,8 +729,15 @@ async function runMany(m: TabModel, statements: string[], skipHistory: boolean) 
       out.push({ sql, result: r, error: null, elapsedMs: elapsed, isQuery, skipped: false });
       if (!isQuery && changesSchema(sql)) schemaChanged = true;
       if (undo) undos.push(undo);
-      if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null), undo);
+      const jid =
+        !readOnly && isWrite(m, sql)
+          ? recordWrite({ connId: m.connId, source: "editor", sql, ok: true, affected: r.affected ?? null, elapsedMs: elapsed, undo, batch: batchId })
+          : null;
+      if (!skipHistory) record(m, sql, elapsed, isQuery ? r.rows.length : null, isQuery ? null : (r.affected ?? null), undo, jid);
     } catch (e) {
+      if (!readOnly && isWrite(m, sql)) {
+        recordWrite({ connId: m.connId, source: "editor", sql, ok: false, error: errorText(e), elapsedMs: Date.now() - started, batch: batchId });
+      }
       if (token !== m.token) return;
       out.push({ sql, result: null, error: errorText(e), elapsedMs: null, isQuery, skipped: false });
       failed = true;
@@ -741,6 +777,7 @@ function combineUndo(list: UndoPrep[]): UndoPrep | null {
     rows: usable.reduce((n, u) => n + u.rows, 0),
     reason: null,
     parts: usable,
+    snapshots: usable.flatMap((u) => u.snapshots ?? []),
   };
 }
 
@@ -768,17 +805,32 @@ export function selectResult(m: TabModel, i: number) {
 export async function undoLast(m: TabModel) {
   const undo = m.undo();
   if (!undo || undo.statements.length === 0) return;
-  try {
-    await db.importSql(m.dbKind, m.connId, undo.statements);
-    forgetUndo(undo);
+  const ok = await runUndo(m.dbKind, m.connId, undo);
+  if (ok) {
     batch(() => {
       m.undo.set(null);
       m.undoOpen.set(false);
     });
+    // 表格提交后的撤销:重读当前页
+    if (m.kind === "table") refresh(m);
+  } else m.undoOpen.set(false);
+}
+
+/** 在一个事务里执行撤销的反向语句,并记一条指回原记录的撤销记录。成功返回 true(已提示)。 */
+export async function runUndo(kind: DbKind, connId: string, undo: UndoPrep): Promise<boolean> {
+  const sql = undo.statements.join(";\n");
+  const undoes = journalIdsOf(undo);
+  const started = Date.now();
+  try {
+    await db.importSql(kind, connId, undo.statements);
+    recordWrite({ connId, source: "undo", sql, ok: true, affected: undo.rows, elapsedMs: Date.now() - started, undoes });
+    forgetUndo(undo);
     toast.success(t("undo.done", { rows: undo.rows }));
+    return true;
   } catch (e) {
-    m.undoOpen.set(false);
+    recordWrite({ connId, source: "undo", sql, ok: false, error: errorText(e), elapsedMs: Date.now() - started, undoes });
     toast.error(t("undo.failed", { error: errorText(e) }));
+    return false;
   }
 }
 
@@ -788,8 +840,9 @@ async function runRedis(m: TabModel, cmd: string, skipHistory: boolean) {
   const started = Date.now();
   try {
     const reply = await db.redisExec(m.connId, cmd);
-    if (token !== m.token) return;
     const elapsed = Date.now() - started;
+    const jid = isWrite(m, cmd) ? recordWrite({ connId: m.connId, source: "redis", sql: cmd, ok: true, elapsedMs: elapsed }) : null;
+    if (token !== m.token) return;
     batch(() => {
       m.running.set(false);
       m.err.set(null);
@@ -801,8 +854,9 @@ async function runRedis(m: TabModel, cmd: string, skipHistory: boolean) {
         affected: null,
       });
     });
-    if (!skipHistory) record(m, cmd, elapsed, null, null);
+    if (!skipHistory) record(m, cmd, elapsed, null, null, null, jid);
   } catch (e) {
+    if (isWrite(m, cmd)) recordWrite({ connId: m.connId, source: "redis", sql: cmd, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
     if (token !== m.token) return;
     batch(() => {
       m.running.set(false);
@@ -1056,17 +1110,29 @@ export async function commit(m: TabModel) {
   if (edits.length === 0 && deletes.length === 0) return;
   const token = ++m.token;
   m.running.set(true);
+  // 提交前把暂存的改动写成等价 SQL 抓快照:写操作记录里留痕,提交后可撤销
+  const prep = await db
+    .gridUndoPrepare(m.dbKind, m.connId, edits, deletes)
+    .catch((e): { statements: string[]; undo: UndoPrep } => ({
+      statements: [],
+      undo: { statements: [], rows: 0, reason: errorText(e) },
+    }));
+  const sql = prep.statements.length > 0 ? prep.statements.join(";\n") : t("journal.grid_commit_summary", { table, edits: edits.length, deletes: deletes.length });
+  const started = Date.now();
   try {
-    await db.commitEdits(m.dbKind, m.connId, edits, deletes);
+    const affected = await db.commitEdits(m.dbKind, m.connId, edits, deletes);
+    recordWrite({ connId: m.connId, source: "grid", sql, ok: true, affected, elapsedMs: Date.now() - started, undo: prep.undo });
     if (token !== m.token) return;
     batch(() => {
       m.running.set(false);
       m.dirty.set({});
       m.deletes.set([]);
+      m.undo.set(prep.undo.statements.length > 0 ? prep.undo : null);
     });
     if (deletes.length > 0) toast.success(t("tab.deleted_rows", { n: deletes.length }));
     refresh(m);
   } catch (e) {
+    recordWrite({ connId: m.connId, source: "grid", sql, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
     if (token !== m.token) return;
     batch(() => {
       m.running.set(false);

@@ -20,6 +20,7 @@ import { modelOf, refresh, refreshRedisKey, type TabModel } from "./model";
 import { RedisKeyEditor } from "./RedisKeyEditor";
 import { Results, StatusLine } from "./Results";
 import { Diagnostics } from "./Diagnostics";
+import { JournalView } from "./Journal";
 import { SchemaDiff } from "./SchemaDiff";
 import { DataDiff } from "./DataDiff";
 import { isDataDiffModel } from "./dataDiffModel";
@@ -139,6 +140,7 @@ export function TabBody(props: { tab: WorkTab }) {
     const am = advisorModelOf(props.tab);
     return am ? <IndexAdvisor m={am} /> : <Placeholder icon="network" text={t("erd.wip")} />;
   }
+  if (props.tab.kind === "journal") return <JournalView connId={props.tab.connId} />;
   if (!m) return <Placeholder icon="network" text={t("erd.wip")} />;
   return <ModelView m={m} tabId={props.tab.id} />;
 }

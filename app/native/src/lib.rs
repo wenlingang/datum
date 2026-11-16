@@ -8,6 +8,7 @@ mod ai;
 mod conn;
 mod db;
 mod erd;
+mod journal;
 mod keys;
 mod mask;
 mod dialogs;
@@ -23,6 +24,7 @@ pub use ai::Ai;
 pub use conn::Store;
 pub use db::Db;
 pub use erd::Erd;
+pub use journal::Journal;
 pub use keys::EditorKeys;
 pub use mask::Mask;
 pub use dialogs::Dialogs;
@@ -40,6 +42,7 @@ fn native(registry: &mut Registry) {
         .module::<Store>()
         .module::<Db>()
         .module::<Erd>()
+        .module::<Journal>()
         .module::<Prefs>()
         .module::<Sql>()
         .module::<Ai>()

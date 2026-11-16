@@ -440,8 +440,9 @@ test("多条写语句一起执行也能撤销;过后还能从历史里撤销", a
   await check("SELECT 'other' AS x", "other");
   await app.press("id:history");
   await app.waitUntil(() => app.texts().some((x) => x.startsWith("Undo (1 rows)")), { timeout: 5000 });
-  // 整体撤销过的那两条不再提供撤销,只剩这一条
-  expect(app.texts().filter((x) => x.startsWith("Undo (")).length).toBe(1);
+  // 整体撤销过的那两条不再提供撤销,只剩这一条(前面测试留下的写操作在写操作记录里,重启后也能撤销,
+  // 历史里另有它们的「Undo (5 rows)」「Undo (400 rows)」,不在这里数)
+  expect(app.texts().filter((x) => x === "Undo (1 rows)" || x === "Undo (2 rows)").length).toBe(1);
   await app.press("text:Undo (1 rows)");
   await app.waitFor("id:undo-dialog", { timeout: 5000 });
   await app.press("id:undo-confirm");
@@ -450,7 +451,7 @@ test("多条写语句一起执行也能撤销;过后还能从历史里撤销", a
   // 撤销过的不能再撤销
   await app.press("id:history");
   await app.waitUntil(() => app.texts().some((x) => x.includes("UPDATE products SET origin = 'Later'")), { timeout: 5000 });
-  expect(app.texts().some((x) => x.startsWith("Undo ("))).toBe(false);
+  expect(app.texts().some((x) => x === "Undo (1 rows)" || x === "Undo (2 rows)")).toBe(false);
   app.dispose();
 });
 

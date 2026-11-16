@@ -1,7 +1,7 @@
 // datum/native 的类型化封装:原生导出返回 `unknown`(JSON),这里断言成 lib/types 的形状。
 // 界面代码只从这里调用原生模块,不直接 import "datum/native"。
 
-import { Ai, Db, Erd, Mask, Prefs as NativePrefs, Sql, Store } from "datum/native";
+import { Ai, Db, Erd, Journal, Mask, Prefs as NativePrefs, Sql, Store } from "datum/native";
 import { AlertDialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import type {
@@ -19,6 +19,11 @@ import type {
   ErdSchema,
   ForeignKey,
   HistoryEntry,
+  JournalDetail,
+  JournalFilter,
+  JournalSettings,
+  JournalSummary,
+  UndoCheck,
   KnowledgeDoc,
   Prefs,
   ProviderConfig,
@@ -142,6 +147,9 @@ export const db = {
   cancelQuery: (kind: DbKind, id: string) => Db.cancelQuery(kind, id) as Promise<boolean>,
   /** 执行写语句前的撤销准备(抓快照、生成反向语句) */
   undoPrepare: async (kind: DbKind, id: string, sql: string) => (await Db.undoPrepare(kind, id, sql)) as UndoPrep,
+  /** 表格提交前的撤销准备:暂存的改动写成等价 SQL 抓快照。 */
+  gridUndoPrepare: async (kind: DbKind, id: string, edits: CellEdit[], deletes: RowDelete[]) =>
+    (await Db.gridUndoPrepare(kind, id, edits, deletes)) as { statements: string[]; undo: UndoPrep },
   /** 写语句的影响范围预估;改写不了的语句为 null */
   writeImpact: async (kind: DbKind, id: string, sql: string) =>
     (await Db.writeImpact(kind, id, sql)) as WriteImpact | null,
@@ -261,6 +269,21 @@ export const db = {
     Db.diagAct(kind, id, action, args) as Promise<void>,
 };
 
+/** 写操作记录(写日志)。 */
+export const journal = {
+  newId: () => Journal.newId() as string,
+  record: async (entry: Record<string, unknown>) => (await Journal.record(entry)) as string | null,
+  list: async (connId: string, filter: JournalFilter | null) => (await Journal.list(connId, filter ?? null)) as JournalSummary[],
+  get: async (connId: string, id: string) => (await Journal.get(connId, id)) as JournalDetail | null,
+  undoable: async (connId: string) => (await Journal.undoable(connId)) as [string, number][],
+  undoCheck: async (kind: DbKind, connId: string, id: string) => (await Journal.undoCheck(kind, connId, id)) as UndoCheck,
+  export: (connId: string, filter: JournalFilter | null, format: "md" | "csv") =>
+    Journal.export(connId, filter ?? null, format) as Promise<string>,
+  clear: (connId: string | null) => Journal.clear(connId) as Promise<void>,
+  settings: () => Journal.settings() as JournalSettings,
+  saveSettings: (s: JournalSettings) => Journal.saveSettings(s) as JournalSettings,
+};
+
 export const erd = {
   schema: async (kind: DbKind, id: string) => (await Erd.schema(kind, id)) as ErdSchema,
   build: (tables: string[], columns: ColumnsByTable, schema: ErdSchema, opts: ErdBuildOptions) =>
@@ -277,6 +300,8 @@ export const sql = {
   currentStatement: (doc: string, caret: number) => Sql.currentStatement(doc, caret),
   isQuery: (s: string) => Sql.isQuery(s),
   isReadOnly: (doc: string) => Sql.isReadOnly(doc),
+  /** 一条 Redis 命令会不会改数据(认不出的按会写处理) */
+  redisMayWrite: (cmd: string) => Sql.redisMayWrite(cmd),
   /** `strict`(prod 连接):带 WHERE 的 UPDATE / DELETE 也列出,执行前确认并预估影响范围 */
   analyze: (doc: string, strict = false) => Sql.analyze(doc, strict) as RiskFinding[],
   /** MySQL:另把改表结构的语句列出(带 schemaChange / assessOnly),执行前评估锁表与重建风险 */

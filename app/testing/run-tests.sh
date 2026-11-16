@@ -82,6 +82,16 @@ if want tab; then
   BEFORE=$(sqlite3 "$D/roastery.db" "$IDX")
   run tab-advisor "$D" tab/advisor.test.tsx
   [ "$(sqlite3 "$D/roastery.db" "$IDX")" = "$BEFORE" ] || { echo "advisor: 验证后库里多了索引"; FAILED=1; }
+  # 写操作记录:先执行 / 撤销,再用新进程在同一配置目录里验证跨重启撤销
+  D="$ROOT/tab-journal"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"
+  printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
+  run tab-journal "$D" tab/journal.test.tsx
+  run tab-journal-restart "$D" tab/journal-restart.test.tsx
+  [ "$(stat -f %Lp "$D/journal/dev-sqlite.jsonl" 2>/dev/null || stat -c %a "$D/journal/dev-sqlite.jsonl")" = 600 ] \
+    || { echo "journal: 写日志文件应为 0600"; FAILED=1; }
+  [ "$(sqlite3 "$D/roastery.db" "select count(*) from products where origin in ('Journal test', 'Restart test')")" = 0 ] \
+    || { echo "journal: 撤销后数据应回到原样"; FAILED=1; }
   # 自然语言筛选:本地起一个 OpenAI 兼容的假服务,固定回一段筛选 JSON
   D="$ROOT/tab-nl"; mkdir -p "$D"
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"

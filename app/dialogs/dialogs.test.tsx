@@ -3,7 +3,7 @@
 // 配置目录里要先放一个 SQLite 文件 test.db(测试连接、保存、导入都只用它)。
 // (TSX 读不到未声明的环境变量,配置目录经原生模块取得。)
 
-import { Db, Store } from "datum/native";
+import { Db, Journal, Store } from "datum/native";
 import { describe, expect, open, test } from "nsh/test";
 
 const CONFIG = Store.configDir();
@@ -234,6 +234,26 @@ describe("settings", () => {
     await app.waitUntil(() => saved() === true, { timeout: 5000 });
     await app.press("id:allow-prod-data");
     await app.waitUntil(() => saved() === false, { timeout: 5000 });
+    app.dispose();
+  });
+
+  test("write journal settings: on by default, row data and retention are saved", async () => {
+    const app = await start();
+    await app.press("id:dev-settings");
+    await app.press("id:settings-section-privacy");
+    await app.waitFor("text:Record every write in the Write Journal");
+    type S = { enabled: boolean; storeRows: boolean; retentionDays: number };
+    const settings = () => Journal.settings() as S;
+    expect(settings()).toEqual({ enabled: true, storeRows: true, retentionDays: 90 });
+    await app.press("id:journal-store-rows");
+    await app.waitUntil(() => settings().storeRows === false, { timeout: 5000 });
+    await app.press("label:90 days");
+    await app.press("text:30 days");
+    await app.waitUntil(() => settings().retentionDays === 30, { timeout: 5000 });
+    await app.press("id:journal-enabled");
+    await app.waitUntil(() => settings().enabled === false, { timeout: 5000 });
+    // 恢复默认,不影响别的测试
+    Journal.saveSettings({ enabled: true, storeRows: true, retentionDays: 90 });
     app.dispose();
   });
 

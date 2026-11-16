@@ -73,6 +73,8 @@ export interface HistoryEntry {
   elapsedMs: number;
   rowCount?: number | null;
   affected?: number | null;
+  /** 写语句在写操作记录里的那一条(重启后从历史撤销靠它找回撤销数据) */
+  journalId?: string | null;
 }
 
 export interface QueryResult {
@@ -812,6 +814,110 @@ export interface UndoPrep {
   reason: string | null;
   /** 前端合成的整体撤销:由哪几条语句各自的撤销组成(撤销整体后,它们在历史里也不能再撤销) */
   parts?: UndoPrep[];
+  /** 各条写语句改动前的行(写操作记录的预览与撤销前核对用) */
+  snapshots?: UndoSnapshot[];
+  /** 这份撤销对应的写操作记录(撤销时记一条指回它的撤销记录) */
+  journalId?: string | null;
+  /** 来自写操作记录(不是刚执行完的那次):确认框里多一条提醒 */
+  journal?: { check: UndoCheck | null; checking: boolean };
+}
+
+// ---------------------------------------------------------------- 写操作记录
+
+/** 写操作的来源。 */
+export type JournalSource = "editor" | "ai" | "grid" | "undo" | "import" | "alter" | "redis" | "lua";
+
+/** 一条写语句改动前的行。 */
+export interface UndoSnapshot {
+  table: string;
+  /** true:DELETE(撤销插回去);false:UPDATE(撤销改回去) */
+  delete: boolean;
+  columns: string[];
+  /** 前 20 行,给人看的值 */
+  rows: (string | null)[][];
+  total: number;
+  primaryKey: string[];
+  keys: string[][];
+}
+
+/** 写日志里的一条(完整)。 */
+export interface JournalEntry {
+  id: string;
+  ts: number;
+  session: string;
+  connId: string;
+  connName: string;
+  env: string;
+  kind: string;
+  database: string;
+  source: JournalSource;
+  batch: string | null;
+  sql: string;
+  truncated: boolean;
+  affected: number | null;
+  ok: boolean;
+  error: string | null;
+  elapsedMs: number;
+  undo: { statements: string[]; rows: number; snapshots: UndoSnapshot[] } | null;
+  undoReason: string | null;
+  undoes: string[];
+}
+
+/** 列表里的一条:不带撤销数据,SQL 只有开头。 */
+export interface JournalSummary {
+  id: string;
+  ts: number;
+  connId: string;
+  connName: string;
+  env: string;
+  kind: string;
+  database: string;
+  source: JournalSource;
+  batch: string | null;
+  sql: string;
+  truncated: boolean;
+  affected: number | null;
+  ok: boolean;
+  error: string | null;
+  elapsedMs: number;
+  undoRows: number | null;
+  undoReason: string | null;
+  undoes: string[];
+  undoneBy: string | null;
+  previousSession: boolean;
+}
+
+export interface JournalDetail {
+  entry: JournalEntry;
+  undoneBy: string | null;
+  previousSession: boolean;
+  laterWrites: number;
+}
+
+export interface JournalFilter {
+  source?: JournalSource | null;
+  status?: "ok" | "error" | null;
+  text?: string | null;
+  from?: number | null;
+  to?: number | null;
+  limit?: number | null;
+}
+
+export interface JournalSettings {
+  enabled: boolean;
+  storeRows: boolean;
+  retentionDays: number;
+}
+
+/** 从写日志撤销前的核对。 */
+export interface UndoCheck {
+  previousSession: boolean;
+  laterWrites: number;
+  undoneBy: string | null;
+  checked: boolean;
+  missing: number;
+  existing: number;
+  error: string | null;
 }
 
 // ---------------------------------------------------------------- 关系库诊断

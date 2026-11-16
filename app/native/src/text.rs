@@ -67,6 +67,11 @@ impl Sql {
         risk::is_read_only(&doc)
     }
 
+    /// 一条 Redis 命令会不会改数据(写操作记录只记写命令;认不出的按会写处理)。
+    pub fn redis_may_write(cmd: String) -> bool {
+        datum_core::rds::lua::command_may_write(&cmd)
+    }
+
     /// SQL 风险检查:破坏性语句清单。`strict`(prod 连接)时带 WHERE 的 UPDATE / DELETE 也列出。
     pub fn analyze(doc: String, strict: bool) -> JsonValue {
         findings_json(if strict {

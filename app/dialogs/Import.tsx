@@ -8,6 +8,7 @@ import { t } from "nsh/i18n";
 import { db, dialogsNative, errorText, sql, store } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { Btn, DbIcon, color } from "../ui/kit";
 import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
@@ -129,14 +130,19 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
     if (!conn || stmts.length === 0 || running()) return;
     props.running.set(true);
     report.set(null);
+    // 写操作留痕:整段脚本记一条(超长的由写日志截断并标记);只读脚本不记
+    const write = !sql.isReadOnly(stmts.join(";\n"));
+    const started = Date.now();
     try {
       await db.connect(conn.kind, conn.id);
       const n = await db.importSql(conn.kind, conn.id, stmts);
+      if (write) recordWrite({ connId: conn.id, source: "import", sql: stmts.join(";\n"), ok: true, elapsedMs: Date.now() - started });
       if (!alive) return;
       report.set({ ok: true, text: t("import.done", { count: n }) });
       // 结构可能已变:刷新侧栏表列表
       void refreshTables(conn.id);
     } catch (e) {
+      if (write) recordWrite({ connId: conn.id, source: "import", sql: stmts.join(";\n"), ok: false, error: errorText(e), elapsedMs: Date.now() - started });
       if (alive) report.set({ ok: false, text: t("import.failed", { error: errorText(e) }) });
     } finally {
       props.running.set(false);

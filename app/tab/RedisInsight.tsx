@@ -15,6 +15,7 @@ import type {
   RedisSlowEntry,
 } from "../lib/types";
 import { conns } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { toast } from "../store/toast";
 import { Btn, Hint, Icon, IconButton, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
@@ -531,12 +532,16 @@ export function RedisInsight(props: { connId: string }) {
     const k = deleting();
     if (!k) return;
     busy.set(true);
+    const command = `DEL ${/[\s"']/.test(k.key) ? JSON.stringify(k.key) : k.key}`;
+    const started = Date.now();
     try {
       const n = await db.redisDeleteKey(id, k.node ?? null, k.key);
+      recordWrite({ connId: id, source: "redis", sql: command, ok: true, affected: n, elapsedMs: Date.now() - started });
       toast.success(n > 0 ? t("rinsight.deleted") : t("rinsight.already_gone"));
       deleting.set(null);
       dropFromReport(k.key, k.node ?? null);
     } catch (e) {
+      recordWrite({ connId: id, source: "redis", sql: command, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
       toast.error(errorText(e));
     } finally {
       busy.set(false);

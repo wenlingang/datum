@@ -160,6 +160,15 @@ export function Results(props: { m: TabModel }) {
       <If when={body() === "running"}>
         <Hint class="p-3">{t("tab.running")}</Hint>
       </If>
+      {/* 表格提交的暂存改动:提交后可撤销 */}
+      <If when={m.kind === "table" && body() === "grid" && (m.undo()?.statements.length ?? 0) > 0 ? m.undo() : null}>
+        {(u) => (
+          <View class="flex-row items-center gap-2 border-b border-border px-3 py-1.5">
+            <Btn small variant="outline" icon="undo-2" label={t("undo.button")} onPress={() => m.undoOpen.set(true)} testID="undo" />
+            <Text class={`${FS.xs} text-muted-foreground`}>{t("undo.available", { rows: u().rows })}</Text>
+          </View>
+        )}
+      </If>
       <If when={body() === "grid"}>
         <View class="min-h-0 flex-1">
           <If when={explained()}>

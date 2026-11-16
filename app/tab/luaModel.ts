@@ -8,9 +8,10 @@
 
 import { signal, type Signal } from "nsh";
 import { t } from "nsh/i18n";
-import { db, errorText } from "../lib/native";
+import { db, errorText, sql as sqlText } from "../lib/native";
 import type { LuaOutcome } from "../lib/types";
 import { conns } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { addTab, newTabId, workspace, type WorkTab } from "../store/workspace";
 
 /** 计时器间隔(显示已运行时长、检查标签页是否已关)。 */
@@ -98,10 +99,29 @@ export async function runLua(m: LuaModel) {
       void db.redisEvalAbandon(run).catch(() => {});
     }
   }, TICK_MS);
+  // 写操作留痕:可能写入的脚本(静态检查判不了的也算)记下脚本与 KEYS / ARGV;只读脚本不记
+  const script = m.script();
+  const keys = m.keys();
+  const args = m.args();
+  const mayWrite = (() => {
+    try {
+      return sqlText.analyzeLua(script).mayWrite;
+    } catch {
+      return true;
+    }
+  })();
+  const journalSql = `-- EVAL · KEYS ${JSON.stringify(keys)} · ARGV ${JSON.stringify(args)}\n${script}`;
+  const started = Date.now();
   try {
-    const out = await db.redisEval(m.connId, run, { script: m.script(), keys: m.keys(), args: m.args() });
+    const out = await db.redisEval(m.connId, run, { script, keys, args });
+    if (mayWrite) {
+      // 顶层是错误回复:脚本报错(之前执行过的写命令不会回滚,照样记下)
+      const err = out.value.type === "error" ? out.value.text : null;
+      recordWrite({ connId: m.connId, source: "lua", sql: journalSql, ok: !err, error: err, elapsedMs: Date.now() - started });
+    }
     if (m.run() === run) m.outcome.set(out);
   } catch (e) {
+    if (mayWrite) recordWrite({ connId: m.connId, source: "lua", sql: journalSql, ok: false, error: errorText(e), elapsedMs: Date.now() - started });
     if (m.run() === run) {
       m.outcome.set(null);
       m.error.set(errorText(e));

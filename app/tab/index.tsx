@@ -194,6 +194,26 @@ export function openDiagnostics(connId: string) {
   });
 }
 
+/** 打开写操作记录 tab(每个连接一个,已开则切过去)。 */
+export function openJournal(connId: string) {
+  const conn = conns.get(connId);
+  if (!conn) return;
+  const existing = workspace.tabs().find((x) => x.kind === "journal" && x.connId === connId);
+  if (existing) {
+    addTabFocus(existing);
+    return;
+  }
+  addTab({
+    id: newTabId(),
+    kind: "journal",
+    connId,
+    dbKind: conn.kind,
+    table: null,
+    title: signal(t("journal.title")),
+    state: null,
+  });
+}
+
 /** 打开表结构对比 tab:本连接为源库,在 tab 里选目标库(每个源库一个,已开则切过去)。 */
 export function openSchemaDiff(connId: string) {
   const conn = conns.get(connId);
