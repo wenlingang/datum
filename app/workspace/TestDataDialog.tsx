@@ -21,6 +21,7 @@ import type {
 } from "../lib/types";
 import { aiStore } from "../store/ai";
 import { conns, refreshTables } from "../store/conns";
+import { recordWrite } from "../store/journal";
 import { toast } from "../store/toast";
 import { findTableTab } from "../store/workspace";
 import { openQueryOn } from "../tab";
@@ -264,10 +265,25 @@ function TestDataForm(props: { connId: string; table: string }) {
     }
   }
 
+  let startedAt: number | null = null;
+  let startedSeed: unknown = null;
+
   function finish(p: TdProgress) {
     if (timer) clearInterval(timer);
     timer = undefined;
     running.set(false);
+    // 记进写操作记录(插入的是生成的数据,没有改动前的行,不提供撤销)
+    if (p.committed > 0 || p.error) {
+      recordWrite({
+        connId,
+        source: "testdata",
+        sql: t("testdata.journal_sql", { count: p.committed.toLocaleString(), table, seed: String(startedSeed ?? "") }),
+        ok: !p.error && !p.cancelled,
+        affected: p.committed,
+        error: p.error ?? (p.cancelled ? t("testdata.cancelled") : null),
+        elapsedMs: startedAt ? Date.now() - startedAt : 0,
+      });
+    }
     if (p.cancelled) {
       report.set({
         ok: false,
@@ -293,6 +309,8 @@ function TestDataForm(props: { connId: string; table: string }) {
     running.set(true);
     report.set(null);
     progress.set(null);
+    startedAt = Date.now();
+    startedSeed = p.seed;
     try {
       await testData.start(kind, connId, p);
     } catch (e) {

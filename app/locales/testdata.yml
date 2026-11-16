@@ -1,5 +1,9 @@
 _version: 2
 testdata:
+  journal_sql:
+    en: "-- Generated test data: inserted %{count} rows into %{table} (seed %{seed})"
+    zh-CN: "-- 生成测试数据:向 %{table} 插入 %{count} 行(种子 %{seed})"
+    zh-TW: "-- 產生測試資料:向 %{table} 插入 %{count} 列(種子 %{seed})"
   menu:
     en: "Generate Test Data…"
     zh-CN: "生成测试数据…"

@@ -825,7 +825,7 @@ export interface UndoPrep {
 // ---------------------------------------------------------------- 写操作记录
 
 /** 写操作的来源。 */
-export type JournalSource = "editor" | "ai" | "grid" | "undo" | "import" | "alter" | "redis" | "lua";
+export type JournalSource = "editor" | "ai" | "grid" | "undo" | "import" | "alter" | "redis" | "lua" | "testdata";
 
 /** 一条写语句改动前的行。 */
 export interface UndoSnapshot {

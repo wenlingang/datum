@@ -72,6 +72,30 @@ export function setMaskOverride(connId: string, key: string, mode: MaskOverride 
   changed(() => mask.setOverride(connId, key, mode));
 }
 
+/**
+ * 已知来源表的一批行(数据对比的两侧、写操作记录的改动前数据):按连接规则遮罩敏感列;随设置变化重算。
+ * 行可以是 null(这一侧没有这行),原样保留。
+ */
+export function maskRowsOf(
+  connId: string | null | undefined,
+  table: string | null,
+  columns: string[],
+  rows: ((string | null)[] | null)[],
+): ((string | null)[] | null)[] {
+  rev();
+  const present = rows.filter((r): r is (string | null)[] => r !== null);
+  if (!connId || present.length === 0) return rows;
+  try {
+    const plan = mask.plan(connId, table, columns, present.slice(0, 100));
+    if (!plan.some((k) => k !== null)) return rows;
+    const masked = mask.maskRows(plan, present);
+    let i = 0;
+    return rows.map((r) => (r === null ? null : masked[i++]));
+  } catch {
+    return rows.map((r) => (r === null ? null : r.map((v) => (v === null ? null : "••••••"))));
+  }
+}
+
 /** 连接上一份结果的展示值(对话里的执行结果表等):敏感列遮罩;随设置变化重算。 */
 export function maskTable(
   connId: string | null | undefined,

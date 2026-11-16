@@ -93,6 +93,10 @@ journal:
       en: "Lua Script"
       zh-CN: "Lua 脚本"
       zh-TW: "Lua 腳本"
+    testdata:
+      en: "Test Data"
+      zh-CN: "测试数据"
+      zh-TW: "測試資料"
   range_all:
     en: "Any Time"
     zh-CN: "全部时间"

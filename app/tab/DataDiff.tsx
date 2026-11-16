@@ -8,6 +8,7 @@ import { connLabel } from "../chat/actions";
 import { Dropdown, Segmented, Toggle } from "../dialogs/controls";
 import type { DataDiffRow } from "../lib/types";
 import { conns } from "../store/conns";
+import { maskRowsOf } from "../store/privacy";
 import { toast } from "../store/toast";
 import { ErrorText } from "../ui/error";
 import { Btn, DbIcon, EnvBadge, Hint, Icon, IconButton, TextField } from "../ui/kit";
@@ -260,9 +261,16 @@ function Cell(props: { m: DataDiffModel; row: DataDiffRow | undefined; col: numb
 function Results(props: { m: DataDiffModel }) {
   const m = props.m;
   const rep = () => m.report()!;
+  // 展示用:两侧各按自己连接的规则遮罩敏感列(同步脚本仍用原值,它要拿去执行)
+  const shown = (): DataDiffRow[] => {
+    const r = rep();
+    const src = maskRowsOf(m.sourceConn(), r.sourceTable, r.columns, r.rows.map((x) => x.source));
+    const dst = maskRowsOf(m.targetConn(), r.targetTable, r.columns, r.rows.map((x) => x.target));
+    return r.rows.map((x, i) => ({ ...x, source: src[i], target: dst[i] }));
+  };
   const rows = () => {
     const c = m.category();
-    const all = rep().rows;
+    const all = shown();
     return c === "all" ? all : all.filter((r) => r.kind === c);
   };
   const keys = () => new Set(rep().key);

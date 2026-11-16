@@ -71,6 +71,7 @@ if want workspace; then
   kill $MOCK 2>/dev/null || true
   grep -q 'CREATE TABLE' "$D/requests.log" || { echo "testdata ai: 请求里没有建表语句"; FAILED=1; }
   if grep -q 'Boquete\|Grinder' "$D/requests.log"; then echo "testdata ai: 不应发送行数据"; FAILED=1; fi
+  grep -q '"source":"testdata"' "$D/journal/c-td.jsonl" 2>/dev/null || { echo "testdata: 插入应记进写操作记录"; FAILED=1; }
   [ "$(sqlite3 "$D/td.db" "select count(*) from products; select count(distinct sku) from products; select count(*) from products p left join categories c on c.id = p.category_id where c.id is null; select count(*) from products where status not in ('active','draft','archived') or price < 0 or length(sku) > 12 or updated_at < created_at; select count(*) from categories; select count(*) from orphan")" = "$(printf '53\n53\n0\n0\n2\n0')" ] \
     || { echo "testdata: 行数、唯一、外键或 CHECK 不符合预期"; FAILED=1; }
 fi
@@ -82,6 +83,7 @@ if want tab; then
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
   run tab-unit "$D" tab/placeholders.test.ts
+  run tab-unit-privacy "$D" store/privacy.test.ts
   # 敏感数据遮罩:同一份库加一张客户表,连接的遮罩打开(本地连接默认不遮罩)
   D="$ROOT/tab-mask"; mkdir -p "$D"
   sqlite3 "$D/roastery.db" < "$HERE/roastery-seed.sql"

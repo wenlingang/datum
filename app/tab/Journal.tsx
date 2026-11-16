@@ -11,6 +11,7 @@ import { errorText, journal, shell } from "../lib/native";
 import type { Env, JournalDetail, JournalFilter, JournalSource, JournalSummary, UndoPrep } from "../lib/types";
 import { conns } from "../store/conns";
 import { journalRev } from "../store/journal";
+import { maskRowsOf } from "../store/privacy";
 import { toast } from "../store/toast";
 import { Btn, EnvBadge, Hint, Icon, IconButton, type IconName, TextField } from "../ui/kit";
 import { DropMenu, MItem } from "../ui/menu";
@@ -20,7 +21,7 @@ import { checkJournalUndo, journalUndoPrep } from "./journalUndo";
 import { runUndo } from "./model";
 import { UndoConfirm } from "./UndoDialog";
 
-const SOURCES: JournalSource[] = ["editor", "ai", "grid", "undo", "import", "alter", "redis", "lua"];
+const SOURCES: JournalSource[] = ["editor", "ai", "grid", "undo", "import", "alter", "redis", "lua", "testdata"];
 
 const SOURCE_ICON: Record<JournalSource, IconName> = {
   editor: "terminal",
@@ -31,6 +32,7 @@ const SOURCE_ICON: Record<JournalSource, IconName> = {
   alter: "pencil",
   redis: "db-redis",
   lua: "code-xml",
+  testdata: "wand-sparkles",
 };
 
 type Range = "all" | "today" | "7d" | "30d";
@@ -492,7 +494,10 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
         <Hint>{t("journal.truncated")}</Hint>
       </If>
       <Each of={e().undo?.snapshots ?? []}>
-        {(s) => (
+        {(s) => {
+          // 改动前的数据按连接的遮罩规则展示(敏感列打码,演示模式下也安全)
+          const rows = () => maskRowsOf(props.connId, s().table, s().columns, s().rows) as (string | null)[][];
+          return (
           <View testID="journal-snapshot" class="gap-1.5">
             <Text class={`${FS.xs} font-bold text-muted-foreground`}>
               {s().delete ? t("journal.rows_deleted", { table: s().table }) : t("journal.rows_before", { table: s().table })}
@@ -504,7 +509,7 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
                     {(c) => <Text class={`${FS.xs} ${MONO} w-[110px] font-bold text-muted-foreground line-clamp-1`}>{c()}</Text>}
                   </Each>
                 </View>
-                <Each of={s().rows}>
+                <Each of={rows()}>
                   {(r) => (
                     <View class="flex-row gap-3">
                       <Each of={s().columns}>
@@ -523,7 +528,8 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
               <Text class={`${FS.xs} text-fg-faint`}>{t("journal.preview_of", { shown: s().rows.length, total: s().total })}</Text>
             </If>
           </View>
-        )}
+          );
+        }}
       </Each>
     </Scroll>
   );
