@@ -1,8 +1,8 @@
 {
   "name": "Datum",
   "id": "com.dbstudio.app",
-  "version": "0.2.3",
-  "build": 6,
+  "version": "0.2.4",
+  "build": 7,
   "icon": "assets/app-icon.png",
   "appearance": "system",
   "rust": "native",
