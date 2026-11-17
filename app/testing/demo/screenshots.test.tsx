@@ -208,3 +208,100 @@ test("sqlite-alter.png:亮色,SQLite 表单改列类型,预览 12 步重建表�
   await app.wait(1000);
   await app.screenshot(`${OUT}/sqlite-alter.png`);
 }, 90_000);
+
+// ---- 0.2.4 新功能(都用 roastery SQLite 库,不需要演示数据库)----
+
+test("masking.png:暗色,演示模式下 customers 表的敏感列打码", async () => {
+  const app = await start("dark");
+  await openRoastery(app);
+  await app.press("id:demo-toggle");
+  await app.waitFor("id:demo-badge", T);
+  await app.press("id:table-list >> label:customers");
+  await app.waitFor("text:first_name", T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/masking.png`);
+  // 点 DEMO 徽章退出演示模式(打开后顶栏开关换成徽章)
+  await app.press("id:demo-badge");
+}, 90_000);
+
+test("data-compare.png:亮色,products 与改过几行的副本对比数据", async () => {
+  const app = await start("light");
+  await openRoastery(app);
+  // 做一份带主键的副本,改两行、删一行、加一行(本地连接,不弹审查)
+  await newQuery(
+    app,
+    `CREATE TABLE products_backup (
+  id INTEGER PRIMARY KEY, category_id INTEGER NOT NULL, sku TEXT NOT NULL, name TEXT NOT NULL,
+  origin TEXT, region TEXT, roast_level TEXT, price_cents INTEGER NOT NULL, stock INTEGER NOT NULL DEFAULT 0,
+  attributes TEXT, active BOOLEAN NOT NULL DEFAULT 1, created_at TEXT NOT NULL
+);
+INSERT INTO products_backup SELECT * FROM products;
+UPDATE products_backup SET price_cents = price_cents + 200 WHERE id IN (2, 7);
+UPDATE products_backup SET stock = 0 WHERE id = 11;
+DELETE FROM products_backup WHERE id = 5;
+INSERT INTO products_backup (id, category_id, sku, name, origin, region, roast_level, price_cents, stock, attributes, active, created_at)
+  VALUES (99, 1, 'SO-OLD-099', 'Retired Blend', 'Brazil', 'Cerrado', 'dark', 1500, 0, '{}', 0, '2024-01-01 00:00:00');`,
+  );
+  await app.keyboard.press("mod+shift+enter");
+  await app.waitFor("text:/Executed successfully/", T);
+  await app.rightClick("id:table-list >> label:products");
+  await app.press("label:Compare Data With…");
+  await app.waitFor("id:data-diff", T);
+  // 目标默认是同一连接里的同名表,改选副本:点下拉框里显示的表名打开,再选 products_backup
+  await app.waitFor("id:ddiff-target-table >> text:products", T);
+  await app.press("id:ddiff-target-table >> text:products");
+  await app.press("text:products_backup");
+  await app.waitUntil(() => app.enabled("id:ddiff-run"), T);
+  await app.press("id:ddiff-run");
+  await app.waitFor("id:ddiff-summary", T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/data-compare.png`);
+}, 120_000);
+
+test("index-advisor.png:暗色,慢查询的索引建议与执行计划对比", async () => {
+  const app = await start("dark");
+  await openRoastery(app);
+  await newQuery(
+    app,
+    `-- Recent shipped web orders
+SELECT id, customer_id, total_cents, placed_at
+FROM orders
+WHERE status = 'shipped'
+  AND channel = 'web'
+ORDER BY placed_at DESC
+LIMIT 20;`,
+  );
+  await app.press("id:run-limit");
+  await app.press("id:suggest-indexes");
+  await app.waitFor("id:index-advisor", T);
+  await app.waitFor("id:advisor-plan-after", T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/index-advisor.png`);
+}, 90_000);
+
+test("journal.png:亮色,写操作记录:一次 UPDATE 与改动前的行", async () => {
+  const app = await start("light");
+  await openRoastery(app);
+  await newQuery(app, "UPDATE products SET stock = stock - 1 WHERE origin = 'Ethiopia';");
+  await app.press("id:run");
+  await app.waitFor("text:/Executed successfully/", T);
+  await app.press("label:Connection Actions");
+  await app.press("text:Write Journal");
+  await app.waitFor("id:journal-view", T);
+  await app.waitFor("id:journal-list >> text:/^UPDATE products SET stock/", T);
+  await app.press("id:journal-list >> text:/^UPDATE products SET stock/");
+  await app.waitFor("id:journal-snapshot", T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/journal.png`);
+}, 90_000);
+
+test("test-data.png:暗色,给 orders 生成测试数据的对话框与预览", async () => {
+  const app = await start("dark");
+  await openRoastery(app);
+  await app.rightClick("id:table-list >> label:orders");
+  await app.press("label:Generate Test Data…");
+  await app.waitFor("id:testdata-dialog", T);
+  await app.waitFor("id:testdata-preview-grid", T);
+  await app.wait(1000);
+  await app.screenshot(`${OUT}/test-data.png`);
+}, 90_000);

@@ -27,7 +27,12 @@ crop mysql-alter 976 1120 434 880        # 风险评估对话框(保留 2x)
 crop sqlite-alter 1469 1920 187 480 1400 # 改表对话框
 crop redis 710 1500 170 660              # key 标题 + Hash 字段表(保留 2x)
 
-for f in sql-editor table ai-assistant new-connection destructive-review erd jsonb mysql-alter sqlite-alter redis; do
+# 0.2.4 新功能:整窗缩到 1600×1024
+for name in masking data-compare index-advisor journal test-data; do
+  sips -z 1024 1600 "$OUT/$name.png" --out "$DOCS/$name.png" >/dev/null
+done
+
+for f in sql-editor table ai-assistant new-connection destructive-review erd jsonb mysql-alter sqlite-alter redis masking data-compare index-advisor journal test-data; do
   printf '%s: ' "$f"
   sips -g pixelWidth -g pixelHeight "$DOCS/$f.png" | awk '/pixel/ {printf "%s ", $2} END {print ""}'
 done

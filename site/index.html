@@ -534,6 +534,66 @@ document.documentElement.classList.add("js");
 
       <div class="scene flip">
         <div>
+          <h2 lang="en">Prove an index helps before you build it.</h2>
+          <h2 lang="zh-CN">建索引之前，<br>先证明它有用。</h2>
+          <p lang="en">Point Datum at a slow query and it proposes indexes from the <code>WHERE</code>, <code>JOIN</code> and <code>ORDER BY</code>, then checks each one against the real plan: hypothetical indexes on PostgreSQL (hypopg), a rolled-back transaction on SQLite. You see the cost before and after, side by side.</p>
+          <p lang="zh-CN">把一条慢查询交给 Datum，它按 <code>WHERE</code>、<code>JOIN</code>、<code>ORDER BY</code> 提出候选索引，再拿真实的执行计划逐个验证：PostgreSQL 用 hypopg 假想索引，SQLite 在事务里建好再回滚。加索引前后的成本左右对照，一目了然。</p>
+          <p class="muted" lang="en">Nothing is created until you open the <code>CREATE INDEX</code> in the editor and run it yourself. AI can add candidates too, and gets the schema and plan, never your rows.</p>
+          <p class="muted" lang="zh-CN">你在编辑器里自己执行 <code>CREATE INDEX</code> 之前，库里什么都不会多。也可以让 AI 补充候选，它拿到的是表结构和执行计划，不是数据行。</p>
+        </div>
+        <img class="shot" src="screenshots/index-advisor.png" width="1600" height="1024" loading="lazy" alt="The index advisor proposing a composite index, with the current plan doing a full scan and the plan with the index doing a search">
+      </div>
+
+      <div class="scene">
+        <div>
+          <h2 lang="en">Share your screen, not your customers.</h2>
+          <h2 lang="zh-CN">分享屏幕，<br>不露客户数据。</h2>
+          <p lang="en">Datum spots sensitive columns, such as emails, phone numbers, ID and card numbers, passwords and tokens, by their names and their values, and masks them in the grid, in copies and exports, and in everything sent to AI. On by default for staging and prod.</p>
+          <p lang="zh-CN">Datum 按列名和取值认出敏感列：邮箱、手机号、证件号、银行卡号、密码与令牌，在表格、复制、导出和发给 AI 的内容里一律打码。staging 与 prod 连接默认开启。</p>
+          <p class="muted" lang="en">Demo mode (<kbd>⌘⇧D</kbd>) masks every connection and hides hosts, user names and file paths, for screenshots, recordings and live demos.</p>
+          <p class="muted" lang="zh-CN">演示模式（<kbd>⌘⇧D</kbd>）对所有连接强制打码，并隐藏主机、用户名和文件路径，截图、录屏、现场演示都放心。</p>
+        </div>
+        <img class="shot" src="screenshots/masking.png" width="1600" height="1024" loading="lazy" alt="A customers table in demo mode, with names and email addresses masked">
+      </div>
+
+      <div class="scene flip">
+        <div>
+          <h2 lang="en">Every write, on the record.</h2>
+          <h2 lang="zh-CN">每一次写入，<br>都有据可查。</h2>
+          <p lang="en">Writes from the editor, AI cards, grid edits, imports and Redis are kept in a local journal with the rows as they were before. Search it, export it as a change log, and undo an <code>UPDATE</code> or <code>DELETE</code> even after a restart; Datum first checks whether those rows have changed since.</p>
+          <p lang="zh-CN">编辑器、AI 卡片、表格编辑、导入和 Redis 的写操作都记进本机的写操作记录，连同改动前的行。可以搜索、导出成变更记录，重启之后照样能撤销 <code>UPDATE</code>、<code>DELETE</code>；撤销前 Datum 会先核对这些行后来有没有被改过。</p>
+          <p class="muted" lang="en">The journal stays on your machine in a private file, is never sent to AI, and keeps 90 days by default.</p>
+          <p class="muted" lang="zh-CN">记录只存在本机的私有文件里，从不发给 AI，默认保留 90 天。</p>
+        </div>
+        <img class="shot" src="screenshots/journal.png" width="1600" height="1024" loading="lazy" alt="The write journal showing an UPDATE, its statement and the rows before the change, with an undo button">
+      </div>
+
+      <div class="scene">
+        <div>
+          <h2 lang="en">Find what changed between two copies.</h2>
+          <h2 lang="zh-CN">数据差在哪，<br>逐行找出来。</h2>
+          <p lang="en">Compare a table across two databases, or with its backup, row by row by key: rows only on one side and cells that differ, highlighted. Datum then writes the <code>INSERT</code>, <code>UPDATE</code> and <code>DELETE</code> that bring the target in line.</p>
+          <p lang="zh-CN">按主键逐行比较两个库里的同一张表，或者一张表和它的备份：只在一边有的行、值不同的单元格都标出来。随后生成让目标与源一致的 <code>INSERT</code>、<code>UPDATE</code>、<code>DELETE</code>。</p>
+          <p class="muted" lang="en">Big tables are read in chunks and can be stopped. Deletes start commented out, and the script runs in the target's editor with the usual review and undo.</p>
+          <p class="muted" lang="zh-CN">大表分块读取，随时可停。删除语句默认注释掉，脚本在目标库的编辑器里执行，照常经过审查，也能撤销。</p>
+        </div>
+        <img class="shot" src="screenshots/data-compare.png" width="1600" height="1024" loading="lazy" alt="Comparing the products table with a backup copy: five differences listed and a sync script below">
+      </div>
+
+      <div class="scene flip">
+        <div>
+          <h2 lang="en">Test data that looks real.</h2>
+          <h2 lang="zh-CN">像真的一样的<br>测试数据。</h2>
+          <p lang="en">Right-click a table to fill it with believable rows, in English or Chinese. Datum picks a generator for each column from its name and type, and keeps to your constraints: unique values, foreign keys taken from parent tables, <code>CHECK</code> lists, lengths, and <code>created_at</code> before <code>updated_at</code>.</p>
+          <p lang="zh-CN">在表上右键，就能填进看起来真实的数据，中英文都行。Datum 按列名和类型为每列挑生成方式，并遵守你的约束：唯一值不重复、外键取自父表、符合 <code>CHECK</code> 清单与长度、<code>created_at</code> 早于 <code>updated_at</code>。</p>
+          <p class="muted" lang="en">Preview the first rows, reuse a seed to get the same data again, and insert in a transaction you can cancel.</p>
+          <p class="muted" lang="zh-CN">先预览前几行；同一个种子生成同样的数据；插入在事务里进行，可以随时取消。</p>
+        </div>
+        <img class="shot" src="screenshots/test-data.png" width="1600" height="1024" loading="lazy" alt="The test data dialog for the orders table, with a generator per column and a preview of generated rows">
+      </div>
+
+      <div class="scene">
+        <div>
           <h2 lang="en">See how it all connects.</h2>
           <h2 lang="zh-CN">表之间怎么连，一眼看清。</h2>
           <p lang="en">The relationship diagram lays out every table and foreign key, including the ones a schema never declared but column names imply, like <code>customer_id</code>. Focus on one table to see just its neighbours, and double-click a table to open it.</p>
@@ -611,8 +671,8 @@ document.documentElement.classList.add("js");
         </div>
         <div>
           <h3><span lang="en">Safety</span><span lang="zh-CN">安全</span></h3>
-          <p lang="en">Destructive statements wait for review with the number of rows they touch. UPDATE and DELETE can be undone, including multi-table forms and several at once. Read-only runs are enforced by the database itself, and your open transactions are left alone.</p>
-          <p lang="zh-CN">危险语句先审查，并显示会影响的行数。UPDATE、DELETE 执行后可撤销，多表写法、几条一起执行也行。只读执行由数据库本身强制，你开着的事务不会被打断。</p>
+          <p lang="en">Destructive statements wait for review with the number of rows they touch. UPDATE and DELETE can be undone, including multi-table forms and several at once, and every write is kept in a local journal you can undo from after a restart. Read-only runs are enforced by the database itself, and your open transactions are left alone.</p>
+          <p lang="zh-CN">危险语句先审查，并显示会影响的行数。UPDATE、DELETE 执行后可撤销，多表写法、几条一起执行也行；每次写入都记进本机的写操作记录，重启后也能从记录里撤销。只读执行由数据库本身强制，你开着的事务不会被打断。</p>
         </div>
         <div>
           <h3><span lang="en">Diagnostics</span><span lang="zh-CN">诊断</span></h3>
@@ -635,9 +695,24 @@ document.documentElement.classList.add("js");
           <p lang="zh-CN">比较两个同类数据库的表、列、索引、视图、触发器、外键与注释，生成让目标库与源库一致的迁移脚本。</p>
         </div>
         <div>
+          <h3><span lang="en">Data compare</span><span lang="zh-CN">数据对比</span></h3>
+          <p lang="en">Row-by-row diff of a table across two databases or against a backup, by primary or unique key, in chunks you can stop, with a sync script of INSERT, UPDATE and commented-out DELETE.</p>
+          <p lang="zh-CN">按主键或唯一键逐行比较两个库里的表，或与备份比较，分块读取可随时停止，生成 INSERT、UPDATE 与默认注释的 DELETE 同步脚本。</p>
+        </div>
+        <div>
+          <h3><span lang="en">Index advisor</span><span lang="zh-CN">索引建议</span></h3>
+          <p lang="en">Candidate indexes from a slow query, verified against the plan with hypopg on PostgreSQL or a rolled-back transaction on SQLite, with cost before and after. MySQL gets rule-based suggestions.</p>
+          <p lang="zh-CN">从慢查询推出候选索引，PostgreSQL 用 hypopg、SQLite 用回滚事务对照执行计划验证，给出前后成本。MySQL 给出按规则的建议。</p>
+        </div>
+        <div>
+          <h3><span lang="en">Test data</span><span lang="zh-CN">测试数据</span></h3>
+          <p lang="en">Realistic rows in English or Chinese that respect unique keys, foreign keys, CHECK lists and lengths, with a preview, repeatable seeds and a cancellable transaction.</p>
+          <p lang="zh-CN">生成中英文的逼真数据，遵守唯一键、外键、CHECK 清单与长度；可预览、种子可复现、插入在可取消的事务里。</p>
+        </div>
+        <div>
           <h3><span lang="en">Privacy</span><span lang="zh-CN">数据与隐私</span></h3>
-          <p lang="en">AI sees only the schema of prod connections unless you allow more. First SSH connections show the host fingerprint for you to confirm, and new prod connections verify the server certificate.</p>
-          <p lang="zh-CN">prod 连接的数据默认不发给 AI，只给表结构。首次连接 SSH 跳板机要你确认主机指纹，新建的 prod 连接默认校验服务器证书。</p>
+          <p lang="en">Sensitive columns are masked in the grid, copies, exports and AI requests; demo mode hides hosts and user names too. AI sees only the schema of prod connections unless you allow more. First SSH connections show the host fingerprint for you to confirm, and new prod connections verify the server certificate.</p>
+          <p lang="zh-CN">敏感列在表格、复制、导出和 AI 请求里自动打码，演示模式还会隐藏主机和用户名。prod 连接的数据默认不发给 AI，只给表结构。首次连接 SSH 跳板机要你确认主机指纹，新建的 prod 连接默认校验服务器证书。</p>
         </div>
       </div>
       <p class="note" lang="en">English, Simplified and Traditional Chinese; light, dark or system; updates inside the app.</p>
