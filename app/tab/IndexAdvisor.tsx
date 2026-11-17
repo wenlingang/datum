@@ -227,7 +227,8 @@ export function IndexAdvisor(props: { m: AdvisorModel }) {
             onPress={() => void runAdvice(m)}
           />
         </View>
-        <Text testID="advisor-sql" class={`${FS.xs} ${MONO} text-muted-foreground line-clamp-3`}>{m.statement}</Text>
+        {/* 多行语句压成一行再截断:直接截断会吞掉超出部分的换行,词与词粘在一起 */}
+        <Text testID="advisor-sql" class={`${FS.xs} ${MONO} text-muted-foreground line-clamp-3`}>{m.statement.replace(/\s+/g, " ").trim()}</Text>
         <If when={advice()}>
           {(a) => (
             <View class="gap-1.5">
