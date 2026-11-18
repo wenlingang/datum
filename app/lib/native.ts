@@ -414,6 +414,8 @@ export type ExportFormat = TextExportFormat | "xlsx";
 export const shell = {
   /** 系统保存对话框(默认下载目录)写入文本;返回写入的路径,取消为 null。 */
   saveText: (fileName: string, text: string) => Shell.saveText(fileName, text),
+  /** 系统保存对话框(默认下载目录)写入字节(如 PNG);返回写入的路径,取消为 null。 */
+  saveBytes: (fileName: string, bytes: Uint8Array) => Shell.saveBytes(fileName, bytes),
   /** 结果行写成 Excel 文件并弹出保存对话框;返回路径,取消时为 null。 */
   saveXlsx: (fileName: string, table: string, columns: string[], rows: (string | null)[][]) =>
     Shell.saveXlsx(fileName, table, columns, rows),

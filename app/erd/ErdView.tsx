@@ -2,17 +2,20 @@
 //
 // 画布 = 一张屏幕坐标的 Canvas(点阵背景、连线、箭头)
 //      + 绝对定位的表节点(只渲染视口内的;缩得很小时只画表名)
-//      + 最上层的 Canvas(选中边的列配对)。
+//      + 最上层的 Canvas(选中边的列配对)。工具条「导出」把整张图画成 PNG(export.ts)。
 // 交互:滚轮 / 双指平移;⌘/Ctrl + 滚轮以指针为中心缩放;捏合缩放(手势中原生变换预览,
 // 松手并入缩放);拖空白平移、拖表移动;点表高亮关联;双击开表;搜索高亮并移到命中处。
 
-import { Canvas, computed, createAnimatedValue, effect, Text, untracked, View, type JSX } from "nsh";
+import { Canvas, computed, createAnimatedValue, effect, signal, Text, untracked, View, type JSX } from "nsh";
 import { t } from "nsh/i18n";
 import type { ErdNode } from "../lib/types";
+import { errorText, shell } from "../lib/native";
 import { conns } from "../store/conns";
+import { toast } from "../store/toast";
 import { openTable } from "../tab";
 import { Btn, color, Icon, IconButton, TextField } from "../ui/kit";
 import { FS } from "../ui/text";
+import { renderPng } from "./export";
 import { intersects, LOD_SIMPLE, NODE_HEADER_H, NODE_PAD_Y, NODE_ROW_H, routeEdge, wheelPoints, worldView, type Pt } from "./geom";
 import {
   applyPendingFit,
@@ -64,6 +67,23 @@ function Toolbar(props: { m: ErdModel }) {
   };
   const noEdges = () => !m.loading() && !m.error() && m.graph().nodes.length > 0 && !m.graph().edges.length;
   const empty = () => !m.graph().nodes.length;
+  const exporting = signal(false);
+  const exportDiagram = async () => {
+    if (exporting()) return;
+    exporting.set(true);
+    try {
+      const { bytes, pixels } = await renderPng(m.graph(), m.rects());
+      const base = (m.focus() ?? conns.get(m.connId)?.name ?? "erd").replace(/[^\w.-]+/g, "_");
+      const path = await shell.saveBytes(`erd_${base}_${shell.fileTimestamp()}.png`, bytes);
+      if (!path) return;
+      const label = m.viewMode() === "er" ? t("erd.exported_er") : t("erd.exported_struct");
+      toast.success(`${label} · ${pixels}`);
+    } catch (e) {
+      toast.error(t("erd.export_failed", { error: errorText(e) }));
+    } finally {
+      exporting.set(false);
+    }
+  };
   return (
     <View class="h-10 shrink-0 flex-row items-center gap-2.5 border-b border-border bg-panel px-3.5">
       <If when={m.focus()}>
@@ -110,6 +130,16 @@ function Toolbar(props: { m: ErdModel }) {
           testID="erd-view-er"
         />
       </View>
+      <Btn
+        small
+        variant="outline"
+        icon="image-down"
+        label={exporting() ? t("erd.exporting") : t("erd.export")}
+        tooltip={t("erd.export_tooltip")}
+        disabled={exporting() || empty() || m.loading()}
+        onPress={() => void exportDiagram()}
+        testID="erd-export"
+      />
       <IconButton icon="refresh-cw" tooltip={t("erd.refresh_tooltip")} onPress={() => void load(m)} />
     </View>
   );

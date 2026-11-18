@@ -19,15 +19,13 @@ impl Shell {
     /// 弹出系统保存对话框(默认在下载目录,预填 `file_name`),把 `text` 写进用户选的路径。
     /// 返回写入的路径;用户取消时为 null。写入失败时报错(文案为系统错误)。
     pub async fn save_text(file_name: String, text: String) -> Result<Option<String>, String> {
-        let mut dialog = SaveDialog::new().file_name(file_name);
-        if let Some(dir) = dirs::download_dir() {
-            dialog = dialog.directory(dir);
-        }
-        let Some(path) = pick_save_path(dialog).await? else {
-            return Ok(None);
-        };
-        std::fs::write(&path, text).map_err(|e| e.to_string())?;
-        Ok(Some(path.to_string_lossy().into_owned()))
+        save_with_dialog(file_name, text.as_bytes()).await
+    }
+
+    /// 把 `bytes`(如导出的 PNG)写进用户在保存对话框里选的路径(同 `save_text`)。
+    /// 返回写入的路径;用户取消时为 null。
+    pub async fn save_bytes(file_name: String, bytes: Vec<u8>) -> Result<Option<String>, String> {
+        save_with_dialog(file_name, &bytes).await
     }
 
     /// 把结果行写成 Excel(.xlsx):弹出保存对话框(同 `save_text`),工作表名取 `table`。
@@ -41,15 +39,7 @@ impl Shell {
         let rows: Vec<Vec<Cell>> = from(rows, "rows")?;
         let refs: Vec<&Vec<Cell>> = rows.iter().collect();
         let bytes = to_xlsx(&table, &columns, &refs)?;
-        let mut dialog = SaveDialog::new().file_name(file_name);
-        if let Some(dir) = dirs::download_dir() {
-            dialog = dialog.directory(dir);
-        }
-        let Some(path) = pick_save_path(dialog).await? else {
-            return Ok(None);
-        };
-        std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
-        Ok(Some(path.to_string_lossy().into_owned()))
+        save_with_dialog(file_name, &bytes).await
     }
 
     /// 把结果行渲染成导出文本。`format`:`"csv"` / `"json"` / `"markdown"` / `"sql"`(每行一条 INSERT,
@@ -126,10 +116,23 @@ impl Shell {
 }
 
 /// 保存对话框(默认在下载目录,预填文件名);取消时为 None。
+/// 设了 `DATUM_TEST_SAVE_DIR` 时不弹框,直接存到该目录(真实窗口测试用,系统对话框驱动不了)。
 async fn ask_path(file_name: String) -> Result<Option<std::path::PathBuf>, String> {
+    if let Some(dir) = std::env::var_os("DATUM_TEST_SAVE_DIR") {
+        return Ok(Some(std::path::PathBuf::from(dir).join(file_name)));
+    }
     let mut dialog = SaveDialog::new().file_name(file_name);
     if let Some(dir) = dirs::download_dir() {
         dialog = dialog.directory(dir);
     }
     pick_save_path(dialog).await
+}
+
+/// 弹保存对话框(同 `ask_path`),把 `bytes` 写进选中的路径;返回路径,取消时为 None。
+async fn save_with_dialog(file_name: String, bytes: &[u8]) -> Result<Option<String>, String> {
+    let Some(path) = ask_path(file_name).await? else {
+        return Ok(None);
+    };
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }

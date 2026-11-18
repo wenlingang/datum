@@ -20,6 +20,9 @@ ONLY=${1:-all}
 want() { [ "$ONLY" = all ] || [ "$ONLY" = "$1" ] || { [ "$ONLY" = core ] && case $1 in rust|tab|erd|dialogs) true;; *) false;; esac; }; }
 FAILED=0
 
+# ER 图测试库:customers ← orders ← order_items(物理外键),order_items.product_id 按命名推断,products 15 列
+ERD_SCHEMA="create table customers(id integer primary key, name text); create table orders(id integer primary key, customer_id int references customers(id), total real); create table order_items(id integer primary key, order_id int references orders(id), product_id int, qty int); create table products(id integer primary key, c2 text, c3 text, c4 text, c5 text, c6 text, c7 text, c8 text, c9 text, c10 text, c11 text, c12 text, c13 text, c14 text, c15_last text); create table notes(id integer primary key, body text);"
+
 conn() { # id name file
   printf '{"id":"%s","name":"%s","kind":"sqlite","env":"local","host":"","port":0,"user":"","database":"","filePath":"%s","sslMode":"disable"}' "$1" "$2" "$3"
 }
@@ -134,9 +137,10 @@ fi
 
 if want erd; then
   D="$ROOT/erd"; mkdir -p "$D"
-  sqlite3 "$D/erd.db" "create table customers(id integer primary key, name text); create table orders(id integer primary key, customer_id int references customers(id), total real); create table order_items(id integer primary key, order_id int references orders(id), product_id int, qty int); create table products(id integer primary key, c2 text, c3 text, c4 text, c5 text, c6 text, c7 text, c8 text, c9 text, c10 text, c11 text, c12 text, c13 text, c14 text, c15_last text); create table notes(id integer primary key, body text);"
+  sqlite3 "$D/erd.db" "$ERD_SCHEMA"
   printf '[%s]\n' "$(conn c-erd erd "$D/erd.db")" > "$D/connections.json"
   run erd "$D" erd/erd.test.tsx
+  run erd-unit "$D" erd/unit.test.ts
 fi
 
 if want dialogs; then
@@ -155,6 +159,14 @@ if [ "$ONLY" = native ]; then
   D="$ROOT/native-chat"; mkdir -p "$D"
   echo "==> native-chat"
   DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" chat/typing.native.test.tsx || FAILED=1
+  D="$ROOT/native-erd"; mkdir -p "$D/saved"
+  sqlite3 "$D/erd.db" "$ERD_SCHEMA"
+  printf '[%s]\n' "$(conn c-erd erd "$D/erd.db")" > "$D/connections.json"
+  echo "==> native-erd"
+  DATUM_CONFIG_DIR="$D" DATUM_TEST_SAVE_DIR="$D/saved" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" erd/erd.native.test.tsx || FAILED=1
+  # 导出的文件确实是 PNG
+  png=$(ls "$D"/saved/erd_*.png 2>/dev/null | head -1)
+  if [ -z "$png" ] || ! file "$png" | grep -q "PNG image data"; then echo "✗ 没有导出 PNG 文件:$(ls "$D/saved")"; FAILED=1; else echo "✓ $(file -b "$png")"; fi
 fi
 
 # 真实 MySQL 上的诊断操作与改表结构评估:需要本机 MySQL(root 无密码),设 DATUM_TEST_MYSQL=端口 才跑

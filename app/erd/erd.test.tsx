@@ -75,3 +75,9 @@ test("双击表节点打开表浏览", async () => {
   await app.press("id:erd-node:notes");
   await app.waitFor("id:tab:notes");
 });
+
+test("导出按钮:图加载后可用", async () => {
+  const app = await openErd();
+  await app.waitUntil(() => app.enabled("id:erd-export"));
+});
+

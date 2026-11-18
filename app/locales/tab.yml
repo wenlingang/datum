@@ -557,10 +557,6 @@ erd:
     en: "Schema diagram exported"
     zh-CN: "已导出表结构图"
     zh-TW: "已匯出資料表結構圖"
-  exported_diagram:
-    en: "Relationship diagram exported"
-    zh-CN: "已导出关系图"
-    zh-TW: "已匯出關聯圖"
   export_failed:
     en: "Export failed: %{error}"
     zh-CN: "导出失败:%{error}"
