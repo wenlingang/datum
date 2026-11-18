@@ -41,6 +41,7 @@ pub fn EditorKeys(props: EditorKeysProps, cx: Scope<EditorKeysEvent>) -> impl In
                     when: When::Always,
                     repeat: false,
                     pass_through: false,
+                    ..Default::default()
                 },
                 move |k| cx.emit(EditorKeysEvent::Key(SharedString::from(k.to_string()))),
             );
