@@ -36,6 +36,8 @@ export interface ErdModel {
   readonly viewport: Signal<Viewport>;
   /** 画布尺寸(onLayout) */
   readonly size: Signal<Size>;
+  /** 是否显示小地图 */
+  readonly minimap: Signal<boolean>;
   /** 尺寸确定后要适配的视野:undefined 不适配,null 全图,数组为指定表 */
   pendingFit: string[] | null | undefined;
   searchTimer: number | undefined;
@@ -68,6 +70,7 @@ export function createErdModel(connId: string, dbKind: DbKind): ErdModel {
     hits: signal<Set<string> | null>(null),
     viewport: signal<Viewport>({ zoom: 1, pan: { x: 0, y: 0 } }),
     size: signal<Size>({ width: 0, height: 0 }),
+    minimap: signal(true),
     pendingFit: undefined,
     searchTimer: undefined,
   };
@@ -225,6 +228,12 @@ export function applyPendingFit(m: ErdModel) {
 export function zoomBy(m: ErdModel, factor: number, anchor?: Pt) {
   const s = m.size();
   m.viewport.update((v) => zoomAt(v, factor, anchor ?? { x: s.width / 2, y: s.height / 2 }));
+}
+
+/** 平移视野,让世界坐标 `p` 落在画布中心(缩放不变)。 */
+export function centerOn(m: ErdModel, p: Pt) {
+  const s = m.size();
+  m.viewport.update((v) => ({ zoom: v.zoom, pan: { x: s.width / 2 - p.x * v.zoom, y: s.height / 2 - p.y * v.zoom } }));
 }
 
 export function panBy(m: ErdModel, dx: number, dy: number) {

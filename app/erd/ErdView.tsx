@@ -2,7 +2,8 @@
 //
 // 画布 = 一张屏幕坐标的 Canvas(点阵背景、连线、箭头)
 //      + 绝对定位的表节点(只渲染视口内的;缩得很小时只画表名)
-//      + 最上层的 Canvas(选中边的列配对)。工具条「导出」把整张图画成 PNG(export.ts)。
+//      + 最上层的 Canvas(选中边的列配对)
+//      + 左下角小地图(全图缩略与视野框)。工具条「导出」把整张图画成 PNG(export.ts)。
 // 交互:滚轮 / 双指平移;⌘/Ctrl + 滚轮以指针为中心缩放;捏合缩放(手势中原生变换预览,
 // 松手并入缩放);拖空白平移、拖表移动;点表高亮关联;双击开表;搜索高亮并移到命中处。
 
@@ -16,9 +17,27 @@ import { openTable } from "../tab";
 import { Btn, color, Icon, IconButton, TextField } from "../ui/kit";
 import { FS } from "../ui/text";
 import { renderPng } from "./export";
-import { intersects, LOD_SIMPLE, NODE_HEADER_H, NODE_PAD_Y, NODE_ROW_H, routeEdge, wheelPoints, worldView, type Pt } from "./geom";
+import {
+  bounds,
+  intersects,
+  LOD_SIMPLE,
+  MINIMAP_H,
+  MINIMAP_W,
+  minimapFrame,
+  minimapToWorld,
+  NODE_HEADER_H,
+  NODE_PAD_Y,
+  NODE_ROW_H,
+  routeEdge,
+  union,
+  wheelPoints,
+  worldView,
+  type MinimapFrame,
+  type Pt,
+} from "./geom";
 import {
   applyPendingFit,
+  centerOn,
   expand,
   fitTo,
   load,
@@ -167,10 +186,13 @@ function Board(props: { m: ErdModel }) {
   let grabbed: string | null = null;
   /** 刚拖动过:吞掉随后的那次点击 */
   let dragged = false;
+  /** 手指按在小地图上:小地图自己处理,画布不平移(小地图的 onTouchStart 先于画布的) */
+  let onMinimap = false;
 
   // 拖动走触摸事件:桌面上鼠标拖动同时也是触摸;用表面坐标(pageX/Y)求增量,与视图变换无关
   const onTouchStart = (e: { pageX: number; pageY: number }) => {
-    drag = { table: grabbed, last: { x: e.pageX, y: e.pageY }, moved: false };
+    drag = onMinimap ? null : { table: grabbed, last: { x: e.pageX, y: e.pageY }, moved: false };
+    onMinimap = false;
     grabbed = null;
     dragged = false;
   };
@@ -251,6 +273,7 @@ function Board(props: { m: ErdModel }) {
         <EdgeLabels m={m} />
       </View>
       <Overlay m={m} />
+      <Minimap m={m} grab={() => (onMinimap = true)} />
       <Controls m={m} />
     </View>
   );
@@ -286,7 +309,87 @@ function Controls(props: { m: ErdModel }) {
       </Text>
       <IconButton icon="zoom-in" tooltip={t("erd.zoom_in")} onPress={() => zoomBy(m, 1.2)} />
       <IconButton icon="maximize" tooltip={t("erd.fit_view")} onPress={() => fitTo(m, null)} />
+      <IconButton
+        icon="map"
+        active={m.minimap()}
+        tooltip={m.minimap() ? t("erd.minimap_hide") : t("erd.minimap_show")}
+        onPress={() => m.minimap.update((v) => !v)}
+        testID="erd-minimap-toggle"
+      />
     </View>
+  );
+}
+
+// ------------------------------------------------------------ 小地图
+
+/** 左下角的全图缩略:表的位置(搜索命中 / 点选的亮起)与当前视野框;按下或拖动把视野中心移过去。 */
+function Minimap(props: { m: ErdModel; grab: () => void }) {
+  const m = props.m;
+  /** 范围:表的包围盒与当前视野的并集 */
+  const frame = computed(() => {
+    const b = bounds(Object.values(m.rects()));
+    if (!b) return null;
+    const s = m.size();
+    const v = m.viewport();
+    const view = { x0: -v.pan.x / v.zoom, y0: -v.pan.y / v.zoom, x1: (s.width - v.pan.x) / v.zoom, y1: (s.height - v.pan.y) / v.zoom };
+    return minimapFrame(union(b, view));
+  });
+  /** 拖动中沿用按下时的映射:视野移动会改变范围,跟着变的话手指下的点会漂 */
+  let held: MinimapFrame | null = null;
+  const jump = (e: { locationX: number; locationY: number }) => {
+    const f = held ?? frame();
+    if (f) centerOn(m, minimapToWorld(f, { x: e.locationX, y: e.locationY }));
+  };
+  return (
+    <If when={m.minimap() && !m.error() && m.graph().nodes.length > 0}>
+      <View
+        testID="erd-minimap"
+        class="absolute bottom-3 left-3 overflow-hidden rounded-(--radius) border border-border bg-panel shadow-sm"
+        style={{ width: MINIMAP_W, height: MINIMAP_H, opacity: 0.92 }}
+        onPress={() => {}}
+        onTouchStart={(e) => {
+          props.grab();
+          held = frame();
+          jump(e);
+        }}
+        onTouchMove={jump}
+        onTouchEnd={() => (held = null)}
+        onTouchCancel={() => (held = null)}
+      >
+        <Canvas
+          style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }}
+          draw={(cx) => {
+            const f = frame();
+            if (!f) return;
+            const rects = m.rects();
+            const hits = m.hits();
+            const sel = m.selected();
+            const primary = color("primary");
+            const faint = color("fg-faint");
+            for (const [table, r] of Object.entries(rects)) {
+              const lit = hits ? hits.has(table) : sel === table;
+              cx.globalAlpha = lit ? 1 : 0.55;
+              cx.fillStyle = lit ? primary : faint;
+              cx.fillRect(f.ox + r.x * f.scale, f.oy + r.y * f.scale, Math.max(1.5, r.w * f.scale), Math.max(1.5, r.h * f.scale));
+            }
+            // 视野框
+            const s = m.size();
+            const v = m.viewport();
+            const x = f.ox + (-v.pan.x / v.zoom) * f.scale;
+            const y = f.oy + (-v.pan.y / v.zoom) * f.scale;
+            const w = (s.width / v.zoom) * f.scale;
+            const h = (s.height / v.zoom) * f.scale;
+            cx.globalAlpha = 0.12;
+            cx.fillStyle = primary;
+            cx.fillRect(x, y, w, h);
+            cx.globalAlpha = 1;
+            cx.strokeStyle = primary;
+            cx.lineWidth = 1.2;
+            cx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+          }}
+        />
+      </View>
+    </If>
   );
 }
 

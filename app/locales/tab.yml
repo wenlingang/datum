@@ -633,6 +633,14 @@ erd:
     en: "Fit to View"
     zh-CN: "适配视野"
     zh-TW: "符合視窗大小"
+  minimap_show:
+    en: "Show Minimap"
+    zh-CN: "显示小地图"
+    zh-TW: "顯示小地圖"
+  minimap_hide:
+    en: "Hide Minimap"
+    zh-CN: "隐藏小地图"
+    zh-TW: "隱藏小地圖"
   pick_database:
     en: "Select Database…"
     zh-CN: "选择数据库…"

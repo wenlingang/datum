@@ -122,3 +122,37 @@ export function wheelPoints(delta: Pt, mode: "lines" | "points"): Pt {
   const unit = mode === "lines" ? 16 : 1;
   return { x: delta.x * unit, y: delta.y * unit };
 }
+
+/** 小地图尺寸与内边距(点)。 */
+export const MINIMAP_W = 180;
+export const MINIMAP_H = 120;
+const MINIMAP_PAD = 6;
+
+/** 小地图的映射:小地图坐标 = o + 世界坐标 × scale。 */
+export interface MinimapFrame {
+  scale: number;
+  ox: number;
+  oy: number;
+}
+
+/** 把世界范围 `b`(表的包围盒与当前视野的并集,视野框总画得出来)等比放进小地图并居中。 */
+export function minimapFrame(b: { x0: number; y0: number; x1: number; y1: number }): MinimapFrame {
+  const w = Math.max(1, b.x1 - b.x0);
+  const h = Math.max(1, b.y1 - b.y0);
+  const scale = Math.min((MINIMAP_W - MINIMAP_PAD * 2) / w, (MINIMAP_H - MINIMAP_PAD * 2) / h);
+  return {
+    scale,
+    ox: (MINIMAP_W - w * scale) / 2 - b.x0 * scale,
+    oy: (MINIMAP_H - h * scale) / 2 - b.y0 * scale,
+  };
+}
+
+/** 小地图上的点 → 世界坐标。 */
+export function minimapToWorld(f: MinimapFrame, p: Pt): Pt {
+  return { x: (p.x - f.ox) / f.scale, y: (p.y - f.oy) / f.scale };
+}
+
+/** 两个范围的并集。 */
+export function union(a: { x0: number; y0: number; x1: number; y1: number }, b: { x0: number; y0: number; x1: number; y1: number }) {
+  return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+}

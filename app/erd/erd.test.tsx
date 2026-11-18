@@ -81,3 +81,30 @@ test("导出按钮:图加载后可用", async () => {
   await app.waitUntil(() => app.enabled("id:erd-export"));
 });
 
+test("小地图:开关显示", async () => {
+  const app = await openErd();
+  await app.waitFor("id:erd-minimap");
+  await app.press("id:erd-minimap-toggle");
+  await app.waitUntil(() => !app.shows("id:erd-minimap"));
+  await app.press("id:erd-minimap-toggle");
+  await app.waitFor("id:erd-minimap");
+});
+
+test("小地图:拖到左上角,视野跟过去(画布不反向平移),选中不被清掉", async () => {
+  const app = await openErd();
+  await app.press("id:erd-node:order_items");
+  const dimmed = () => (app.viewStyle("id:erd-node:notes")?.opacity ?? 1) < 0.5;
+  await app.waitUntil(dimmed);
+  for (let i = 0; i < 8; i++) await app.press("label:Zoom In");
+  await app.waitUntil(() => app.value("id:erd-zoom") === "200%" || app.texts().includes("200%"));
+  expect(app.shows("id:erd-node:customers")).toBe(true);
+  // 从小地图中间拖到左上角:视野中心移到图的左上,最右边的 customers 出了视野
+  await app.drag("id:erd-minimap", { x: -80, y: -50 });
+  await app.waitUntil(() => !app.shows("id:erd-node:customers"));
+  expect(app.shows("id:erd-node:order_items")).toBe(true);
+  // 单击小地图也不算点空白:选中还在(notes 已出视野,回到全图再看)
+  await app.press("id:erd-minimap");
+  await app.press("label:Fit to View");
+  await app.waitFor("id:erd-node:notes");
+  expect(dimmed()).toBe(true);
+});

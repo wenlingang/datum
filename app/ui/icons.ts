@@ -42,6 +42,7 @@ import keyRound from "../assets/icons/key-round.svg";
 import link2 from "../assets/icons/link-2.svg";
 import listTree from "../assets/icons/list-tree.svg";
 import loaderCircle from "../assets/icons/loader-circle.svg";
+import map from "../assets/icons/map.svg";
 import lockOpen from "../assets/icons/lock-open.svg";
 import lock from "../assets/icons/lock.svg";
 import maximize from "../assets/icons/maximize.svg";
@@ -123,6 +124,7 @@ export const ICONS = {
   "link-2": link2,
   "list-tree": listTree,
   "loader-circle": loaderCircle,
+  "map": map,
   "lock-open": lockOpen,
   "lock": lock,
   "maximize": maximize,
