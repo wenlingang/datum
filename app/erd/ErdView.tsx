@@ -7,14 +7,15 @@
 // 交互:滚轮 / 双指平移;⌘/Ctrl + 滚轮以指针为中心缩放;捏合缩放(手势中原生变换预览,
 // 松手并入缩放);拖空白平移、拖表移动;点表高亮关联;双击开表;搜索高亮并移到命中处。
 
-import { Canvas, computed, createAnimatedValue, effect, signal, Text, untracked, View, type JSX } from "nsh";
+import { Canvas, computed, createAnimatedValue, effect, Scroll, signal, Text, untracked, View, type JSX } from "nsh";
 import { t } from "nsh/i18n";
 import type { ErdNode } from "../lib/types";
 import { errorText, shell } from "../lib/native";
 import { conns } from "../store/conns";
 import { toast } from "../store/toast";
 import { openTable } from "../tab";
-import { Btn, color, Icon, IconButton, TextField } from "../ui/kit";
+import { Toggle, ToggleGroup, Toolbar as NshToolbar } from "nsh/base";
+import { Btn, color, Icon, IconButton, tip, ToggleBtn, SearchField, EmptyState } from "../ui/kit";
 import { FS } from "../ui/text";
 import { renderPng } from "./export";
 import {
@@ -104,63 +105,57 @@ function Toolbar(props: { m: ErdModel }) {
     }
   };
   return (
-    <View class="h-10 shrink-0 flex-row items-center gap-2.5 border-b border-border bg-panel px-3.5">
-      <If when={m.focus()}>
-        <Btn small variant="outline" icon="undo-2" label={t("erd.back_to_all")} onPress={() => setFocus(m, null)} testID="erd-back" />
-      </If>
-      <Text class={`${FS.xs} font-mono text-fg-faint`}>{stats()}</Text>
-      <If when={noEdges()}>
-        <Text class={`${FS.xs} text-fg-faint`}>{m.focus() ? t("erd.no_edges_table") : t("erd.no_edges_db")}</Text>
-      </If>
-      <View class="flex-1" />
+    // 窄的时候(如右侧开着 AI 面板)依次让位:统计文字先截断,再收窄搜索框(不小于 min-w-28),
+    // 最后开关与按钮所在的一段横向滚动,按钮不会被截掉或点不到。
+    <NshToolbar class="h-10 shrink-0 flex-row items-center gap-2.5 border-b border-border bg-panel px-3.5">
+      <View class="min-w-0 flex-1 flex-row items-center gap-2.5">
+        <If when={m.focus()}>
+          <Btn small variant="outline" icon="chevron-left" label={t("erd.back_to_all")} onPress={() => setFocus(m, null)} testID="erd-back" class="shrink-0" />
+        </If>
+        <Text class={`${FS.xs} min-w-0 shrink line-clamp-1 tabular-nums text-fg-faint`}>{stats()}</Text>
+        <If when={noEdges()}>
+          <Text class={`${FS.xs} min-w-0 shrink line-clamp-1 text-fg-faint`}>
+            {m.focus() ? t("erd.no_edges_table") : t("erd.no_edges_db")}
+          </Text>
+        </If>
+      </View>
       <If when={m.loading()}>
-        <Icon name="loader-circle" size={14} color="fg-faint" />
+        <Icon name="loader-circle" size={14} color="fg-faint" class="shrink-0" />
       </If>
-      <TextField
+      <SearchField
+        small
         testID="erd-search"
-        class="h-6 w-56"
+        class="w-56 min-w-28 shrink"
         value={m.search()}
-        onChange={({ value }) => setSearch(m, value)}
+        onChange={(v) => setSearch(m, v)}
         placeholder={t("erd.search_placeholder")}
       />
-      <Btn
-        small
-        variant={m.inferred() ? "secondary" : "outline"}
-        label={t("erd.inferred")}
-        tooltip={t("erd.inferred_tooltip")}
-        onPress={() => toggleInferred(m)}
-        testID="erd-inferred"
-      />
-      <View class="flex-row gap-1">
+      <Scroll horizontal class="min-w-0 shrink-[0.01]" contentClass="flex-row items-center gap-2.5" testID="erd-toolbar-tools">
+        <ToggleBtn
+          label={t("erd.inferred")}
+          tooltip={t("erd.inferred_tooltip")}
+          pressed={m.inferred()}
+          onPress={() => toggleInferred(m)}
+          testID="erd-inferred"
+        />
+        <ToggleGroup class="shrink-0 flex-row gap-1" disabled={empty()}>
+          <ToggleBtn label={t("erd.view_struct")} pressed={m.viewMode() === "struct"} onPress={() => setView(m, "struct")} testID="erd-view-struct" />
+          <ToggleBtn label={t("erd.view_er")} pressed={m.viewMode() === "er"} onPress={() => setView(m, "er")} testID="erd-view-er" />
+        </ToggleGroup>
         <Btn
           small
-          variant={m.viewMode() === "struct" ? "secondary" : "outline"}
-          label={t("erd.view_struct")}
-          disabled={empty()}
-          onPress={() => setView(m, "struct")}
-          testID="erd-view-struct"
+          variant="outline"
+          icon="image-down"
+          label={exporting() ? t("erd.exporting") : t("erd.export")}
+          tooltip={t("erd.export_tooltip")}
+          disabled={exporting() || empty() || m.loading()}
+          onPress={() => void exportDiagram()}
+          testID="erd-export"
+          class="shrink-0"
         />
-        <Btn
-          small
-          variant={m.viewMode() === "er" ? "secondary" : "outline"}
-          label={t("erd.view_er")}
-          disabled={empty()}
-          onPress={() => setView(m, "er")}
-          testID="erd-view-er"
-        />
-      </View>
-      <Btn
-        small
-        variant="outline"
-        icon="image-down"
-        label={exporting() ? t("erd.exporting") : t("erd.export")}
-        tooltip={t("erd.export_tooltip")}
-        disabled={exporting() || empty() || m.loading()}
-        onPress={() => void exportDiagram()}
-        testID="erd-export"
-      />
-      <IconButton icon="refresh-cw" tooltip={t("erd.refresh_tooltip")} onPress={() => void load(m)} />
-    </View>
+        <IconButton small icon="refresh-cw" tooltip={t("erd.refresh_tooltip")} onPress={() => void load(m)} />
+      </Scroll>
+    </NshToolbar>
   );
 }
 
@@ -287,11 +282,9 @@ function Overlay(props: { m: ErdModel }) {
       <View class="absolute inset-0 items-center justify-center gap-3 p-6">
         <If when={m.error()} else={<Icon name="loader-circle" size={24} color="fg-faint" />}>
           {(e) => (
-            <>
-              <Icon name="circle-alert" size={28} color="destructive" />
-              <Text class={`${FS.sm} text-fg-soft`}>{t("erd.load_failed", { error: e() })}</Text>
-              <Btn small variant="outline" icon="refresh-cw" label={t("erd.retry")} onPress={() => void load(m)} />
-            </>
+            <EmptyState class="" icon="circle-alert" iconColor="destructive" title={t("erd.load_failed", { error: e() })}>
+              <Btn small variant="outline" icon="refresh-cw" label={t("erd.retry")} onPress={() => void load(m)} class="mt-1" />
+            </EmptyState>
           )}
         </If>
       </View>
@@ -302,21 +295,24 @@ function Overlay(props: { m: ErdModel }) {
 function Controls(props: { m: ErdModel }) {
   const m = props.m;
   return (
-    <View class="absolute bottom-3 right-3 flex-row items-center gap-0.5 rounded-(--radius) border border-border bg-panel p-0.5 shadow-sm">
+    <NshToolbar class="absolute bottom-3 right-3 flex-row items-center gap-0.5 rounded-(--radius) border border-border bg-panel p-0.5 shadow-sm">
       <IconButton icon="zoom-out" tooltip={t("erd.zoom_out")} onPress={() => zoomBy(m, 1 / 1.2)} />
       <Text testID="erd-zoom" class={`${FS.xs} w-10 text-center font-mono text-fg-soft`}>
         {`${Math.round(m.viewport().zoom * 100)}%`}
       </Text>
       <IconButton icon="zoom-in" tooltip={t("erd.zoom_in")} onPress={() => zoomBy(m, 1.2)} />
       <IconButton icon="maximize" tooltip={t("erd.fit_view")} onPress={() => fitTo(m, null)} />
-      <IconButton
-        icon="map"
-        active={m.minimap()}
-        tooltip={m.minimap() ? t("erd.minimap_hide") : t("erd.minimap_show")}
-        onPress={() => m.minimap.update((v) => !v)}
+      <Toggle
         testID="erd-minimap-toggle"
-      />
-    </View>
+        pressed={m.minimap()}
+        onChange={({ pressed }) => m.minimap.set(pressed)}
+        accessibilityLabel={t("erd.minimap_show")}
+        tooltip={tip(() => (m.minimap() ? t("erd.minimap_hide") : t("erd.minimap_show")))}
+        class="group flex-row items-center justify-center rounded-(--radius) p-1.5 hover:bg-list-hover active:bg-secondary-active aria-pressed:bg-secondary"
+      >
+        <Icon name="map" size={15} color={m.minimap() ? "foreground" : "muted-foreground"} />
+      </Toggle>
+    </NshToolbar>
   );
 }
 

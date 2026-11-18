@@ -12,16 +12,15 @@
 // 关闭并移除会话、释放缓冲。断开连接时 core 也会停掉它名下的所有会话。
 
 import { cleanup, List, signal, Text, View } from "nsh";
-import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
-import { CheckBox, DialogFrame, Dropdown, Segmented } from "../dialogs/controls";
+import { CheckBox, DialogFrame, Dropdown, Segmented, ConfirmFrame } from "../dialogs/controls";
 import { db, errorText } from "../lib/native";
 import type { RedisLiveDetail, RedisLiveItem, RedisLivePoll, RedisMonitorFilter, RedisSub, RedisViewFormat } from "../lib/types";
 import { conns } from "../store/conns";
 import { toast } from "../store/toast";
 import { viewFormat } from "../store/redisFormats";
 import { ErrorText } from "../ui/error";
-import { Btn, Hint, Icon, IconButton, TextField } from "../ui/kit";
+import { Btn, Hint, Icon, IconButton, TextField, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { formatBytes } from "./RedisInsight";
 import { createDecoded, DecodedBody, DecodeInfo, formatName, FormatPicker, ViewToggle } from "./RedisValueView";
@@ -61,7 +60,7 @@ function FormatTag(props: { format: RedisViewFormat }) {
 }
 
 function Header(props: { mode: Mode }) {
-  const cell = (label: string, cls: string) => <Text class={`${FS.xs} ${cls} font-bold text-muted-foreground`}>{label}</Text>;
+  const cell = (label: string, cls: string) => <SectionLabel class={cls}>{label}</SectionLabel>;
   return (
     <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
       {cell(t("rlive.col_time"), "w-[92px]")}
@@ -186,22 +185,28 @@ function ConfirmDialog(props: {
 }) {
   const acked = signal(false);
   return (
-    <Dialog
+    <ConfirmFrame
       testID={props.testID}
       open={props.open}
-      onOpenChange={(e) => {
-        if (!e.open) props.onClose();
+      onClose={() => {
         acked.set(false);
+        props.onClose();
       }}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[540px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      title={props.title}
+      icon="triangle-alert"
+      iconColor="warning"
+      width={540}
+      cancelLabel={t("rlive.cancel")}
+      cancelTestID={`${props.testID}-cancel`}
+      confirmLabel={props.okLabel}
+      confirmTestID={`${props.testID}-ok`}
+      confirmVariant="danger"
+      confirmDisabled={!!props.ack && !acked()}
+      onConfirm={() => {
+        acked.set(false);
+        props.onConfirm();
+      }}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="triangle-alert" size={16} color="warning" />
-        <Text class={`${FS.base} min-w-0 flex-1 font-bold text-popover-foreground`}>{props.title}</Text>
-      </View>
       <Text class={`${FS.sm} text-popover-foreground`}>{props.body}</Text>
       <If when={props.detail}>{(x) => <Text class={`${FS.xs} ${MONO} text-muted-foreground line-clamp-3`}>{x()}</Text>}</If>
       <If when={props.prodNote}>{(x) => <Text class={`${FS.xs} font-bold text-negative`}>{x()}</Text>}</If>
@@ -215,20 +220,7 @@ function ConfirmDialog(props: {
           </View>
         )}
       </If>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("rlive.cancel")} onPress={props.onClose} testID={`${props.testID}-cancel`} />
-        <Btn
-          variant="danger"
-          disabled={!!props.ack && !acked()}
-          label={props.okLabel}
-          onPress={() => {
-            acked.set(false);
-            props.onConfirm();
-          }}
-          testID={`${props.testID}-ok`}
-        />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }
 
@@ -612,7 +604,7 @@ export function RedisLive(props: { connId: string }) {
                   />
                 }
               >
-                <Btn testID="rlive-stop" small icon="circle-x" label={t("rlive.stop")} onPress={() => void stopSession()} />
+                <Btn testID="rlive-stop" small icon="square" label={t("rlive.stop")} onPress={() => void stopSession()} />
               </If>
             </View>
             <Hint class={FS.xs}>{t("rlive.filter_hint")}</Hint>
@@ -652,7 +644,7 @@ export function RedisLive(props: { connId: string }) {
               onPress={() => void subscribe()}
             />
             <If when={running()}>
-              <Btn testID="rlive-stop" small icon="circle-x" label={t("rlive.stop")} onPress={() => void stopSession()} />
+              <Btn testID="rlive-stop" small icon="square" label={t("rlive.stop")} onPress={() => void stopSession()} />
             </If>
           </View>
           <If when={running() && (status()?.subs.length ?? 0) > 0}>
@@ -679,7 +671,7 @@ export function RedisLive(props: { connId: string }) {
             </View>
           </If>
           <View class="flex-row items-center gap-2">
-            <Text class={`${FS.xs} w-[110px] font-bold text-muted-foreground`}>{t("rlive.publish_to")}</Text>
+            <SectionLabel class="w-[110px]">{t("rlive.publish_to")}</SectionLabel>
             <TextField
               testID="rlive-pub-channel"
               class="h-7 w-[220px] font-mono"

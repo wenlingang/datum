@@ -28,7 +28,7 @@ async function runSql(app: App, sql: string, want: string) {
 test("编辑器的 UPDATE 记进写操作记录,可从记录撤销并标为已撤销", async () => {
   const app = await start();
   const update = "UPDATE products SET origin = 'Journal test' WHERE id <= 2";
-  await runSql(app, update, "✓ Executed successfully · 2 rows affected");
+  await runSql(app, update, "Executed successfully · 2 rows affected");
   // 只读语句不记(开头带注释的查询也不记)
   await runSql(app, "-- 说明\nSELECT 'no' || 'ted' AS c", "noted");
   current = "SELECT 'no' || 'ted' AS c";
@@ -78,7 +78,7 @@ test("编辑器的 UPDATE 记进写操作记录,可从记录撤销并标为已�
   await runSql(app, "SELECT COUNT(*) || ' left' AS n FROM products WHERE origin = 'Journal test'", "0 left");
 
   // 留一条不撤销的,给重启测试
-  await runSql(app, "UPDATE products SET origin = 'Restart test' WHERE id = 5", "✓ Executed successfully · 1 rows affected");
+  await runSql(app, "UPDATE products SET origin = 'Restart test' WHERE id = 5", "Executed successfully · 1 rows affected");
   // 失败的写操作也留痕
   await runSql(app, "UPDATE no_such_table SET x = 1 WHERE id = 1", "no such table");
   const list = (await Journal.list("dev-sqlite", null)) as { sql: string; ok: boolean; undoneBy: string | null }[];
@@ -97,7 +97,7 @@ test("表格编辑提交也留痕,带撤销", async () => {
   await app.type("id:cell-editor", "Grid ");
   await app.press("id:cell-stage");
   await app.waitFor("text:Staged");
-  await app.press("label:x");
+  await app.press("id:cell-dialog-dismiss");
   await app.waitFor("text:Edit Cell", { state: "gone" });
   await app.keyboard.press("mod+s");
   await app.waitUntil(() => app.texts().includes("Grid Coffee 3"), { timeout: 15000 });

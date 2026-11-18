@@ -8,7 +8,7 @@ import type { HistoryEntry } from "../lib/types";
 import { conns } from "../store/conns";
 import { clearHistory, history, historyJournalUndo, historyUndo, loadJournalUndo } from "../store/history";
 import { toast } from "../store/toast";
-import { Btn, Icon } from "../ui/kit";
+import { Btn, Icon, EmptyState } from "../ui/kit";
 import { FS } from "../ui/text";
 import { checkJournalUndo, journalUndoPrep } from "./journalUndo";
 import { run, setSql, type TabModel } from "./model";
@@ -92,7 +92,7 @@ export function HistoryPanel(props: { m: TabModel }) {
       </View>
       <If
         when={entries().length > 0}
-        else={<Text class={`${FS.xs} px-4 py-6 text-center text-fg-faint`}>{t("history.empty")}</Text>}
+        else={<EmptyState compact title={t("history.empty")} />}
       >
         <List each={entries()} keyExtractor={(e) => e.id} estimatedItemSize={50} style={{ height: height() }}>
           {(e) => (

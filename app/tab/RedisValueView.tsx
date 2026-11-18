@@ -13,9 +13,10 @@ import { db } from "../lib/native";
 import type { RedisDecoded, RedisRawCell, RedisViewFormat } from "../lib/types";
 import { setViewFormat, VIEW_FORMATS, viewFormat } from "../store/redisFormats";
 import { editorText } from "../ui/editor";
-import { Btn, Icon } from "../ui/kit";
+import { Icon } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { JsonTree } from "./JsonTree";
+import { ViewSwitch } from "./ui";
 
 /** 要解码的值:显示文本 + 非 UTF-8 时的原始字节。 */
 export interface ValueSource {
@@ -117,7 +118,7 @@ export function DecodeInfo(props: { decoded: RedisDecoded | null; requested: Red
       </If>
       <If when={d()?.fallback}>
         <View class="min-w-0 shrink flex-row items-center gap-1">
-          <Icon name="circle-alert" size={12} color="warning" />
+          <Icon name="triangle-alert" size={12} color="warning" />
           <Text testID="rkey-format-fallback" class={`${FS.xs} min-w-0 text-warning line-clamp-1`}>
             {t("rkey.format_fallback", { format: formatName(props.requested), shown: formatName(d()?.format ?? "text") })}
           </Text>
@@ -133,24 +134,14 @@ export function DecodeInfo(props: { decoded: RedisDecoded | null; requested: Red
 /** 树 / 文本切换(只在有树时显示)。 */
 export function ViewToggle(props: { mode: "tree" | "text"; onChange: (m: "tree" | "text") => void }) {
   return (
-    <View class="flex-row items-center gap-1">
-      <Btn
-        small
-        testID="rkey-view-tree"
-        icon="list-tree"
-        variant={props.mode === "tree" ? "secondary" : "ghost"}
-        label={t("json.view_tree")}
-        onPress={() => props.onChange("tree")}
-      />
-      <Btn
-        small
-        testID="rkey-view-text"
-        icon="braces"
-        variant={props.mode === "text" ? "secondary" : "ghost"}
-        label={t("json.view_text")}
-        onPress={() => props.onChange("text")}
-      />
-    </View>
+    <ViewSwitch
+      value={props.mode}
+      onChange={props.onChange}
+      options={[
+        { value: "tree", label: t("json.view_tree"), icon: "list-tree", testID: "rkey-view-tree" },
+        { value: "text", label: t("json.view_text"), icon: "braces", testID: "rkey-view-text" },
+      ]}
+    />
   );
 }
 

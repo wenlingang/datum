@@ -2,6 +2,7 @@
 // 点开看完整 SQL 与结果。布局参照 nsh gallery 的对话示例(ToolCard)。
 
 import { Scroll, signal, Text, View } from "nsh";
+import { Collapsible } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { ToolStep } from "../store/ai";
 import type { ExportFormat } from "../lib/native";
@@ -169,45 +170,50 @@ export function ToolCard(props: {
       class="overflow-hidden rounded-(--radius) border bg-background"
       classList={{
         "border-ai/40": props.step.state === "running",
-        "border-destructive/40": props.step.state === "error",
+        "border-destructive/30": props.step.state === "error",
         "border-border": props.step.state === "ok",
       }}
     >
-      <View
-        class="flex-row items-center gap-2.5 px-3 py-2 hover:bg-list-hover"
-        onPress={() => toggled.set(!open())}
-        accessibilityLabel={h().title}
+      <Collapsible
+        open={open() && props.step.state !== "running"}
+        reveal
+        content={<Body step={props.step} wide={props.wide} onOpenQuery={props.onOpenQuery} />}
       >
-        <View class="h-6 w-6 items-center justify-center rounded-(--radius) border border-border bg-raised">
-          <Icon name={h().icon} size={12} color="foreground" />
-        </View>
-        <View class="min-w-0 flex-1">
-          <Text class={`${FS.xs} font-bold text-foreground`}>{h().title}</Text>
-          <If when={h().detail}>
-            <Text class={`${FS.xs} ${MONO} text-muted-foreground line-clamp-1`}>{h().detail}</Text>
-          </If>
-        </View>
-        <If
-          when={props.step.state === "running"}
-          else={
-            <Text
-              class={`${FS.xs} shrink-0`}
-              classList={{ "text-negative": props.step.state === "error", "text-muted-foreground": props.step.state !== "error" }}
-            >
-              {props.step.state === "error" ? t("chat.tool_failed") : props.step.summary}
-            </Text>
-          }
+        <View
+          class="flex-row items-center gap-2.5 px-3 py-2 hover:bg-list-hover"
+          role="button"
+          accessibilityState={{ expanded: open() }}
+          onPress={() => toggled.set(!open())}
+          accessibilityLabel={h().title}
         >
-          <View class="shrink-0 flex-row items-center gap-1.5">
-            <Icon name="loader-circle" size={12} color="ai" />
-            <Text class={`${FS.xs} text-muted-foreground`}>{t("chat.tool_running")}</Text>
+          <View class="h-6 w-6 items-center justify-center rounded-(--radius) border border-border bg-raised">
+            <Icon name={h().icon} size={12} color="foreground" />
           </View>
-        </If>
-        <Icon name={open() ? "chevron-up" : "chevron-down"} size={12} color="fg-faint" />
-      </View>
-      <If when={open() && props.step.state !== "running"}>
-        <Body step={props.step} wide={props.wide} onOpenQuery={props.onOpenQuery} />
-      </If>
+          <View class="min-w-0 flex-1">
+            <Text class={`${FS.xs} font-bold text-foreground`}>{h().title}</Text>
+            <If when={h().detail}>
+              <Text class={`${FS.xs} ${MONO} text-muted-foreground line-clamp-1`}>{h().detail}</Text>
+            </If>
+          </View>
+          <If
+            when={props.step.state === "running"}
+            else={
+              <Text
+                class={`${FS.xs} shrink-0`}
+                classList={{ "text-negative": props.step.state === "error", "text-muted-foreground": props.step.state !== "error" }}
+              >
+                {props.step.state === "error" ? t("chat.tool_failed") : props.step.summary}
+              </Text>
+            }
+          >
+            <View class="shrink-0 flex-row items-center gap-1.5">
+              <Icon name="loader-circle" size={12} color="ai" />
+              <Text class={`${FS.xs} text-muted-foreground`}>{t("chat.tool_running")}</Text>
+            </View>
+          </If>
+          <Icon name={open() ? "chevron-up" : "chevron-down"} size={12} color="fg-faint" />
+        </View>
+      </Collapsible>
     </View>
   );
 }

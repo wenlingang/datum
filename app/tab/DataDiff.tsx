@@ -5,13 +5,13 @@ import { Clipboard, type JSX, Text, View } from "nsh";
 import { DataTable, type DataTableColumn, Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { connLabel } from "../chat/actions";
-import { Dropdown, Segmented, Toggle } from "../dialogs/controls";
+import { Dropdown, Segmented, SwitchField } from "../dialogs/controls";
 import type { DataDiffRow } from "../lib/types";
 import { conns } from "../store/conns";
 import { maskRowsOf } from "../store/privacy";
 import { toast } from "../store/toast";
 import { ErrorText } from "../ui/error";
-import { Btn, DbIcon, EnvBadge, Hint, Icon, IconButton, TextField } from "../ui/kit";
+import { Btn, DbIcon, EnvBadge, Hint, Icon, IconButton, TextField, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import {
   canRun,
@@ -201,7 +201,7 @@ function Setup(props: { m: DataDiffModel }) {
             />
           }
         >
-          <Btn testID="ddiff-cancel" small icon="x" label={t("ddiff.cancel")} onPress={() => cancelCompare(m)} />
+          <Btn testID="ddiff-cancel" small icon="square" label={t("ddiff.cancel")} onPress={() => cancelCompare(m)} />
         </If>
       </View>
       <If when={ins() && (ins()!.onlySource.length > 0 || ins()!.onlyTarget.length > 0)}>
@@ -364,8 +364,8 @@ function Results(props: { m: DataDiffModel }) {
       </View>
       <View class="min-h-0 flex-[2] border-t border-border">
         <View class="h-10 shrink-0 flex-row items-center gap-3 border-b border-border px-3">
-          <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground line-clamp-1`}>{t("ddiff.script")}</Text>
-          <Toggle
+          <SectionLabel class="flex-1 line-clamp-1">{t("ddiff.script")}</SectionLabel>
+          <SwitchField
             testID="ddiff-include-deletes"
             checked={m.includeDeletes()}
             label={t("ddiff.include_deletes")}

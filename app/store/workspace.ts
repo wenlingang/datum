@@ -41,7 +41,7 @@ export interface WorkTab {
   readonly dbKind: DbKind;
   /** 表浏览的表名(Redis 为 key 名) */
   readonly table: string | null;
-  /** 标签标题(双击可重命名) */
+  /** 标签标题(查询页可双击重命名,见 canRename) */
   readonly title: Signal<string>;
   /** tab/ 的内部模型(由 tab/ 创建与解释) */
   state: unknown;
@@ -63,23 +63,20 @@ export interface ResultTools {
   } | null;
 }
 
-/** 侧栏 / 详情栏 / AI 面板的宽度与范围(GPUI 版 h_resizable 的 size / size_range)。 */
+/** 侧栏 / AI 面板的宽度与范围(GPUI 版 h_resizable 的 size / size_range)。 */
 export const PANEL = {
   sidebar: { size: 320, min: 260, max: 520 },
-  detail: { size: 320, min: 200, max: 640 },
   ai: { size: 400, min: 280, max: 900 },
 } as const;
 
 const tabs = signal<WorkTab[]>([]);
 const activeByConn = signal<Record<string, string>>({});
 const sidebarOpen = signal(true);
-const detailOpen = signal(false);
 const aiOpen = signal(false);
 /** AI 对话铺满主区域(对话工作台):编辑器、标签页与右侧面板收起,侧栏保留 */
 const aiFullscreen = signal(false);
 const renamingId = signal<string | null>(null);
 const sidebarWidth = signal<number>(PANEL.sidebar.size);
-const detailWidth = signal<number>(PANEL.detail.size);
 const aiWidth = signal<number>(PANEL.ai.size);
 const updateAvailable = signal(false);
 type ToolsProvider = (tab: WorkTab) => ResultTools | null;
@@ -104,13 +101,11 @@ export const workspace = {
   /** 顶栏 / AI 用的「当前连接」:当前 tab 的连接,否则侧栏聚焦的连接。 */
   headConn: () => conns.get(workspace.activeTab()?.connId) ?? conns.active(),
   sidebarOpen: () => sidebarOpen(),
-  detailOpen: () => detailOpen(),
   aiOpen: () => aiOpen(),
   aiFullscreen: () => aiFullscreen(),
   /** 正在双击重命名的 tab id。 */
   renamingId: () => renamingId(),
   sidebarWidth: () => sidebarWidth(),
-  detailWidth: () => detailWidth(),
   aiWidth: () => aiWidth(),
   /** 有新版本可装(顶栏设置按钮上的红点)。 */
   updateAvailable: () => updateAvailable(),
@@ -188,6 +183,28 @@ export function closeOtherTabs(id: string) {
   });
 }
 
+/** 同一连接里,`id` 左边(`side` 为 "left")或右边的 tab。 */
+export function tabsBeside(id: string, side: "left" | "right"): WorkTab[] {
+  const self = tabs().find((t) => t.id === id);
+  if (!self) return [];
+  const same = tabs().filter((t) => t.connId === self.connId);
+  const i = same.findIndex((t) => t.id === id);
+  return side === "left" ? same.slice(0, i) : same.slice(i + 1);
+}
+
+/** 关闭左侧 / 右侧全部:只关同一连接里那一边的 tab;当前 tab 被关掉时切到 `id`。 */
+export function closeTabsBeside(id: string, side: "left" | "right") {
+  const keep = tabs().find((t) => t.id === id);
+  if (!keep) return;
+  const drop = new Set(tabsBeside(id, side).map((t) => t.id));
+  if (!drop.size) return;
+  const active = workspace.activeTab();
+  batch(() => {
+    tabs.update((l) => l.filter((t) => !drop.has(t.id)));
+    if (!active || drop.has(active.id)) focusTab(keep);
+  });
+}
+
 /** 关闭某连接的全部 tab(连接被删除时)。 */
 export function closeConnTabs(connId: string) {
   batch(() => {
@@ -200,9 +217,13 @@ export function closeConnTabs(connId: string) {
   });
 }
 
-/** 开始双击重命名。 */
+/** 只有查询页(SQL / Redis 查询)能改名;表、ER 图、诊断等的标题就是它们看的对象,不改。 */
+export const canRename = (tab: WorkTab) => tab.kind === "query";
+
+/** 开始重命名(双击或右键「重命名」);不能改名的 tab 忽略。 */
 export function startRename(id: string) {
-  renamingId.set(id);
+  const tab = tabs().find((x) => x.id === id);
+  if (tab && canRename(tab)) renamingId.set(id);
 }
 
 /** 结束重命名:标题非空才生效。 */
@@ -220,8 +241,6 @@ export function cancelRename() {
 }
 
 export const toggleSidebar = () => sidebarOpen.update((v) => !v);
-export const toggleDetail = () => detailOpen.update((v) => !v);
-export const setDetailOpen = (open: boolean) => detailOpen.set(open);
 /** 开关 AI 面板;全屏时关面板即退出全屏。 */
 export const toggleAi = () => {
   if (aiFullscreen()) {
@@ -242,8 +261,8 @@ export const toggleAiFullscreen = () =>
 export const setAiFullscreen = (on: boolean) => aiFullscreen.set(on);
 
 /** 拖动分隔条后记住宽度(面板收起再展开时保持)。 */
-export function setPanelWidth(panel: "sidebar" | "detail" | "ai", width: number) {
-  ({ sidebar: sidebarWidth, detail: detailWidth, ai: aiWidth })[panel].set(width);
+export function setPanelWidth(panel: "sidebar" | "ai", width: number) {
+  ({ sidebar: sidebarWidth, ai: aiWidth })[panel].set(width);
 }
 
 /** 设置页检查更新后调用:顶栏设置按钮显示红点。 */

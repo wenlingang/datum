@@ -182,9 +182,9 @@ journal:
     zh-CN: "在编辑器中打开"
     zh-TW: "在編輯器中開啟"
   undo:
-    en: "Undo (%{rows} rows)…"
-    zh-CN: "撤销(%{rows} 行)…"
-    zh-TW: "復原(%{rows} 列)…"
+    en: "Undo (%{rows} rows)"
+    zh-CN: "撤销(%{rows} 行)"
+    zh-TW: "復原(%{rows} 列)"
   undo_title:
     en: "Undo a Recorded Change"
     zh-CN: "撤销记录里的改动"

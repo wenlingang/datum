@@ -7,9 +7,9 @@ import { errorText, mask } from "../lib/native";
 import type { DetectedColumn, MaskKind, MaskOverride } from "../lib/types";
 import { conns } from "../store/conns";
 import { maskSettings, privacy, setMaskAutoDetect, setMaskEnabled, setMaskOverride } from "../store/privacy";
-import { Btn, EnvBadge, Hint } from "../ui/kit";
+import { Btn, EnvBadge, Hint, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
-import { DialogFrame, Segmented, Toggle } from "./controls";
+import { DialogFrame, Segmented, SwitchField } from "./controls";
 
 type Choice = "auto" | MaskOverride;
 
@@ -76,7 +76,7 @@ export function PrivacyDialog(props: { open: boolean; connId: string; onClose: (
       <View class="gap-3">
         <View class="flex-row items-center gap-3">
           <View class="flex-1">
-            <Toggle
+            <SwitchField
               testID="privacy-enabled"
               checked={s().enabled}
               onChange={(v) => setMaskEnabled(props.connId, v)}
@@ -89,13 +89,13 @@ export function PrivacyDialog(props: { open: boolean; connId: string; onClose: (
           </If>
         </View>
         <Hint>{s().demo ? t("mask.forced_by_demo") : t("mask.enabled_hint")}</Hint>
-        <Toggle
+        <SwitchField
           testID="privacy-auto"
           checked={s().autoDetect}
           onChange={(v) => setMaskAutoDetect(props.connId, v)}
           label={t("mask.auto_detect")}
         />
-        <Text class={`${FS.xs} pt-2 font-bold text-muted-foreground`}>{t("mask.columns_title")}</Text>
+        <SectionLabel class="pt-2">{t("mask.columns_title")}</SectionLabel>
         <If
           when={cols().length > 0}
           else={

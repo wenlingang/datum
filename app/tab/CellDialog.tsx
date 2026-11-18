@@ -5,18 +5,20 @@
 // 键顺序与数字写法不变(JS 的 JSON.parse + stringify 会改写大数和 1.10)。
 
 import { cleanup, Clipboard, computed, Scroll, signal, Text, View } from "nsh";
-import { Dialog, Editor } from "nsh/base";
+import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { grid } from "../lib/native";
 import type { JsonError, JsonKind, JsonPath } from "../lib/types";
-import { Btn, Icon, IconButton } from "../ui/kit";
 import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
 import { JsonTree } from "./JsonTree";
+import { ViewSwitch } from "./ui";
 import { canFilterJson, filterByJson, isJsonDoc, stageEdit, type CellDialogState, type TabModel } from "./model";
 import { revealOpenCell } from "./mask";
 import { privacy } from "../store/privacy";
 import { isJsonType } from "./values";
+import { DialogFrame } from "../dialogs/controls";
+import { Btn, Icon } from "../ui/kit";
 
 /** 值能解析为 JSON 对象 / 数组时返回 2 空格缩进的格式化文本(键顺序、数字写法不变)。 */
 export function tryFormatJson(v: string): string | null {
@@ -105,24 +107,14 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
         </If>
         <View class="flex-1" />
         <If when={json}>
-          <View class="flex-row items-center gap-1">
-            <Btn
-              small
-              testID="cell-view-tree"
-              icon="list-tree"
-              variant={view() === "tree" ? "secondary" : "ghost"}
-              label={t("json.view_tree")}
-              onPress={() => view.set("tree")}
-            />
-            <Btn
-              small
-              testID="cell-view-text"
-              icon="braces"
-              variant={view() === "text" ? "secondary" : "ghost"}
-              label={t("json.view_text")}
-              onPress={() => view.set("text")}
-            />
-          </View>
+          <ViewSwitch
+            value={view()}
+            onChange={(v) => view.set(v)}
+            options={[
+              { value: "tree", label: t("json.view_tree"), icon: "list-tree", testID: "cell-view-tree" },
+              { value: "text", label: t("json.view_text"), icon: "braces", testID: "cell-view-text" },
+            ]}
+          />
         </If>
       </View>
       <If when={masked}>
@@ -194,7 +186,7 @@ function CellEditor(props: { m: TabModel; cell: CellDialogState }) {
             >
               {(e) => (
                 <View class="min-w-0 flex-1 flex-row items-center gap-1">
-                  <Icon name="circle-alert" size={12} color={jsonCol ? "destructive" : "warning"} />
+                  <Icon name={jsonCol ? "circle-alert" : "triangle-alert"} size={12} color={jsonCol ? "destructive" : "warning"} />
                   <Text
                     testID="cell-json-error"
                     class={`${FS.xs} min-w-0 flex-1 line-clamp-1`}
@@ -255,29 +247,17 @@ export function CellDialog(props: { m: TabModel }) {
   const m = props.m;
   const close = () => m.cell.set(null);
   return (
-    <Dialog
+    <DialogFrame
       open={m.cell() !== null}
-      onOpenChange={(e) => !e.open && close()}
-      closeOnEscape
-      closeOnBackdropPress
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[880px] max-w-[92%] rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={close}
+      testID="cell-dialog"
+      title={m.cell()?.editable && !m.cell()?.masked ? t("cell.edit_title") : t("cell.view_title")}
+      width={880}
     >
       {/* 按格子与遮罩状态重建:「显示原值」后编辑器(不受控)要换成原值 */}
       <Each of={m.cell() ? [m.cell()!] : []} key={(c) => `${c.viewIx}:${c.colIx}:${c.masked ? "m" : "v"}`}>
-        {(c) => (
-          <View class="gap-3">
-            <View class="flex-row items-center justify-between">
-              <Text class={`${FS.base} font-bold text-popover-foreground`}>
-                {c().editable && !c().masked ? t("cell.edit_title") : t("cell.view_title")}
-              </Text>
-              <IconButton icon="x" size={14} onPress={close} />
-            </View>
-            <CellEditor m={m} cell={c()} />
-          </View>
-        )}
+        {(c) => <CellEditor m={m} cell={c()} />}
       </Each>
-    </Dialog>
+    </DialogFrame>
   );
 }

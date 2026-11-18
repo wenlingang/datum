@@ -14,7 +14,7 @@ export function EmptyWorkspace() {
       <Text class={`${FS.sm} ${MONO} mt-6 font-bold text-fg-soft`}>{t("workspace.ready")}</Text>
       <Text class={`${FS.sm} mt-1.5 text-center text-fg-faint`}>{t("workspace.empty_hint")}</Text>
       <View class="mt-4">
-        <Btn variant="primary" small icon="code-xml" label={t("workspace.new_sql_query")} onPress={newQuery} testID="empty-new-query" />
+        <Btn variant="primary" small icon="terminal" label={t("workspace.new_sql_query")} onPress={newQuery} testID="empty-new-query" />
       </View>
     </View>
   );

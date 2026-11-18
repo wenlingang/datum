@@ -9,7 +9,7 @@ import { supportsSql } from "../lib/types";
 import { conns, loadTables } from "../store/conns";
 import { privacy, toggleDemoMode } from "../store/privacy";
 import { toast } from "../store/toast";
-import { closeTab, toggleAi, toggleAiFullscreen, toggleDetail, toggleSidebar, workspace } from "../store/workspace";
+import { closeTab, toggleAi, toggleAiFullscreen, toggleSidebar, workspace } from "../store/workspace";
 import { newQueryTab, openErd, runTabCommand } from "../tab";
 
 let mainWindow: WindowRef | null = null;
@@ -52,7 +52,7 @@ export function openErdForActive() {
   openErd(conn.id);
 }
 
-export { toggleAi, toggleAiFullscreen, toggleDetail, toggleSidebar };
+export { toggleAi, toggleAiFullscreen, toggleSidebar };
 
 /** 应用菜单(切换语言后随 t() 自动重建)。菜单项的 shortcut 即全局快捷键。 */
 function applicationMenu(): MenuItem[] {
@@ -90,7 +90,6 @@ function applicationMenu(): MenuItem[] {
       label: t("menu.view"),
       submenu: [
         { label: t("menu.toggle_sidebar"), shortcut: "mod+b", onSelect: toggleSidebar },
-        { label: t("menu.toggle_detail"), onSelect: toggleDetail },
         { label: t("menu.toggle_ai"), onSelect: toggleAi },
         { label: t("menu.ai_workbench"), shortcut: "mod+j", onSelect: toggleAiFullscreen },
         { label: t("menu.erd"), onSelect: openErdForActive },

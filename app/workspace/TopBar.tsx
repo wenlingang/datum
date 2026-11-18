@@ -2,7 +2,7 @@
 // 对应 GPUI 版 workspace/chrome.rs 的 render_top_bar。
 
 import { Text, View } from "nsh";
-import { Button } from "nsh/base";
+import { Button, Toggle } from "nsh/base";
 import { titleBar } from "nsh/desktop";
 import { t } from "nsh/i18n";
 import { openSettings } from "../dialogs";
@@ -55,9 +55,8 @@ function PathPill() {
                     {name()}
                   </Text>
                   <IconButton
+                    small
                     icon="copy"
-                    size={12}
-                    class="p-1"
                     tooltip={t("workspace.copy_table_name")}
                     onPress={() => void copyText(name())}
                   />
@@ -111,16 +110,18 @@ export function TopBar() {
               <Text class={`${FS.xs} font-bold text-warning-foreground`}>{t("mask.demo_badge")}</Text>
             </Button>
           </If>
-          <Button
-            onPress={toggleAi}
-            selected={workspace.aiOpen()}
+          {/* 开关语义用 Toggle:按下样式 aria-pressed: 优先级高于 hover:,悬停不盖掉打开时的底色 */}
+          <Toggle
+            pressed={workspace.aiOpen()}
+            onChange={() => toggleAi()}
             testID="toggle-ai"
+            accessibilityLabel={t("workspace.ai_assistant")}
             tooltip={tip(() => (workspace.aiOpen() ? t("workspace.hide_ai") : t("workspace.ai_assistant")))}
-            class="h-7 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover active:bg-secondary-active selected:bg-secondary"
+            class="h-7 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover active:bg-secondary-active aria-pressed:bg-secondary"
           >
             <Icon name="sparkles" size={15} color={workspace.aiOpen() ? "ai" : "foreground"} />
             <Text class={`${FS.sm} font-medium text-foreground`}>{t("workspace.ai_assistant")}</Text>
-          </Button>
+          </Toggle>
           <View class="relative">
             <IconButton
               icon="settings"

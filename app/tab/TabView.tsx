@@ -5,16 +5,17 @@ import { effect, Text, untracked, View } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { WorkTab } from "../store/workspace";
-import { Icon } from "../ui/kit";
+import type { IconName } from "../ui/icons";
+import { Icon, Loading } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ErdView } from "../erd/ErdView";
 import { erdModelOf } from "../erd/model";
 import { CellDialog } from "./CellDialog";
+import { RowDetailDialog } from "./DetailDialogs";
 import { FilterBar } from "./FilterBar";
 import { conns, refreshTables } from "../store/conns";
 import { closeTab } from "../store/workspace";
 import { ErrorText } from "../ui/error";
-import { Hint } from "../ui/kit";
 import { openTable } from "./index";
 import { modelOf, refresh, refreshRedisKey, type TabModel } from "./model";
 import { RedisKeyEditor } from "./RedisKeyEditor";
@@ -37,7 +38,7 @@ import { SqlEditor } from "./SqlEditor";
 import { Toolbar } from "./Toolbar";
 
 /** 尚未移植的形态:居中图标 + 一行说明。 */
-export function Placeholder(props: { icon: "network"; text: string }) {
+export function Placeholder(props: { icon: IconName; text: string }) {
   return (
     <View class="flex-1 items-center justify-center gap-3 bg-editor p-6">
       <Icon name={props.icon} size={40} color="fg-faint" />
@@ -72,9 +73,9 @@ function RedisKeyBody(props: { m: TabModel; tabId: string }) {
   return (
     <View class="min-h-0 flex-1 px-4 py-3">
       <If when={m.err() !== null && m.redisValue() === null}>
-        <ErrorText testID="query-error" mono tone="text-destructive" text={m.err() ?? ""} />
+        <ErrorText testID="query-error" mono text={m.err() ?? ""} />
       </If>
-      <If when={m.redisValue() !== null} else={<If when={m.err() === null}><Hint>{t("tab.running")}</Hint></If>}>
+      <If when={m.redisValue() !== null} else={<If when={m.err() === null}><Loading label={t("tab.running")} /></If>}>
         <RedisKeyEditor
           connId={m.connId}
           node={null}
@@ -119,6 +120,7 @@ function ModelView(props: { m: TabModel; tabId: string }) {
       <UndoDialog m={m} />
       <ParamsDialog m={m} />
       <CellDialog m={m} />
+      <RowDetailDialog m={m} />
     </View>
   );
 }
@@ -131,14 +133,14 @@ export function TabBody(props: { tab: WorkTab }) {
   if (props.tab.kind === "rlive") return <RedisLive connId={props.tab.connId} />;
   if (props.tab.kind === "rlua") {
     const lm = luaModelOf(props.tab);
-    return lm ? <RedisLua m={lm} /> : <Placeholder icon="network" text={t("erd.wip")} />;
+    return lm ? <RedisLua m={lm} /> : <Placeholder icon="code-xml" text={t("erd.wip")} />;
   }
   if (props.tab.kind === "diag") return <Diagnostics connId={props.tab.connId} />;
   if (props.tab.kind === "diff") return <SchemaDiff connId={props.tab.connId} />;
   if (props.tab.kind === "ddiff" && isDataDiffModel(props.tab.state)) return <DataDiff m={props.tab.state} />;
   if (props.tab.kind === "index") {
     const am = advisorModelOf(props.tab);
-    return am ? <IndexAdvisor m={am} /> : <Placeholder icon="network" text={t("erd.wip")} />;
+    return am ? <IndexAdvisor m={am} /> : <Placeholder icon="scan-search" text={t("erd.wip")} />;
   }
   if (props.tab.kind === "journal") return <JournalView connId={props.tab.connId} />;
   if (!m) return <Placeholder icon="network" text={t("erd.wip")} />;

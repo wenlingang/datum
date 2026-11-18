@@ -1,20 +1,24 @@
 // 查询工作区的工具条(编辑器下缘):运行(含行数上限)/ 格式化 / Explain,右侧查询历史。
 // 对应 GPUI 版 tab/toolbar.rs。
 
-import { signal, Text, View } from "nsh";
-import { Button, Popover } from "nsh/base";
+import { keymap, signal, Text, View, type JSX } from "nsh";
+import { Button, Menu, MenuItem, MenuSeparator, Popover, Toolbar as ToolbarBar } from "nsh/base";
 import { t } from "nsh/i18n";
 import { supportsCancel, supportsSql } from "../lib/types";
 import { MAX_ROWS_OPTIONS, maxRows, normalizeMaxRows, updatePrefs } from "../store/prefs";
-import { Btn, Icon, TextField, tip } from "../ui/kit";
+import { Btn, Icon, SectionLabel, TextField, tip } from "../ui/kit";
 import { FS } from "../ui/text";
 import { HistoryPanel } from "./History";
 import { SnippetPanel } from "./Snippets";
 import { beautify, explain, run, runAll, stop, suggestIndexes, type TabModel } from "./model";
 
+// 与 ui/menu 的 MItem 同一套:行高 h-7、FS.sm、hover / focus 用 accent。这里的项要带快捷键提示、单选勾、
+// 自定义行数输入框,MItem 装不下,所以仍用 nsh 的 MenuItem,只对齐样式
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
+const ITEM = "group h-7 flex-row items-center gap-2 rounded-(--radius) px-2 hover:bg-accent focus:bg-accent active:bg-secondary-active";
 
-function LimitMenu(props: { m: TabModel }) {
+/** 运行按钮旁的下拉菜单:运行全部、索引建议、行数上限(含自定义行数)。 */
+function LimitMenu(props: { m: TabModel; trigger: JSX.Element }) {
   const m = props.m;
   const custom = signal("");
   const choose = (n: number) => {
@@ -22,50 +26,52 @@ function LimitMenu(props: { m: TabModel }) {
     m.limitOpen.set(false);
   };
   return (
-    <View class="w-[180px] gap-0.5 p-1.5">
-      <Button
-        testID="run-all"
-        onPress={() => {
-          m.limitOpen.set(false);
-          runAll(m);
-        }}
-        class="h-[26px] flex-row items-center gap-2 rounded-(--radius) px-2.5 hover:bg-list-hover"
-      >
-        <Text class={`${FS.xs} flex-1 text-foreground`}>{t("toolbar.run_all")}</Text>
-        <Text class={`${FS.xs} text-fg-faint`}>⌘⇧↵</Text>
-      </Button>
-      <Button
+    <Menu
+      open={m.limitOpen()}
+      onOpenChange={(e) => {
+        if (e.open) custom.set("");
+        m.limitOpen.set(e.open);
+      }}
+      placement="top"
+      align="start"
+      offset={4}
+      popupClass={`w-[220px] gap-0.5 p-1 ${POPUP}`}
+      trigger={props.trigger}
+    >
+      <MenuItem testID="run-all" accessibilityLabel={t("toolbar.run_all")} onSelect={() => runAll(m)} class={ITEM}>
+        <Text class={`${FS.sm} flex-1 text-popover-foreground`}>{t("toolbar.run_all")}</Text>
+        <Text class={`${FS.xs} text-fg-faint`}>{keymap.label("mod+shift+enter")}</Text>
+      </MenuItem>
+      <MenuItem
         testID="suggest-indexes"
+        accessibilityLabel={t("advisor.suggest")}
         tooltip={tip(t("advisor.suggest_tooltip"))}
-        onPress={() => {
-          m.limitOpen.set(false);
-          suggestIndexes(m);
-        }}
-        class="h-[26px] flex-row items-center gap-2 rounded-(--radius) px-2.5 hover:bg-list-hover"
+        onSelect={() => suggestIndexes(m)}
+        class={ITEM}
       >
-        <Text class={`${FS.xs} flex-1 text-foreground`}>{t("advisor.suggest")}</Text>
-      </Button>
-      <View class="my-1 border-t border-border" />
-      <Text class={`${FS.xs} px-2 pb-1 font-bold text-fg-faint`}>{t("toolbar.limit_title")}</Text>
+        <Text class={`${FS.sm} flex-1 text-popover-foreground`}>{t("advisor.suggest")}</Text>
+      </MenuItem>
+      <MenuSeparator class="my-1 h-px bg-border" />
+      <SectionLabel class="px-2 pb-1">{t("toolbar.limit_title")}</SectionLabel>
       <Each of={MAX_ROWS_OPTIONS}>
         {(n) => (
-          <Button
+          <MenuItem
             testID={`limit:${n()}`}
-            onPress={() => choose(n())}
-            selected={n() === maxRows()}
-            class="h-[26px] flex-row items-center rounded-(--radius) px-2.5 hover:bg-list-hover selected:bg-raised"
+            role="menuitemradio"
+            checked={n() === maxRows()}
+            accessibilityLabel={t("toolbar.n_rows", { n: n() })}
+            onSelect={() => choose(n())}
+            class={ITEM}
+            indicatorClass="size-3.5 items-center justify-center"
+            indicator={<Icon name="check" size={13} color="foreground" class="opacity-0 group-checked:opacity-100" />}
           >
-            <Text
-              class={`${FS.xs} flex-1`}
-              classList={{ "font-bold text-foreground": n() === maxRows(), "text-muted-foreground": n() !== maxRows() }}
-            >
-              {t("toolbar.n_rows", { n: n() })}
-            </Text>
-          </Button>
+            <Text class={`${FS.sm} flex-1 text-popover-foreground`}>{t("toolbar.n_rows", { n: n() })}</Text>
+          </MenuItem>
         )}
       </Each>
       <View class="mt-1 flex-row items-center gap-1.5 border-t border-border pt-1.5">
         <TextField
+          testID="limit-custom"
           class="h-6 flex-1"
           placeholder={t("toolbar.limit_custom")}
           value={custom()}
@@ -77,7 +83,7 @@ function LimitMenu(props: { m: TabModel }) {
         />
         <Text class={`${FS.xs} text-muted-foreground`}>{t("toolbar.rows_unit")}</Text>
       </View>
-    </View>
+    </Menu>
   );
 }
 
@@ -85,37 +91,39 @@ export function Toolbar(props: { m: TabModel }) {
   const m = props.m;
   const relational = () => supportsSql(m.dbKind);
   return (
-    <View class="h-[38px] shrink-0 flex-row items-center gap-1.5 border-t border-border bg-panel px-2.5">
-      <View class="flex-row items-center gap-px">
-        <Btn
-          small
-          variant="primary"
+    <ToolbarBar
+      axis="horizontal"
+      accessibilityLabel={t("toolbar.label")}
+      class="h-[38px] shrink-0 flex-row items-center gap-1.5 border-t border-border bg-panel px-2.5"
+    >
+      {/* 运行 + 行数下拉合成一个分段按钮:共用主色底和外圆角,中间一条细分隔线(以前是两个各带圆角的按钮,中间有缝) */}
+      <View class="h-6 shrink-0 flex-row items-stretch overflow-hidden rounded-(--radius) bg-primary">
+        <Button
           testID="run"
-          icon={m.running() ? "loader-circle" : "play"}
-          label={relational() ? t("toolbar.run_with_limit", { n: maxRows() }) : t("toolbar.run")}
-          tooltip={t("toolbar.run_tooltip")}
+          tooltip={tip(t("toolbar.run_tooltip"))}
           onPress={() => run(m)}
-        />
+          class="flex-row items-center gap-1.5 px-2 hover:bg-primary-hover active:bg-primary-active"
+        >
+          <Icon name={m.running() ? "loader-circle" : "play"} size={13} color="primary-foreground" />
+          <Text class={`${FS.xs} font-medium text-primary-foreground`}>
+            {relational() ? t("toolbar.run_with_limit", { n: maxRows() }) : t("toolbar.run")}
+          </Text>
+        </Button>
         <If when={relational()}>
-          <Popover
-            open={m.limitOpen()}
-            onOpenChange={(e) => m.limitOpen.set(e.open)}
-            placement="top"
-            align="start"
-            offset={4}
-            popupClass={POPUP}
+          <View class="my-1 w-px bg-primary-foreground/25" />
+          <LimitMenu
+            m={m}
             trigger={
               <Button
                 testID="run-limit"
                 tooltip={tip(t("toolbar.limit_tooltip"))}
-                class="h-6 flex-row items-center rounded-(--radius) bg-primary px-1.5 hover:bg-primary-hover active:bg-primary-active"
+                accessibilityLabel={t("toolbar.limit_tooltip")}
+                class="flex-row items-center px-1.5 hover:bg-primary-hover active:bg-primary-active"
               >
                 <Icon name="chevron-down" size={13} color="primary-foreground" />
               </Button>
             }
-          >
-            <LimitMenu m={m} />
-          </Popover>
+          />
         </If>
       </View>
       <If when={m.running() && supportsCancel(m.dbKind)}>
@@ -133,9 +141,9 @@ export function Toolbar(props: { m: TabModel }) {
         <Btn
           small
           variant="ghost"
-          icon="wand-sparkles"
+          icon="text-align-start"
           label={t("toolbar.format")}
-          kbd="⌘⇧F"
+          kbd={keymap.label("mod+shift+f")}
           tooltip={t("toolbar.format_tooltip")}
           onPress={() => beautify(m)}
         />
@@ -145,7 +153,7 @@ export function Toolbar(props: { m: TabModel }) {
           testID="explain"
           icon="list-tree"
           label="Explain"
-          kbd="⌘E"
+          kbd={keymap.label("mod+e")}
           tooltip={t("toolbar.explain_tooltip")}
           onPress={() => explain(m)}
         />
@@ -191,6 +199,6 @@ export function Toolbar(props: { m: TabModel }) {
       >
         <HistoryPanel m={m} />
       </Popover>
-    </View>
+    </ToolbarBar>
   );
 }

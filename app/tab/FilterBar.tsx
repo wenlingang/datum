@@ -21,7 +21,7 @@ import {
   updateDraft,
   type TabModel,
 } from "./model";
-import { SelectMenu } from "./ui";
+import { Dropdown } from "../dialogs/controls";
 import { ErrorText } from "../ui/error";
 
 const OP_KEY: Record<FilterOp, string> = {
@@ -120,13 +120,15 @@ export function FilterBar(props: { m: TabModel }) {
                 </Text>
               </Button>
             </If>
-            <SelectMenu
+            <Dropdown
               testID={`filter-col:${d().id}`}
-              width={184}
+              small
+              style={{ width: 184 }}
+              value={d().col === "" ? null : d().col}
               label={d().col === "" ? t("filter.pick_column") : d().col}
-              options={columns().map((c) => ({ value: c, label: c }))}
+              items={columns().map((c) => ({ value: c, title: c }))}
               // 换了列:原来的 JSON 字段路径不再适用
-              onSelect={(col) => updateDraft(m, d().id, { col, path: undefined, jsonType: undefined })}
+              onChange={(col) => updateDraft(m, d().id, { col, path: undefined, jsonType: undefined })}
             />
             {/* JSON 树上点字段生成的条件:列之后标出字段路径(PG 的取值写法 `->'a'->>'b'`,列名已在左边,不重复) */}
             <If when={d().path?.length ? d().path : null}>
@@ -140,12 +142,14 @@ export function FilterBar(props: { m: TabModel }) {
                 </Text>
               )}
             </If>
-            <SelectMenu
+            <Dropdown
               testID={`filter-op:${d().id}`}
-              width={120}
+              small
+              style={{ width: 120 }}
+              value={d().op}
               label={t(OP_KEY[d().op])}
-              options={FILTER_OPS.map((op) => ({ value: op, label: t(OP_KEY[op]) }))}
-              onSelect={(op) => updateDraft(m, d().id, { op })}
+              items={FILTER_OPS.map((op) => ({ value: op, title: t(OP_KEY[op]) }))}
+              onChange={(op) => updateDraft(m, d().id, { op: op as FilterOp })}
             />
             <If
               when={needsValue(d().op)}

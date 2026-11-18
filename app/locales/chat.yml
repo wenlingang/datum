@@ -79,9 +79,9 @@ chat:
     zh-CN: 切换模型
     zh-TW: 切換模型
   manage_providers:
-    en: Manage Providers & Models…
-    zh-CN: 管理服务商与模型…
-    zh-TW: 管理服務商與模型…
+    en: Manage Providers & Models
+    zh-CN: 管理服务商与模型
+    zh-TW: 管理服務商與模型
   new_chat:
     en: New Chat
     zh-CN: 新对话

@@ -75,7 +75,11 @@ impl Rng {
     }
 }
 
-/// 随机种子(界面默认值):当前时间与地址混一下,不需要密码学强度。
+/// 种子的上限(不含):界面要显示、复制种子,且种子要经 nsh 从 JS 传回原生层。nsh 只把绝对值
+/// 小于 9×10^15 的整数当整数传(更大的变成浮点,反序列化成 u64 会失败),比 JS 安全整数 2^53 还小一点。
+pub const SEED_LIMIT: u64 = 9_000_000_000_000_000;
+
+/// 随机种子(界面默认值):当前时间与地址混一下,不需要密码学强度。小于 [`SEED_LIMIT`]。
 pub fn random_seed() -> u64 {
     let t = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -83,13 +87,19 @@ pub fn random_seed() -> u64 {
         .unwrap_or(0);
     let local = 0u8;
     let mut r = Rng(t ^ (&local as *const u8 as u64).rotate_left(32));
-    // 界面里显示、复制种子:控制在 JS 安全整数范围内(2^53)
-    r.next_u64() >> 11
+    r.next_u64() % SEED_LIMIT
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn random_seed_stays_below_limit() {
+        for _ in 0..10_000 {
+            assert!(random_seed() < SEED_LIMIT);
+        }
+    }
 
     #[test]
     fn same_seed_same_sequence() {

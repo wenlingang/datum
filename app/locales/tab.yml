@@ -130,6 +130,10 @@ filter:
       zh-CN: 非空
       zh-TW: 非空
 toolbar:
+  label:
+    en: Query toolbar
+    zh-CN: 查询工具条
+    zh-TW: 查詢工具列
   run_all:
     en: Run All Statements
     zh-CN: 运行全部语句

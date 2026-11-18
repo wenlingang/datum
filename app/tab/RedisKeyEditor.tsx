@@ -9,9 +9,9 @@
 // 真正执行时 core 逐个参数传给 Redis(二进制安全),不拼接命令文本。
 
 import { cleanup, effect, List, Scroll, signal, type Signal, Text, untracked, View, type JSX } from "nsh";
-import { Dialog, Editor } from "nsh/base";
+import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
-import { DialogFrame, Field, Segmented } from "../dialogs/controls";
+import { DialogFrame, Field, Segmented, ConfirmFrame } from "../dialogs/controls";
 import { db, errorText } from "../lib/native";
 import type { KeyDetail, RedisEdit, RedisKeyValue, RedisStreamGroup, RedisStreamPage } from "../lib/types";
 import { conns } from "../store/conns";
@@ -20,7 +20,7 @@ import { viewFormat } from "../store/redisFormats";
 import { toast } from "../store/toast";
 import { editorText } from "../ui/editor";
 import { ErrorText } from "../ui/error";
-import { Btn, Hint, Icon, IconButton, TextField } from "../ui/kit";
+import { Btn, Hint, Icon, IconButton, TextField, SearchField, Loading } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import {
   createDecoded,
@@ -110,19 +110,21 @@ function createGate(connId: string, node: () => string | null) {
       return `${c.name} · db${c.database || "0"}${node() ? ` · ${node()}` : ""}`;
     };
     return (
-      <Dialog
+      <ConfirmFrame
         testID="rkey-confirm"
         open={p() !== null}
-        onOpenChange={(e) => !e.open && answer(false)}
-        closeOnEscape
-        animation="fade"
-        backdropClass="bg-overlay"
-        class="m-auto w-[540px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+        onClose={() => answer(false)}
+        title={p()?.title ?? ""}
+        icon="triangle-alert"
+        iconColor={p()?.danger ? "destructive" : "warning"}
+        width={540}
+        cancelLabel={t("rkey.cancel")}
+        cancelTestID="rkey-confirm-cancel"
+        confirmLabel={t("rkey.confirm")}
+        confirmTestID="rkey-confirm-ok"
+        confirmVariant={p()?.danger ? "danger" : "primary"}
+        onConfirm={() => answer(true)}
       >
-        <View class="flex-row items-center gap-2">
-          <Icon name="triangle-alert" size={16} color={p()?.danger ? "destructive" : "warning"} />
-          <Text class={`${FS.base} min-w-0 flex-1 font-bold text-popover-foreground line-clamp-2`}>{p()?.title ?? ""}</Text>
-        </View>
         <Text class={`${FS.xs} text-muted-foreground`}>{t("rkey.confirm_target", { target: target() })}</Text>
         <Scroll class="max-h-[160px] rounded-(--radius) border border-border bg-background">
           <Text testID="rkey-confirm-command" class={`${FS.xs} ${MONO} select-text px-2.5 py-2 text-foreground`}>
@@ -132,16 +134,7 @@ function createGate(connId: string, node: () => string | null) {
         <If when={prod()}>
           <Text class={`${FS.xs} font-bold text-negative`}>{t("rkey.confirm_prod")}</Text>
         </If>
-        <View class="flex-row justify-end gap-2 pt-1">
-          <Btn variant="outline" label={t("rkey.cancel")} onPress={() => answer(false)} testID="rkey-confirm-cancel" />
-          <Btn
-            variant={p()?.danger ? "danger" : "primary"}
-            label={t("rkey.confirm")}
-            onPress={() => answer(true)}
-            testID="rkey-confirm-ok"
-          />
-        </View>
-      </Dialog>
+      </ConfirmFrame>
     );
   }
 
@@ -279,7 +272,7 @@ function ElementList(props: {
         <Each of={props.columns}>
           {(c, i) => (
             <Text
-              class={`${FS.xs} font-bold text-muted-foreground`}
+              class={`${FS.xs} font-bold text-fg-faint`}
               classList={{ "min-w-0 flex-1": !(multi() && i() === 0) }}
               style={multi() && i() === 0 ? { width: props.firstWidth ?? 220 } : undefined}
             >
@@ -316,9 +309,8 @@ function ElementList(props: {
             <If when={props.onView}>
               {(view) => (
                 <IconButton
+                  small
                   icon="eye"
-                  size={13}
-                  class="p-1"
                   label={`${t("rkey.view")} ${r().cells[0]}`}
                   tooltip={t("rkey.view")}
                   onPress={() => view()(r())}
@@ -330,9 +322,8 @@ function ElementList(props: {
                 <If when={props.onEdit}>
                   {(edit) => (
                     <IconButton
+                      small
                       icon="pencil"
-                      size={13}
-                      class="p-1"
                       label={`${t("rkey.edit")} ${r().cells[0]}`}
                       tooltip={t("rkey.edit")}
                       onPress={() => edit()(r())}
@@ -342,9 +333,8 @@ function ElementList(props: {
                 <If when={props.onDelete}>
                   {(del) => (
                     <IconButton
+                      small
                       icon="trash"
-                      size={13}
-                      class="p-1"
                       label={`${t("rkey.delete")} ${r().cells[0]}`}
                       tooltip={t("rkey.delete")}
                       onPress={() => del()(r())}
@@ -492,18 +482,13 @@ function StringEditor(props: { value: Signal<string>; readOnly: boolean }) {
 function ElementsBar(props: { filter: Signal<string>; shown: number; total: number; children?: JSX.Element }) {
   return (
     <View class="flex-row items-center gap-2">
-      <View class="relative w-[240px] justify-center">
-        <TextField
-          testID="rkey-filter"
-          class="h-7 pl-7"
-          value={props.filter()}
-          placeholder={t("rkey.filter")}
-          onChange={({ value }) => props.filter.set(value)}
-        />
-        <View class="pointer-events-none absolute left-2.5">
-          <Icon name="search" size={13} color="fg-faint" />
-        </View>
-      </View>
+      <SearchField
+        testID="rkey-filter"
+        class="w-[240px]"
+        value={props.filter()}
+        placeholder={t("rkey.filter")}
+        onChange={(v) => props.filter.set(v)}
+      />
       <Text class={`${FS.xs} flex-1 text-muted-foreground`}>{t("rkey.shown", { shown: props.shown, total: props.total })}</Text>
       {props.children}
     </View>
@@ -920,7 +905,7 @@ function StreamBody(props: { ctx: Ctx; version: number }) {
       <View class="max-h-[40%] gap-1.5">
         <Text class={`${FS.xs} font-bold text-fg-faint`}>{t("rkey.groups")}</Text>
         <Scroll class="min-h-0 shrink">
-          <If when={groups()} else={<Hint class={FS.xs}>{t("rinsight.loading")}</Hint>}>
+          <If when={groups()} else={<Loading label={t("rinsight.loading")} />}>
             {(g) => <Groups groups={g()} />}
           </If>
         </Scroll>
@@ -1069,10 +1054,10 @@ export function RedisKeyEditor(props: {
         </If>
         <View class="flex-1" />
         <If when={!missing()}>
-          <Btn testID="rkey-ttl-btn" small variant="outline" icon="rotate-ccw-clock" label={t("rkey.ttl")} onPress={editTtl} />
+          <Btn testID="rkey-ttl-btn" small variant="outline" icon="clock" label={t("rkey.ttl")} onPress={editTtl} />
           <Btn testID="rkey-rename-btn" small variant="outline" icon="type" label={t("rkey.rename")} onPress={rename} />
         </If>
-        <IconButton icon="refresh-cw" size={14} tooltip={t("rkey.refresh")} label={t("rkey.refresh")} onPress={() => void ctx().reload()} />
+        <Btn small variant="outline" icon="refresh-cw" label={t("rkey.refresh")} onPress={() => void ctx().reload()} />
       </View>
       <If when={props.value?.truncated}>
         <Text class={`${FS.xs} text-warning`}>

@@ -8,10 +8,9 @@ import { toast } from "../store/toast";
 import { addTab, focusTab, newTabId, setResultToolsProvider, workspace, type WorkTab } from "../store/workspace";
 import { createErdModel } from "../erd/model";
 import { createDataDiffModel, dataDiffTitle, isDataDiffModel } from "./dataDiffModel";
-import { DetailPanelView } from "./DetailPanel";
+export { TableDetailDialog, type TableDetailView } from "./DetailDialogs";
 import {
   beautify,
-  clearSelection,
   commit,
   createModel,
   explain,
@@ -43,11 +42,6 @@ export function TabView(props: { tab: WorkTab }) {
       {(tab) => <TabBody tab={tab()} />}
     </Each>
   );
-}
-
-/** 右侧详情栏:行详情 / 表结构 / Redis key 详情(跟随当前 tab)。 */
-export function DetailPanel() {
-  return <DetailPanelView />;
 }
 
 /** 状态栏里属于当前 tab 的部分:行列数、耗时、分页控件等。 */
@@ -315,13 +309,6 @@ export function insertAndRun(sql: string, connId: string, confirmed: boolean) {
 export function activeSelectionText(): string {
   const m = modelOf(workspace.activeTab());
   return m ? selectionText(m) : "";
-}
-
-/** 外壳打开详情栏 / 「查看表详情」时调用:清掉当前 tab 遗留的行选中,让右栏展示表详情
- *  (GPUI 版 toggle_detail 里的 clear_selection)。 */
-export function clearRowSelection() {
-  const m = modelOf(workspace.activeTab());
-  if (m) clearSelection(m);
 }
 
 // 标签条右侧「已筛选 n / 过滤 / 导出」靠这里取当前结果的信息

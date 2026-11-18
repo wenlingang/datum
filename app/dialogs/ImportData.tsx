@@ -3,6 +3,7 @@
 // 解析与插入都在 core(sqlite/import_data.rs),文件流式读取。
 
 import { cleanup, Scroll, signal, Text, View, type Signal } from "nsh";
+import { Progress } from "nsh/base";
 import { t } from "nsh/i18n";
 import { db, dialogsNative, errorText } from "../lib/native";
 import type {
@@ -18,10 +19,10 @@ import type {
 import { conns, loadTables, refreshTables } from "../store/conns";
 import { recordWrite } from "../store/journal";
 import { formatBytes } from "../tab/RedisInsight";
-import { Btn, DbIcon, IconButton, TextField, color } from "../ui/kit";
+import { Btn, DbIcon, IconButton, TextField, color, EmptyState } from "../ui/kit";
 import { ErrorText } from "../ui/error";
 import { FS, MONO } from "../ui/text";
-import { CheckBox, Dropdown, Field, LoadingBtn, Segmented } from "./controls";
+import { CheckBox, Dropdown, Field, Segmented } from "./controls";
 
 /** 轮询导入进度的间隔。 */
 const POLL_MS = 200;
@@ -425,7 +426,7 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
             when={preview()}
             else={
               <View class="flex-1 items-center justify-center px-6">
-                <If when={previewError()} else={<Text class={`${FS.sm} text-fg-faint`}>{t("import_data.empty")}</Text>}>
+                <If when={previewError()} else={<EmptyState compact title={t("import_data.empty")} />}>
                   {(e) => <ErrorText testID="import-data-preview-error" text={e()} />}
                 </If>
               </View>
@@ -499,14 +500,18 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
 
       <If when={running() ? (progress() ?? { rows: 0, bytes: 0, totalBytes: 0 }) : null}>
         {(p) => (
-          <View class="gap-1.5" testID="import-data-progress">
-            <View class="h-1.5 overflow-hidden rounded-full bg-raised">
-              <View class="h-full rounded-full bg-primary" style={{ width: `${percent()}%` }} />
-            </View>
+          <Progress
+            testID="import-data-progress"
+            value={percent()}
+            accessibilityLabel={t("import_data.title")}
+            class="gap-1.5"
+            trackClass="h-1.5 overflow-hidden rounded-full bg-raised"
+            indicatorClass="h-full rounded-full bg-primary"
+          >
             <Text class={`${FS.xs} text-muted-foreground`}>
               {t("import_data.progress", { rows: p().rows.toLocaleString(), percent: percent() })}
             </Text>
-          </View>
+          </Progress>
         )}
       </If>
 
@@ -538,7 +543,7 @@ export function ImportDataView(props: { connId: string; running: Signal<boolean>
             }}
           />
         </If>
-        <LoadingBtn
+        <Btn
           testID="import-data-run"
           variant="primary"
           loading={running()}

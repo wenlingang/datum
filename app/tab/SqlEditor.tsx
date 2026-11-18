@@ -5,7 +5,7 @@
 
 import { signal, Text, untracked, View } from "nsh";
 import { EditorKeys } from "datum/native";
-import { Button, Editor, type EditorCompletionItem, type EditorCompletionKind, type EditorCompletionRequest } from "nsh/base";
+import { Button, Editor, type EditorCompletionItem, type EditorCompletionRequest } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
 import { grid, sql as sqlText } from "../lib/native";
@@ -47,7 +47,6 @@ async function valueItems(m: TabModel, text: string, offset: number): Promise<{ 
   const range = rangeOf(text, vc.start, end);
   const items = hits.map((v) => ({
     label: v,
-    kind: "value" as EditorCompletionKind,
     detail: t("tab.completion_value", { column: vc.column }),
     insertText: vc.quoted ? sqlText.literal(v, m.dbKind) : valueInsert(v, vc.dataType, (x) => sqlText.literal(x, m.dbKind)),
     filterText: vc.quoted ? `'${v}` : v,
@@ -72,7 +71,6 @@ async function jsonKeyItems(m: TabModel, text: string, offset: number): Promise<
   const range = rangeOf(text, jc.start, end);
   return hits.map((k) => ({
     label: k.name,
-    kind: "field" as EditorCompletionKind,
     detail: t("tab.completion_json_key", { column: jc.column }),
     insertText: sqlText.literal(k.name, m.dbKind),
     filterText: `'${k.name}`,
@@ -119,9 +117,10 @@ async function complete(m: TabModel, req: EditorCompletionRequest) {
   // 不一致时(如带引号的标识符)才传 core 算出的范围
   const sameAsQuery = result.start === req.queryStart && result.end === req.offset;
   const range = sameAsQuery ? null : rangeOf(text, result.start, result.end);
+  // 不传 kind:nsh 只会把 kind 显示成固定的英文缩写(表 → cls、列 → fld、关键字 → kw…),不直观;
+  // 每项的 detail 已写明是什么(表、关键字、列类型、某列的取值),kind 全不传时编辑器也不留那一栏
   const base: EditorCompletionItem[] = result.items.map((item) => ({
     label: item.label,
-    kind: item.kind as EditorCompletionKind,
     detail: item.detail || null,
     insertText: item.insert,
     range,

@@ -2,7 +2,7 @@
 // 标明目标连接与数据库,点「仍要执行」放行。所有编辑器执行入口共用。对应 GPUI 版 dialogs/risk.rs。
 
 import { Clipboard, Scroll, Text, View } from "nsh";
-import { Button, Dialog, Editor } from "nsh/base";
+import { Button, Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { AlterAlgorithm, AlterAssessment, AlterOpVerdict, AlterRisk } from "../lib/types";
 import { toast } from "../store/toast";
@@ -10,6 +10,7 @@ import { Icon } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import type { AlterState, ImpactState, RiskGate, TabModel } from "./model";
 import { formatBytes } from "./RedisInsight";
+import { ConfirmFrame } from "../dialogs/controls";
 
 /** 预览表格最多显示的列数(其余列折叠,避免弹窗被宽表撑开)。 */
 const PREVIEW_COLS = 6;
@@ -267,7 +268,7 @@ function Alter(props: { s: AlterState | undefined }) {
   );
 }
 
-function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => void }) {
+function Body(props: { gate: RiskGate }) {
   const g = props.gate;
   // 有高危语句才说「具有破坏性」;只是要核对的写操作(如 prod 上带 WHERE 的 UPDATE)换个说法
   const danger = g.findings.some((f) => f.level === "danger");
@@ -276,16 +277,12 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
     ? t(danger ? "risk.target_db" : "risk.target_db_review", { db: g.database, count })
     : t(danger ? "risk.target_conn" : "risk.target_conn_review", { target: g.targetLabel, count });
   return (
-    <View class="gap-3">
-      <View class="flex-row items-start gap-3">
-        <Icon name="triangle-alert" size={18} color="destructive" class="mt-0.5" />
-        <View class="min-w-0 flex-1 gap-1.5">
-          <Text class={`${FS.base} font-bold text-popover-foreground`}>{t("risk.title")}</Text>
-          <Text class={`${FS.sm} text-muted-foreground`}>{target}</Text>
-          <If when={g.note}>{(n) => <Text class={`${FS.xs} text-muted-foreground`}>{n()}</Text>}</If>
-        </View>
+    <View class="min-h-0 shrink gap-3">
+      <View class="gap-1.5">
+        <Text class={`${FS.sm} text-muted-foreground`}>{target}</Text>
+        <If when={g.note}>{(n) => <Text class={`${FS.xs} text-muted-foreground`}>{n()}</Text>}</If>
       </View>
-      <Scroll class="min-h-0 shrink pl-[30px]" style={{ maxHeight: 460 }} contentClass="gap-2">
+      <Scroll class="min-h-0 shrink" style={{ maxHeight: 460 }} contentClass="gap-2">
         <Each of={g.findings}>
           {(f, i) => (
             <View class="overflow-hidden rounded-(--radius) border border-border">
@@ -295,10 +292,17 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
                   class="flex-row gap-1.5 self-start rounded-full px-2"
                   classList={{ "bg-destructive": f().level === "danger", "bg-warning": f().level !== "danger" }}
                 >
-                  <Text class={`font-bold text-destructive-foreground ${FS.xs}`}>
+                  {/* 徽章文字色跟底色配对:warning 底(暗色下是亮黄)用 warning-foreground,不能用白字 */}
+                  <Text
+                    class={`font-bold ${FS.xs}`}
+                    classList={{ "text-destructive-foreground": f().level === "danger", "text-warning-foreground": f().level !== "danger" }}
+                  >
                     {f().level === "danger" ? t("risk.danger") : t("risk.warning")}
                   </Text>
-                  <Text class={`text-destructive-foreground ${FS.xs}`}>
+                  <Text
+                    class={FS.xs}
+                    classList={{ "text-destructive-foreground": f().level === "danger", "text-warning-foreground": f().level !== "danger" }}
+                  >
                     {f().kind}
                   </Text>
                 </View>
@@ -329,22 +333,6 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
           <Text class={`${FS.xs} font-bold text-negative`}>{t("risk.irreversible")}</Text>
         </View>
       </Scroll>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Button
-          testID="risk-cancel"
-          onPress={props.onCancel}
-          class="h-8 items-center justify-center rounded-(--radius) border border-input px-3.5 hover:bg-list-hover"
-        >
-          <Text class={`${FS.sm} font-medium text-foreground`}>{t("risk.cancel")}</Text>
-        </Button>
-        <Button
-          testID="risk-confirm"
-          onPress={props.onConfirm}
-          class="h-8 items-center justify-center rounded-(--radius) bg-destructive/20 px-3.5 hover:bg-destructive/30"
-        >
-          <Text class={`${FS.sm} font-medium text-destructive`}>{t("risk.confirm")}</Text>
-        </Button>
-      </View>
     </View>
   );
 }
@@ -352,17 +340,22 @@ function Body(props: { gate: RiskGate; onCancel: () => void; onConfirm: () => vo
 /** 风险审查弹窗:`gate` 非空时显示。编辑器之外的执行入口(如 SQLite 改表结构)也用它。 */
 export function RiskGateDialog(props: { gate: RiskGate | null; onCancel: () => void; onConfirm: () => void }) {
   return (
-    <Dialog
+    <ConfirmFrame
       testID="risk-dialog"
       open={props.gate !== null}
-      onOpenChange={(e) => !e.open && props.onCancel()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[560px] max-w-[92%] rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={props.onCancel}
+      title={t("risk.title")}
+      icon="triangle-alert"
+      iconColor="destructive"
+      cancelLabel={t("risk.cancel")}
+      cancelTestID="risk-cancel"
+      confirmLabel={t("risk.confirm")}
+      confirmTestID="risk-confirm"
+      confirmVariant="danger"
+      onConfirm={props.onConfirm}
     >
-      <If when={props.gate}>{(g) => <Body gate={g()} onCancel={props.onCancel} onConfirm={props.onConfirm} />}</If>
-    </Dialog>
+      <If when={props.gate}>{(g) => <Body gate={g()} />}</If>
+    </ConfirmFrame>
   );
 }
 

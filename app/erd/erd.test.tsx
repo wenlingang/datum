@@ -108,3 +108,14 @@ test("小地图:拖到左上角,视野跟过去(画布不反向平移),选中不
   await app.waitFor("id:erd-node:notes");
   expect(dimmed()).toBe(true);
 });
+
+test("工具条放不下时不丢控件:窄宽度下搜索框、开关与按钮都还在", async () => {
+  const app = await openErd();
+  await app.setViewport(480, 800);
+  for (const id of ["erd-search", "erd-inferred", "erd-view-struct", "erd-view-er", "erd-export"]) {
+    expect(app.shows(`id:${id}`)).toBe(true);
+  }
+  expect(app.shows("label:Reload foreign keys / primary keys")).toBe(true);
+  await app.press("id:erd-view-er");
+  await app.waitUntil(() => !hasText(app, "total"));
+});

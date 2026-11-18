@@ -3,12 +3,13 @@
 // 多一块核对结果(之前运行的、之后又改了同一张表、要恢复的行还在不在)。
 
 import { Text, View } from "nsh";
-import { Dialog, Editor } from "nsh/base";
+import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import type { UndoCheck, UndoPrep } from "../lib/types";
-import { Btn, Icon } from "../ui/kit";
 import { FS } from "../ui/text";
 import { type TabModel, undoLast } from "./model";
+import { ConfirmFrame } from "../dialogs/controls";
+import { Icon } from "../ui/kit";
 
 /** 预览里最多显示的语句数(太多时只看个开头)。 */
 const SHOW = 50;
@@ -32,21 +33,20 @@ export function UndoConfirm(props: { open: boolean; undo: UndoPrep | null; busy?
   const fromJournal = () => props.undo?.journal ?? null;
   const blocked = () => !!fromJournal()?.check?.undoneBy;
   return (
-    <Dialog
+    <ConfirmFrame
       testID="undo-dialog"
       open={props.open && statements().length > 0}
-      onOpenChange={(e) => !e.open && props.onClose()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[620px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={props.onClose}
+      title={fromJournal() ? t("journal.undo_title") : t("undo.title")}
+      icon="undo-2"
+      width={620}
+      cancelLabel={t("undo.cancel")}
+      cancelTestID="undo-cancel"
+      confirmLabel={t("undo.confirm")}
+      confirmTestID="undo-confirm"
+      confirmDisabled={!!props.busy || blocked()}
+      onConfirm={props.onConfirm}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="undo-2" size={16} color="foreground" />
-        <Text class={`${FS.base} font-bold text-popover-foreground`}>
-          {fromJournal() ? t("journal.undo_title") : t("undo.title")}
-        </Text>
-      </View>
       <Text class={`${FS.sm} text-popover-foreground`}>
         {t("undo.body", { rows: props.undo?.rows ?? 0, count: statements().length })}
       </Text>
@@ -81,17 +81,7 @@ export function UndoConfirm(props: { open: boolean; undo: UndoPrep | null; busy?
         <Icon name="triangle-alert" size={13} color="warning" class="mt-0.5" />
         <Text class={`${FS.xs} flex-1 text-muted-foreground`}>{t("undo.concurrent_warning")}</Text>
       </View>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("undo.cancel")} onPress={props.onClose} testID="undo-cancel" />
-        <Btn
-          variant="primary"
-          label={t("undo.confirm")}
-          disabled={!!props.busy || blocked()}
-          onPress={props.onConfirm}
-          testID="undo-confirm"
-        />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }
 

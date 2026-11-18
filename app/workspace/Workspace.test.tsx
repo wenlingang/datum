@@ -109,7 +109,7 @@ test("结构对比:roastery 对比 shop,列出差异并生成迁移脚本", asyn
   await app.press("id:rail-c-roastery");
   await app.waitFor("label:products");
   await app.press("label:Connection Actions");
-  await app.press("label:Compare Schema…");
+  await app.press("label:Compare Schema");
   await app.waitFor("id:schema-diff");
   expect(app.enabled("id:sdiff-run")).toBe(false);
   await app.press("id:sdiff-target:shop");
@@ -145,7 +145,7 @@ test("重启后恢复上次打开的标签与内容(不自动执行)", async () 
   expect(second.texts()).not.toContain("answer");
   expect(second.shows("id:empty-workspace")).toBe(false);
   // 表浏览 tab 还在:切过去后自动加载数据
-  await second.press("text:products");
+  await second.press("id:tab-strip >> text:products");
   await second.waitFor("text:Boquete", { timeout: 10_000 });
 });
 
@@ -174,4 +174,127 @@ test("连接菜单打开写操作记录;删除连接时可连同写操作记录�
   }
   expect(left.length).toBe(0);
   app.dispose();
+});
+
+test("查看表详情:弹窗显示字段与索引,不打开表的 tab,关掉不留面板", async () => {
+  const app = await open("../App.tsx", desktop);
+  await app.press("id:rail-c-roastery");
+  await app.waitFor("id:table-list >> label:products");
+  const tabs = app.count("role:tab");
+  await app.rightClick("id:table-list >> label:products");
+  await app.press("label:View Table Details");
+  await app.waitFor("id:table-detail-dialog");
+  expect(app.shows("id:detail-columns")).toBe(true);
+  expect(app.shows("id:detail-indexes")).toBe(true);
+  expect(app.shows("id:table-detail-dialog >> text:country")).toBe(true);
+  expect(app.count("role:tab")).toBe(tabs);
+  // 右上角关闭
+  await app.press("id:table-detail-dialog >> label:Close");
+  await app.waitUntil(() => !app.shows("id:table-detail-dialog"));
+  // 再开一次,Esc 关闭;打开 AI 只有 AI 面板
+  await app.rightClick("id:table-list >> label:products");
+  await app.press("label:View Table Details");
+  await app.waitFor("id:table-detail-dialog");
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:table-detail-dialog"));
+  await app.press("id:toggle-ai");
+  await app.waitFor("id:ai-panel");
+  expect(app.shows("id:detail-columns")).toBe(false);
+});
+
+test("表右键「导出整表」是二级菜单:展开后列出五种格式", async () => {
+  const app = await open("../App.tsx", desktop);
+  await app.press("id:rail-c-roastery");
+  await app.waitFor("id:table-list >> label:products");
+  await app.rightClick("id:table-list >> label:products");
+  await app.waitFor("text:Export Table");
+  // 主菜单里不再平铺各格式
+  expect(app.shows("label:CSV")).toBe(false);
+  await app.press("text:Export Table");
+  for (const f of ["CSV", "Excel", "JSON", "SQL", "Markdown"]) await app.waitFor(`label:${f}`);
+});
+
+test("只有查询页能改名:表的 tab 双击不进入重命名,右键也没有「重命名」", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:products");
+  // 表的 tab:双击只激活,右键菜单没有重命名
+  await app.press("id:tab-strip >> label:products");
+  await app.press("id:tab-strip >> label:products");
+  await app.wait(300);
+  expect(app.shows("id:tab-rename")).toBe(false);
+  await app.rightClick("id:tab-strip >> label:products");
+  await app.waitFor("label:Close Other Tabs");
+  expect(app.shows("label:Rename")).toBe(false);
+  await app.keyboard.press("escape");
+  // 查询页:双击进入重命名(对照)
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.waitFor("id:tab-rename");
+});
+
+test("改名:点到别处退出输入并保存当前名字(Esc 见 workspace.native.test.tsx)", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:SQL Query");
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.waitFor("id:tab-rename");
+  await app.clear("id:tab-rename");
+  await app.type("id:tab-rename", "Daily report");
+  // 按在不能获得焦点的地方(顶栏的连接路径,测试只能用 drag 按下):输入框不会失焦,由工作区根节点收尾
+  await app.drag("id:conn-path", { x: 1 });
+  await app.waitUntil(() => !app.shows("id:tab-rename"));
+  expect(app.shows("id:tab-strip >> label:Daily report")).toBe(true);
+});
+
+test("改名时点另一个 tab:一次就切过去(按下即激活,不怕改名收尾带来的挪位)", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:SQL Query");
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.press("id:tab-strip >> label:SQL Query");
+  await app.waitFor("id:tab-rename");
+  expect(app.shows("id:export-menu")).toBe(false);
+  // drag:按下后指针移开、点击不成立——就像改名收尾让 tab 挪了位、抬起时已不在指针下
+  await app.drag("id:tab-strip >> label:products", { x: 40 });
+  await app.waitUntil(() => !app.shows("id:tab-rename"));
+  // products(表)成了当前 tab:标签条右侧出现导出
+  await app.waitFor("id:export-menu");
+});
+
+test("点 tab 的图标也能切换(整个 tab 都可点)", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:SQL Query");
+  // 预置激活的是 products:点 SQL Query 的图标切到查询页,再点 products 的图标切回
+  await app.press("id:tab-icon:SQL Query");
+  await app.waitUntil(() => !app.shows("id:export-menu"));
+  await app.press("id:tab-icon:products");
+  await app.waitFor("id:export-menu");
+});
+
+test("标签栏末尾的「+」新建查询页", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:SQL Query");
+  const n = app.count("role:tab");
+  await app.press("id:new-query-tab");
+  await app.waitUntil(() => app.count("role:tab") === n + 1);
+});
+
+test("tab 右键:关闭左侧全部 / 关闭右侧全部", async () => {
+  const app = await open("./fixtures/Seeded.tsx", desktop);
+  await app.waitFor("id:tab-strip >> label:products");
+  // 预置 SQL Query、products;再开一个查询页:SQL Query | products | 新查询
+  await app.press("id:new-query-tab");
+  await app.waitUntil(() => app.count("role:tab") === 3);
+  // 最左边的没有可关的左侧
+  await app.rightClick("id:tab-strip >> label:SQL Query >> nth=0");
+  await app.waitFor("label:Close Tabs to the Left");
+  expect(app.enabled("label:Close Tabs to the Left")).toBe(false);
+  await app.keyboard.press("escape");
+  // 中间的 products:先关右侧,再关左侧,只剩它自己
+  await app.rightClick("id:tab-strip >> label:products");
+  await app.press("label:Close Tabs to the Right");
+  await app.waitUntil(() => app.count("role:tab") === 2);
+  await app.rightClick("id:tab-strip >> label:products");
+  await app.press("label:Close Tabs to the Left");
+  await app.waitUntil(() => app.count("role:tab") === 1);
+  expect(app.shows("id:tab-strip >> label:products")).toBe(true);
 });

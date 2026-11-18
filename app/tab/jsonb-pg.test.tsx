@@ -23,9 +23,9 @@ async function openEvents(app: App) {
 test("表浏览:行详情把 jsonb 展开成树,点字段生成筛选并下推到服务端(对整张表生效)", async () => {
   const app = await start();
   await openEvents(app);
-  await app.press("label:detail");
-  // 详情栏打开后网格变窄,note 列在可视区外:点 payload 单元格选中第 1 行
-  await app.press(`text:/"zipcode": 10001\\}/`);
+  // 第 1 行右键「查看详情」:行详情弹窗里 payload 展开成树
+  await app.rightClick(`text:/"zipcode": 10001\\}/`);
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-json:payload", { timeout: 5000 });
   // 默认只展开第一层:customer 收起
   expect(app.shows("id:json-node:customer.zipcode")).toBe(false);
@@ -83,8 +83,8 @@ test("查询结果:树上点字段在本地按路径筛选", async () => {
   await app.type("id:sql-editor", "SELECT note, payload FROM events ORDER BY id LIMIT 6");
   await app.press("id:run");
   await app.waitUntil(() => has(app, "n6"), { timeout: 15000 });
-  await app.press("label:detail");
-  await app.press("text:n2");
+  await app.rightClick("text:n2");
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-json:payload", { timeout: 5000 });
   await app.press("id:json-node:kind");
   await app.press("id:json-filter");

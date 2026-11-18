@@ -145,6 +145,9 @@ test("AI 自己查数据:工具步骤按顺序显示,可展开看 SQL 与结果;
   await app.press("id:tool-result-actions >> role:button[Export]");
   await app.press("label:Excel");
   await app.waitFor("text:export xlsx 2");
+  // 再点表头收起
+  await app.press("id:ai-tool-1 >> label:Query");
+  await app.waitUntil(() => !app.shows("text:cancelled"));
   // 写语句不会被自动执行:以 SQL 卡片出现,等用户点「Run」
   expect(app.texts()).toContain("DELETE FROM orders WHERE status = ");
   expect(app.texts()).toContain("Run");
@@ -225,7 +228,7 @@ test("AI 卡片上执行的写操作可撤销,撤销结果告知 AI", async () =
   await app.press("role:button[Undo]");
   await app.waitFor("text:/Restore the 2 rows as they were before\\?/");
   await app.press("role:button[Undo Changes]");
-  await app.waitFor("text:✓ Undone: 2 rows restored", { timeout: 10_000 });
+  await app.waitFor("text:Undone: 2 rows restored", { timeout: 10_000 });
   // 撤销以隐藏消息记进对话
   expect(app.texts().some((x) => x.startsWith("[Undone]"))).toBe(true);
   // 写操作记录:AI 执行的写操作带撤销数据记下,撤销后标为已撤销(记录内容不进对话)

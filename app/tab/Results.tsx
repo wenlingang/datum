@@ -2,16 +2,17 @@
 // 筛选无命中、行数上限提示、网格)。对应 GPUI 版 tab/mod.rs 的 render_status_line / render_results。
 
 import { Scroll, Text, View } from "nsh";
-import { Button } from "nsh/base";
+import { Tab, Tabs } from "nsh/base";
 import { t } from "nsh/i18n";
 import { maxRows } from "../store/prefs";
 import { supportsSql } from "../lib/types";
-import { Btn, Dot, Hint, tip } from "../ui/kit";
+import { Btn, Dot, Hint, tip, EmptyState, Loading, Icon, SectionLabel } from "../ui/kit";
 import { FS } from "../ui/text";
 import { ResultGrid } from "./Grid";
 import { PlanView } from "./PlanView";
 import { aiExplainPlan, aiFixError, canAnalyze, explainAnalyze, selectResult, type StmtResult, suggestIndexes, viewIndices, type TabModel } from "./model";
 import { ErrorText } from "../ui/error";
+import { ViewSwitch } from "./ui";
 
 function okSummary(m: TabModel): string {
   const r = m.result();
@@ -35,7 +36,7 @@ export function StatusLine(props: { m: TabModel }) {
         <Text class={`${FS.xs} font-bold text-destructive`}>{t("tab.query_error")}</Text>
       </If>
       <If when={state() === "ok"}>
-        <Dot color="data" />
+        <Dot color="success" />
         <Text testID="status-summary" class={`${FS.xs} text-muted-foreground`}>
           {okSummary(m)}
         </Text>
@@ -79,30 +80,35 @@ function StmtTabs(props: { m: TabModel; list: StmtResult[] }) {
   const m = props.m;
   return (
     <Scroll horizontal class="shrink-0 border-b border-border bg-panel">
-      <View testID="stmt-tabs" class="flex-row items-center gap-1 px-2 py-1">
+      <Tabs
+        testID="stmt-tabs"
+        class="flex-row items-center gap-1 px-2 py-1"
+        indicatorClass="inset-y-1 rounded-(--radius) bg-raised"
+      >
         <Each of={props.list}>
-          {(x, i) => (
-            <Button
-              testID={`stmt-tab:${i() + 1}`}
-              selected={m.multiIndex() === i()}
-              onPress={() => selectResult(m, i())}
-              tooltip={tip(x().sql.replace(/\s+/g, " ").slice(0, 200))}
-              class="h-6 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover selected:bg-raised"
-            >
-              <Dot color={x().error !== null ? "destructive" : x().skipped ? "fg-faint" : "data"} />
-              <Text
-                class={`${FS.xs}`}
-                classList={{
-                  "font-bold text-foreground": m.multiIndex() === i(),
-                  "text-muted-foreground": m.multiIndex() !== i(),
-                }}
+          {(x, i) => {
+            const on = () => m.multiIndex() === i();
+            return (
+              <Tab
+                testID={`stmt-tab:${i() + 1}`}
+                selected={on()}
+                onPress={() => selectResult(m, i())}
+                tooltip={tip(x().sql.replace(/\s+/g, " ").slice(0, 200))}
+                class="h-6 flex-row items-center gap-1.5 rounded-(--radius) px-2"
+                classList={{ "hover:bg-list-hover": !on() }}
               >
-                {stmtLabel(x(), i())}
-              </Text>
-            </Button>
-          )}
+                <Dot color={x().error !== null ? "destructive" : x().skipped ? "fg-faint" : "success"} />
+                <Text
+                  class={`${FS.xs} font-medium`}
+                  classList={{ "text-foreground": on(), "text-muted-foreground": !on() }}
+                >
+                  {stmtLabel(x(), i())}
+                </Text>
+              </Tab>
+            );
+          }}
         </Each>
-      </View>
+      </Tabs>
     </Scroll>
   );
 }
@@ -123,7 +129,7 @@ export function Results(props: { m: TabModel }) {
         <Hint class="p-3">{t("tab.stmt_skipped")}</Hint>
       </If>
       <If when={body() === "error"}>
-        <ErrorText testID="query-error" mono tone="text-destructive" class="p-3" text={m.err() ?? ""} />
+        <ErrorText testID="query-error" mono class="p-3" text={m.err() ?? ""} />
         <If when={aiReady()}>
           <View class="flex-row px-3">
             <Btn testID="ai-fix-error" small icon="sparkles" label={t("tab.ai_fix_error")} onPress={() => aiFixError(m)} />
@@ -131,9 +137,12 @@ export function Results(props: { m: TabModel }) {
         </If>
       </If>
       <If when={body() === "execOk"}>
-        <Text testID="exec-ok" class={`${FS.sm} p-3 text-data`}>
-          ✓ {okSummary(m)}
-        </Text>
+        <View class="flex-row items-center gap-1.5 p-3">
+          <Icon name="circle-check" size={14} color="success" />
+          <Text testID="exec-ok" class={`${FS.sm} min-w-0 flex-1 text-success`}>
+            {okSummary(m)}
+          </Text>
+        </View>
         {/* 没有改到任何行:无需撤销,什么都不显示 */}
         <If when={m.undo() && (m.undo()!.statements.length > 0 || m.undo()!.reason) ? m.undo() : null}>
           {(u) => (
@@ -150,15 +159,13 @@ export function Results(props: { m: TabModel }) {
         </If>
       </If>
       <If when={body() === "noRows"}>
-        <Hint class="p-3">{t("tab.query_ok_no_rows")}</Hint>
+        <EmptyState icon="table" title={t("tab.query_ok_no_rows")} />
       </If>
       <If when={body() === "noMatch"}>
-        <Text class={`${FS.sm} p-3 text-muted-foreground`}>
-          {t("tab.no_filter_match", { total: m.result()?.rows.length ?? 0 })}
-        </Text>
+        <EmptyState icon="funnel" title={t("tab.no_filter_match", { total: m.result()?.rows.length ?? 0 })} />
       </If>
       <If when={body() === "running"}>
-        <Hint class="p-3">{t("tab.running")}</Hint>
+        <Loading class="p-3" label={t("tab.running")} />
       </If>
       {/* 表格提交的暂存改动:提交后可撤销 */}
       <If when={m.kind === "table" && body() === "grid" && (m.undo()?.statements.length ?? 0) > 0 ? m.undo() : null}>
@@ -173,26 +180,18 @@ export function Results(props: { m: TabModel }) {
         <View class="min-h-0 flex-1">
           <If when={explained()}>
             <View class="flex-row flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
-              <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>
+              <SectionLabel class="flex-1">
                 {m.plan()?.analyzed ? t("plan.title_analyzed") : t("tab.plan_title")}
-              </Text>
+              </SectionLabel>
               <If when={m.plan()?.tree}>
-                <View class="flex-row gap-px rounded-(--radius) border border-border p-px">
-                  <Btn
-                    testID="plan-view-tree"
-                    small
-                    variant={m.planView() === "tree" ? "secondary" : "ghost"}
-                    label={t("plan.view_tree")}
-                    onPress={() => m.planView.set("tree")}
-                  />
-                  <Btn
-                    testID="plan-view-raw"
-                    small
-                    variant={m.planView() === "raw" ? "secondary" : "ghost"}
-                    label={t("plan.view_raw")}
-                    onPress={() => m.planView.set("raw")}
-                  />
-                </View>
+                <ViewSwitch
+                  value={m.planView()}
+                  onChange={(v) => m.planView.set(v)}
+                  options={[
+                    { value: "tree", label: t("plan.view_tree"), testID: "plan-view-tree" },
+                    { value: "raw", label: t("plan.view_raw"), testID: "plan-view-raw" },
+                  ]}
+                />
               </If>
               <If when={canAnalyze(m)}>
                 <Btn

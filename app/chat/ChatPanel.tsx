@@ -12,7 +12,7 @@ import { type AiMessage, aiStore, setPendingRef, stopStreaming, type ToolStep } 
 import { maskTable } from "../store/privacy";
 import { toast } from "../store/toast";
 import { toggleAiFullscreen } from "../store/workspace";
-import { Btn, Hint, Icon, IconButton, tip } from "../ui/kit";
+import { Btn, Hint, Icon, IconButton, tip, EmptyState, SectionLabel } from "../ui/kit";
 import { FS } from "../ui/text";
 import {
   askFix,
@@ -31,8 +31,8 @@ import { chatDeps } from "./deps";
 import { ModelPicker } from "./ModelPicker";
 import { SqlCard, SqlConfirmDialog } from "./SqlCard";
 import { ResultActions, ResultTable, ShownNote, ToolCard } from "./ToolCard";
-import { ErrorText } from "../ui/error";
-import { DropMenu, MItem, MSep } from "../ui/menu";
+import { ErrorBox } from "../ui/error";
+import { DropMenu, MItem, MSep, MCheck } from "../ui/menu";
 
 /** 消息与输入框所在的居中一栏(面板窄时就是全宽)。 */
 const COLUMN = "w-full max-w-[820px] self-center";
@@ -80,12 +80,13 @@ function HistoryMenu() {
       placement="bottom"
       align="end"
       popupClass="max-h-[360px] min-w-64"
-      trigger={<IconButton icon="rotate-ccw-clock" size={14} tooltip={t("chat.history")} class="p-1" />}
+      trigger={<IconButton small icon="rotate-ccw-clock" tooltip={t("chat.history")} />}
     >
       <Each of={historyList()} key={(h) => h.key}>
         {(h) => (
-          <MItem
-            label={`${h().key === convoKey() ? "● " : ""}${h().title || t("chat.untitled")} · ${whenText(h().updatedAt)}`}
+          <MCheck
+            label={`${h().title || t("chat.untitled")} · ${whenText(h().updatedAt)}`}
+            checked={h().key === convoKey()}
             onSelect={() => openConversation(h().key)}
           />
         )}
@@ -101,8 +102,8 @@ function HistoryRail() {
   return (
     <View testID="ai-history-rail" class="w-[240px] shrink-0 border-r border-border">
       <View class="h-10 shrink-0 flex-row items-center px-3">
-        <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("chat.history")}</Text>
-        <IconButton icon="plus" size={14} tooltip={t("chat.new_chat")} class="p-1" onPress={newConversation} />
+        <SectionLabel class="flex-1">{t("chat.history")}</SectionLabel>
+        <IconButton small icon="plus" tooltip={t("chat.new_chat")} onPress={newConversation} />
       </View>
       <If when={historyList().length > 0} else={<Hint class={`${FS.xs} px-3`}>{t("chat.history_empty")}</Hint>}>
         <List each={historyList()} keyExtractor={(h) => h.key} estimatedItemSize={48} class="flex-1" contentClass="px-1.5 pb-2">
@@ -112,19 +113,18 @@ function HistoryRail() {
               role="button"
               accessibilityLabel={h().title || t("chat.untitled")}
               onPress={() => openConversation(h().key)}
-              class="flex-row items-start gap-1 rounded-(--radius) py-1.5 pl-2.5 pr-1 hover:bg-list-hover"
-              classList={{ "bg-raised": h().key === convoKey() }}
+              class="flex-row items-start gap-1 rounded-(--radius) py-1.5 pl-2.5 pr-1"
+              classList={{ "bg-raised": h().key === convoKey(), "hover:bg-list-hover": h().key !== convoKey() }}
             >
               <View class="min-w-0 flex-1 gap-0.5">
                 <Text
-                  class={`${FS.sm} line-clamp-2`}
-                  classList={{ "font-bold text-foreground": h().key === convoKey(), "text-foreground": h().key !== convoKey() }}
+                  class={`${FS.sm} line-clamp-2 font-medium text-foreground`}
                 >
                   {h().title || t("chat.untitled")}
                 </Text>
                 <Text class={`${FS.xs} text-fg-faint`}>{whenText(h().updatedAt)}</Text>
               </View>
-              <IconButton icon="x" size={12} tooltip={t("chat.delete_convo")} class="p-1" onPress={() => removeConversation(h().key)} />
+              <IconButton small icon="trash" tooltip={t("chat.delete_convo")} onPress={() => removeConversation(h().key)} />
             </View>
           )}
         </List>
@@ -170,7 +170,7 @@ function Header(props: { label: string | null; hasMessages: boolean; wide: boole
 }
 
 /** 空会话:标题、说明与几条可直接发送的建议。 */
-function EmptyState(props: { canAsk: boolean; setup: string | null }) {
+function Welcome(props: { canAsk: boolean; setup: string | null }) {
   const suggestions = () => [
     { icon: "list-tree" as const, title: t("chat.suggest_tables"), prompt: t("chat.suggest_tables_prompt") },
     { icon: "table" as const, title: t("chat.suggest_biggest"), prompt: t("chat.suggest_biggest_prompt") },
@@ -179,21 +179,18 @@ function EmptyState(props: { canAsk: boolean; setup: string | null }) {
   ];
   return (
     <View class={`${COLUMN} flex-1 justify-center gap-5 px-4 py-6`}>
-      <View class="items-center gap-2">
-        <View class="h-11 w-11 items-center justify-center rounded-(--radius-lg) border border-border bg-raised">
-          <Icon name="sparkles" size={20} color="ai" />
-        </View>
-        <Text class={`${FS.base} font-bold text-foreground`}>
-          {props.setup !== null ? t("chat.setup_title") : t("chat.empty_title")}
-        </Text>
-        <Text class={`${FS.sm} text-center text-muted-foreground`}>{props.setup ?? t("chat.empty_sub")}</Text>
-      </View>
-      {/* 未就绪:只给一个去设置的入口,建议卡片等能问了再出现 */}
-      <If when={props.setup !== null}>
-        <View class="items-center">
-          <Btn variant="outline" icon="settings" label={t("chat.open_settings")} onPress={chatDeps.openSettings} testID="ai-open-settings" />
-        </View>
-      </If>
+      <EmptyState
+        class=""
+        icon="sparkles"
+        iconColor="ai"
+        title={props.setup !== null ? t("chat.setup_title") : t("chat.empty_title")}
+        hint={props.setup ?? t("chat.empty_sub")}
+      >
+        {/* 未就绪:只给一个去设置的入口,建议卡片等能问了再出现 */}
+        <If when={props.setup !== null}>
+          <Btn variant="outline" icon="settings" label={t("chat.open_settings")} onPress={chatDeps.openSettings} testID="ai-open-settings" class="mt-1" />
+        </If>
+      </EmptyState>
       <If when={props.setup === null}>
       <View class="flex-row flex-wrap gap-2">
         <Each of={suggestions()}>
@@ -235,6 +232,8 @@ function ReplyText(props: { msgId: number; text: string; base: number; streaming
                 markdown={seg().text}
                 // 回复里可能夹着表数据里注入的内容:不解析 HTML,图片不加载(加载远程图片会把拼进 URL 的数据发出去)
                 options={{ streaming: props.streaming, html: false }}
+                // SQL 段另有卡片;其余代码块(JSON、shell 等)用 TextView 内置的复制按钮
+                codeBlockActions={[{ id: "copy", label: t("chat.copy") }]}
                 renderImage={(img) => (
                   <Text class={`${FS.sm} text-muted-foreground`}>{t("chat.image_blocked", { alt: img.alt || "" })}</Text>
                 )}
@@ -274,15 +273,14 @@ function Actions(props: { msg: AiMessage; last: boolean }) {
   return (
     <View class="-ml-1 flex-row items-center gap-0.5">
       <IconButton
+        small
         icon={copied() ? "check" : "copy"}
-        size={13}
         tooltip={t("chat.copy")}
         label={t("chat.copy")}
         onPress={() => void copy()}
-        class="p-1"
       />
       <If when={props.last}>
-        <IconButton icon="refresh-cw" size={13} tooltip={t("chat.regenerate")} label={t("chat.regenerate")} onPress={regenerate} class="p-1" />
+        <IconButton small icon="refresh-cw" tooltip={t("chat.regenerate")} label={t("chat.regenerate")} onPress={regenerate} />
       </If>
     </View>
   );
@@ -340,7 +338,7 @@ function MessageRow(props: {
             <View class="h-5 w-5 items-center justify-center rounded-full bg-ai/15">
               <Icon name="sparkles" size={11} color="ai" />
             </View>
-            <Text class={`${FS.xs} font-bold text-muted-foreground`}>{props.msg.model ?? t("chat.title")}</Text>
+            <SectionLabel>{props.msg.model ?? t("chat.title")}</SectionLabel>
           </View>
           <If when={empty() && props.streaming}>
             <View testID="ai-thinking" class="flex-row items-center gap-2">
@@ -381,13 +379,15 @@ function MessageRow(props: {
           </If>
           <If when={props.msg.error}>
             {(e) => (
-              <View testID="ai-error" class="flex-row items-start gap-2 rounded-(--radius) border border-destructive/30 bg-destructive/5 px-3 py-2">
-                <Icon name="circle-alert" size={13} color="negative" class="mt-0.5" />
-                <ErrorText size="xs" class="min-w-0 flex-1" text={e()} />
-                <If when={props.last}>
-                  <Btn small variant="outline" icon="refresh-cw" label={t("chat.retry")} onPress={regenerate} testID="ai-retry" />
-                </If>
-              </View>
+              <ErrorBox
+                testID="ai-error"
+                text={e()}
+                action={
+                  <If when={props.last}>
+                    <Btn small variant="outline" icon="refresh-cw" label={t("chat.retry")} onPress={regenerate} testID="ai-retry" />
+                  </If>
+                }
+              />
             )}
           </If>
           <If when={props.msg.stopped}>
@@ -539,7 +539,7 @@ export function ChatPanel(props: { wide?: boolean } = {}) {
         </View>
       </If>
       <View class="min-h-0 flex-1">
-        <If when={messages().length > 0} else={<EmptyState canAsk={canSend()} setup={status() !== null && !ready() ? status()?.error || t("chat.unavailable") : null} />}>
+        <If when={messages().length > 0} else={<Welcome canAsk={canSend()} setup={status() !== null && !ready() ? status()?.error || t("chat.unavailable") : null} />}>
           <List
             ref={list}
             testID="ai-messages"

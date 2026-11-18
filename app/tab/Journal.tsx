@@ -4,7 +4,7 @@
 // 写操作记录的内容只在本地,从不交给 AI。
 
 import { cleanup, Clipboard, effect, List, Scroll, signal, Text, untracked, View } from "nsh";
-import { AlertDialog, Editor, ResizablePanel, ResizablePanelGroup, Toggle, ToggleGroup } from "nsh/base";
+import { AlertDialog, DataTable, Editor, ResizablePanel, ResizablePanelGroup, type DataTableCellClass } from "nsh/base";
 import { t } from "nsh/i18n";
 import { Dropdown } from "../dialogs/controls";
 import { errorText, journal, shell } from "../lib/native";
@@ -13,13 +13,24 @@ import { conns } from "../store/conns";
 import { journalRev } from "../store/journal";
 import { maskRowsOf } from "../store/privacy";
 import { toast } from "../store/toast";
-import { Btn, EnvBadge, Hint, Icon, IconButton, type IconName, TextField } from "../ui/kit";
+import { Btn, EnvBadge, Hint, Icon, SearchField, EmptyState, Loading, SectionLabel, type IconName } from "../ui/kit";
 import { DropMenu, MItem } from "../ui/menu";
 import { FS, MONO } from "../ui/text";
 import { openQueryOn } from "./index";
 import { checkJournalUndo, journalUndoPrep } from "./journalUndo";
 import { runUndo } from "./model";
 import { UndoConfirm } from "./UndoDialog";
+import { ViewSwitch } from "./ui";
+
+const SNAP_ROW = 22;
+const SNAP_HEADER = 24;
+
+/** 快照预览里值为 NULL 的格子(淡色显示)。 */
+function nullCells(rows: (string | null)[][]): DataTableCellClass[] {
+  const out: DataTableCellClass[] = [];
+  rows.forEach((r, row) => r.forEach((v, column) => v === null && out.push({ row, column, class: "text-fg-faint" })));
+  return out;
+}
 
 const SOURCES: JournalSource[] = ["editor", "ai", "grid", "undo", "import", "alter", "redis", "lua", "testdata"];
 
@@ -239,7 +250,7 @@ export function JournalView(props: { connId: string }) {
           <Text class={`${FS.base} font-bold text-foreground`}>{t("journal.heading", { name: conn()?.name ?? "" })}</Text>
           <If when={conn()}>{(c) => <EnvBadge env={c().env} />}</If>
           <View class="flex-1" />
-          <IconButton icon="refresh-cw" tooltip={t("journal.refresh")} label={t("journal.refresh")} onPress={() => void reload()} />
+          <Btn small variant="outline" icon="refresh-cw" label={t("journal.refresh")} onPress={() => void reload()} />
           <DropMenu
             testID="journal-export"
             trigger={<Btn small variant="outline" icon="download" label={t("journal.export")} />}
@@ -250,18 +261,13 @@ export function JournalView(props: { connId: string }) {
           <Btn testID="journal-clear" small variant="ghost" icon="trash" label={t("journal.clear")} onPress={() => void clearAll()} />
         </View>
         <View class="flex-row items-center gap-2">
-          <View class="relative min-w-0 flex-1 justify-center">
-            <TextField
-              testID="journal-search"
-              value={text()}
-              onChange={({ value }) => text.set(value)}
-              placeholder={t("journal.search")}
-              class="h-7 pl-7"
-            />
-            <View class="pointer-events-none absolute left-2.5">
-              <Icon name="search" size={13} color="fg-faint" />
-            </View>
-          </View>
+          <SearchField
+            testID="journal-search"
+            value={text()}
+            onChange={(v) => text.set(v)}
+            placeholder={t("journal.search")}
+            class="min-w-0 flex-1"
+          />
           <Dropdown
             testID="journal-source"
             small
@@ -271,23 +277,11 @@ export function JournalView(props: { connId: string }) {
             onChange={(v) => source.set(v as JournalSource | "")}
             style={{ width: 150 }}
           />
-          <ToggleGroup class="h-7 flex-row rounded-(--radius) border border-input p-0.5">
-            <Each of={statuses()} key={(s) => s.value}>
-              {(s) => (
-                <Toggle
-                  testID={`journal-status-${s().value}`}
-                  pressed={status() === s().value}
-                  onChange={() => status.set(s().value)}
-                  accessibilityLabel={s().label}
-                  class="group justify-center rounded-(--radius-sm) px-2.5 hover:bg-list-hover aria-pressed:bg-raised"
-                >
-                  <Text class={`${FS.xs} text-muted-foreground group-aria-pressed:font-bold group-aria-pressed:text-foreground`}>
-                    {s().label}
-                  </Text>
-                </Toggle>
-              )}
-            </Each>
-          </ToggleGroup>
+          <ViewSwitch
+            options={statuses().map((s) => ({ ...s, testID: `journal-status-${s.value}` }))}
+            value={status()}
+            onChange={(v) => status.set(v)}
+          />
           <Dropdown
             testID="journal-range"
             small
@@ -307,13 +301,12 @@ export function JournalView(props: { connId: string }) {
           when={entries().length > 0}
           else={
             <If when={loaded()}>
-              <View class="flex-1 items-center justify-center gap-2 p-6">
-                <Icon name="scroll-text" size={32} color="fg-faint" />
-                <Text testID="journal-empty" class={`${FS.sm} text-fg-soft`}>
-                  {filtering() ? t("journal.empty_filtered") : t("journal.empty")}
-                </Text>
-                <Hint class="max-w-[460px] text-center">{t("journal.empty_hint")}</Hint>
-              </View>
+              <EmptyState
+                testID="journal-empty"
+                icon="scroll-text"
+                title={filtering() ? t("journal.empty_filtered") : t("journal.empty")}
+                hint={t("journal.empty_hint")}
+              />
             </If>
           }
         >
@@ -331,9 +324,9 @@ export function JournalView(props: { connId: string }) {
                     when={it().kind === "entry" ? (it() as { e: JournalSummary }).e : null}
                     else={
                       <View class="bg-panel px-4 py-1.5">
-                        <Text class={`${FS.xs} font-bold text-muted-foreground`}>
+                        <SectionLabel>
                           {dayLabel((it() as { key: string }).key)}
-                        </Text>
+                        </SectionLabel>
                       </View>
                     }
                   >
@@ -347,7 +340,9 @@ export function JournalView(props: { connId: string }) {
                 when={detail()}
                 else={
                   <View class="flex-1 items-center justify-center p-6">
-                    <Hint>{selected() ? t("journal.loading") : t("journal.pick")}</Hint>
+                    <If when={selected()} else={<Hint>{t("journal.pick")}</Hint>}>
+                      <Loading label={t("journal.loading")} />
+                    </If>
                   </View>
                 }
               >
@@ -393,8 +388,8 @@ function Row(props: { e: JournalSummary; selected: boolean; onPress: () => void 
     <View
       testID={`journal-entry:${e().id}`}
       onPress={props.onPress}
-      class="gap-1 border-b border-border px-4 py-2 hover:bg-list-hover"
-      classList={{ "bg-list-active": props.selected }}
+      class="gap-1 border-b border-border px-4 py-2"
+      classList={{ "bg-list-active": props.selected, "hover:bg-list-hover": !props.selected }}
     >
       <View class="flex-row items-center gap-2">
         <Icon name={SOURCE_ICON[e().source] ?? "terminal"} size={13} color={e().ok ? "muted-foreground" : "negative"} />
@@ -448,7 +443,7 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
           }
         />
         <If when={e().kind !== "redis"}>
-          <Btn testID="journal-open" small variant="outline" icon="terminal" label={t("journal.open_in_editor")} onPress={() => openQueryOn(props.connId, e().sql)} />
+          <Btn testID="journal-open" small variant="outline" icon="square-play" label={t("journal.open_in_editor")} onPress={() => openQueryOn(props.connId, e().sql)} />
         </If>
         <If when={canUndo()}>
           <Btn testID="journal-undo" small variant="primary" icon="undo-2" label={t("journal.undo", { rows: e().undo?.rows ?? 0 })} onPress={props.onUndo} />
@@ -457,7 +452,7 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
       <If when={d().undoneBy}>
         {(by) => (
           <View testID="journal-undone-note" class="flex-row items-center gap-1.5">
-            <Icon name="circle-check" size={13} color="muted-foreground" />
+            <Icon name="circle-check" size={13} color="success" />
             <Text class={`${FS.xs} text-muted-foreground`}>{t("journal.undone_note")}</Text>
             <Btn small variant="ghost" label={t("journal.show_undo")} onPress={() => props.onSelect(by())} />
           </View>
@@ -499,31 +494,30 @@ function DetailPane(props: { d: JournalDetail; connId: string; onUndo: () => voi
           const rows = () => maskRowsOf(props.connId, s().table, s().columns, s().rows) as (string | null)[][];
           return (
           <View testID="journal-snapshot" class="gap-1.5">
-            <Text class={`${FS.xs} font-bold text-muted-foreground`}>
+            <SectionLabel>
               {s().delete ? t("journal.rows_deleted", { table: s().table }) : t("journal.rows_before", { table: s().table })}
-            </Text>
-            <Scroll horizontal>
-              <View class="gap-0.5">
-                <View class="flex-row gap-3">
-                  <Each of={s().columns}>
-                    {(c) => <Text class={`${FS.xs} ${MONO} w-[110px] font-bold text-muted-foreground line-clamp-1`}>{c()}</Text>}
-                  </Each>
-                </View>
-                <Each of={rows()}>
-                  {(r) => (
-                    <View class="flex-row gap-3">
-                      <Each of={s().columns}>
-                        {(_, ci) => (
-                          <Text class={`${FS.xs} ${MONO} w-[110px] line-clamp-1`} classList={{ "text-foreground": r()[ci()] !== null, "text-fg-faint": r()[ci()] === null }}>
-                            {r()[ci()] ?? "NULL"}
-                          </Text>
-                        )}
-                      </Each>
-                    </View>
-                  )}
-                </Each>
-              </View>
-            </Scroll>
+            </SectionLabel>
+            <DataTable
+              testID="journal-snapshot-table"
+              accessibilityLabel={s().table}
+              style={{ height: SNAP_HEADER + Math.max(1, rows().length) * SNAP_ROW + 2 }}
+              columns={s().columns.map((c, i) => ({ key: String(i), title: c, width: 122, minWidth: 60, maxWidth: 600 }))}
+              data={rows().map((r) => r.map((v) => v ?? "NULL"))}
+              cellClasses={nullCells(rows())}
+              rowHeight={SNAP_ROW}
+              headerHeight={SNAP_HEADER}
+              fontSize={11}
+              rowSelectable={false}
+              columnSelectable={false}
+              movableColumns={false}
+              verticalScrollbar={false}
+              classes={{
+                root: "rounded-(--radius) border border-border bg-background",
+                header: "border-b border-border bg-panel",
+                headerCell: `px-2 ${FS.xs} ${MONO} font-bold text-muted-foreground`,
+                cell: `px-2 ${MONO} text-foreground`,
+              }}
+            />
             <If when={s().total > s().rows.length}>
               <Text class={`${FS.xs} text-fg-faint`}>{t("journal.preview_of", { shown: s().rows.length, total: s().total })}</Text>
             </If>

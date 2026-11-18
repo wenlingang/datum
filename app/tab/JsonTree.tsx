@@ -216,10 +216,10 @@ export function JsonTree(props: JsonTreeProps) {
               </If>
               <If when={isSel()}>
                 <View class="shrink-0 flex-row items-center">
-                  <IconButton testID="json-copy-path" icon="link-2" size={12} class="p-1" tooltip={t("json.copy_path")} onPress={() => void copyPath(r().path)} />
-                  <IconButton testID="json-copy-value" icon="copy" size={12} class="p-1" tooltip={t("json.copy_value")} onPress={() => void copyValue(r().path)} />
+                  <IconButton small testID="json-copy-path" icon="link-2" tooltip={t("json.copy_path")} onPress={() => void copyPath(r().path)} />
+                  <IconButton small testID="json-copy-value" icon="copy" tooltip={t("json.copy_value")} onPress={() => void copyValue(r().path)} />
                   <If when={filterable(r())}>
-                    <IconButton testID="json-filter" icon="funnel" size={12} class="p-1" tooltip={t("json.filter_by_value")} onPress={() => filter(r())} />
+                    <IconButton small testID="json-filter" icon="funnel" tooltip={t("json.filter_by_value")} onPress={() => filter(r())} />
                   </If>
                 </View>
               </If>

@@ -20,3 +20,15 @@ test("导出 PNG:整张图渲染并保存,提示像素尺寸", async () => {
   expect(Number(m?.[2])).toBeGreaterThan(400);
   app.dispose();
 });
+
+test("工具条里的搜索框:方向键移动光标,不被工具条接走", async () => {
+  const app = await open("../tab/testing/Harness.tsx", { platform: "macos", width: 1200, height: 800, locale: "en-US" });
+  await app.waitFor("id:tab:SQL Query", { timeout: 15000 });
+  await app.press("label:erd");
+  await app.waitFor("id:erd-node:orders", { timeout: 15000 });
+  await app.type("id:erd-search", "ordr");
+  await app.keyboard.press("left");
+  await app.keyboard.press("e");
+  await app.waitUntil(() => app.value("id:erd-search") === "order", { timeout: 5000 });
+  app.dispose();
+});

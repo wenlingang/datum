@@ -20,7 +20,7 @@ async function openItems(table = "items"): Promise<App> {
   await app.press("id:rail-c-src");
   await app.waitFor(`id:table-list >> label:${table}`);
   await app.rightClick(`id:table-list >> label:${table}`);
-  await app.press("label:Compare Data With…");
+  await app.press("label:Compare with Another Table");
   await app.waitFor("id:data-diff");
   return app;
 }

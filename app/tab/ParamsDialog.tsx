@@ -2,12 +2,12 @@
 // 数字原样代入,NULL 为空值,其余作为字符串(单引号自动转义)。
 
 import { Text, View } from "nsh";
-import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import { sql as sqlText } from "../lib/native";
-import { Btn, Icon, TextField } from "../ui/kit";
+import { TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { confirmParams, type TabModel } from "./model";
+import { ConfirmFrame } from "../dialogs/controls";
 
 /** 预览最多显示的字符数。 */
 const PREVIEW_CHARS = 600;
@@ -23,19 +23,19 @@ export function ParamsDialog(props: { m: TabModel }) {
     return s.length > PREVIEW_CHARS ? `${s.slice(0, PREVIEW_CHARS)}…` : s;
   };
   return (
-    <Dialog
+    <ConfirmFrame
       testID="params-dialog"
       open={gate() !== null}
-      onOpenChange={(e) => !e.open && close()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[560px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={close}
+      title={t("params.title")}
+      icon="braces"
+      cancelLabel={t("params.cancel")}
+      cancelTestID="params-cancel"
+      confirmLabel={t("params.run")}
+      confirmIcon="play"
+      confirmTestID="params-run"
+      onConfirm={() => confirmParams(m)}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="braces" size={16} color="foreground" />
-        <Text class={`${FS.base} font-bold text-popover-foreground`}>{t("params.title")}</Text>
-      </View>
       <Text class={`${FS.xs} text-muted-foreground`}>{t("params.hint")}</Text>
       <View class="gap-2">
         <Each of={gate()?.names ?? []}>
@@ -58,10 +58,6 @@ export function ParamsDialog(props: { m: TabModel }) {
       <View class="max-h-[140px] overflow-hidden rounded-(--radius) border border-border bg-editor px-3 py-2">
         <Text testID="params-preview" class={`${FS.xs} ${MONO} text-foreground line-clamp-6`}>{preview()}</Text>
       </View>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("params.cancel")} onPress={close} testID="params-cancel" />
-        <Btn variant="primary" icon="play" label={t("params.run")} onPress={() => confirmParams(m)} testID="params-run" />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }

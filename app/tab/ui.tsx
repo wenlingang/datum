@@ -1,37 +1,46 @@
 // tab/ 自用的 Datum 外观小件(颜色只用主题 token)。通用的在 ui/kit.tsx、ui/menu.tsx。
 
 import { Text } from "nsh";
-import { Button } from "nsh/base";
-import { Icon } from "../ui/kit";
-import { DropMenu, MItem } from "../ui/menu";
+import { Toggle, ToggleGroup } from "nsh/base";
+import { Icon, type IconName } from "../ui/kit";
 import { FS } from "../ui/text";
 
-/** 带下拉箭头的描边选择按钮 + 菜单(筛选条的列 / 操作符)。 */
-export function SelectMenu<T extends string>(props: {
+export interface ViewOption<T extends string> {
+  value: T;
   label: string;
-  options: { value: T; label: string }[];
-  onSelect: (value: T) => void;
-  width: number;
+  icon?: IconName;
   testID?: string;
-}) {
+}
+
+/** 视图切换(树 / 文本等):一组只能按下一个的小按钮。
+ *  按下态用 `aria-pressed:`,优先级高于 `hover:`,悬停不会盖掉选中底色。 */
+export function ViewSwitch<T extends string>(props: { options: ViewOption<T>[]; value: T; onChange: (v: T) => void }) {
   return (
-    <DropMenu
-      placement="bottom"
-      align="start"
-      trigger={
-        <Button
-          testID={props.testID}
-          class="h-7 flex-row items-center gap-1.5 rounded-(--radius) border border-input bg-background px-2.5 hover:bg-list-hover"
-          style={{ width: props.width }}
-        >
-          <Text class={`${FS.sm} flex-1 text-foreground line-clamp-1`}>{props.label}</Text>
-          <Icon name="chevron-down" size={13} />
-        </Button>
-      }
-    >
+    <ToggleGroup class="flex-row items-center gap-1">
       <Each of={props.options} key={(o) => o.value}>
-        {(o) => <MItem label={o().label} onSelect={() => props.onSelect(o().value)} />}
+        {(o) => {
+          const on = () => props.value === o().value;
+          return (
+            <Toggle
+              testID={o().testID}
+              pressed={on()}
+              onChange={() => props.onChange(o().value)}
+              accessibilityLabel={o().label}
+              class="h-6 flex-row items-center justify-center gap-1.5 rounded-(--radius) px-2 hover:bg-list-hover active:bg-secondary-active aria-pressed:bg-secondary"
+            >
+              <If when={o().icon}>
+                {(name) => <Icon name={name()} size={13} color={on() ? "secondary-foreground" : "muted-foreground"} />}
+              </If>
+              <Text
+                class={`${FS.xs} font-medium`}
+                classList={{ "text-secondary-foreground": on(), "text-foreground": !on() }}
+              >
+                {o().label}
+              </Text>
+            </Toggle>
+          );
+        }}
       </Each>
-    </DropMenu>
+    </ToggleGroup>
   );
 }

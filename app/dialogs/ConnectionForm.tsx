@@ -1,7 +1,7 @@
 // 新建/编辑连接:类型、名称、环境、主机端口、用户密码、数据库(SQLite 为文件),
 // 带连接串预览与真实连通性测试。对应 GPUI 版 dialogs/connection_form.rs。
 
-import { cleanup, Clipboard, Scroll, signal, Text, View } from "nsh";
+import { cleanup, Scroll, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { dialogsNative, errorText, probeDatabases, store } from "../lib/native";
 import { type Connection, DB_KINDS, ENVS, KIND_LABEL, SSH_AUTHS, type SshAuth, SSL_MODES } from "../lib/types";
@@ -11,8 +11,8 @@ import { toast } from "../store/toast";
 import { Btn, DbIcon, envLabel, envToken, Hint, Icon, IconButton, TextField } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { connectionAndPassword, draftFrom, previewString, sslLabel, validate, withKind, withSslDefault, type ConnDraft } from "./connection";
-import { DialogFrame, Dropdown, Field, LoadingBtn, MaskedField, Segmented, SuggestField, Toggle } from "./controls";
-import { ErrorText } from "../ui/error";
+import { DialogFrame, Dropdown, Field, MaskedField, Segmented, SuggestField, SwitchField } from "./controls";
+import { ErrorBox } from "../ui/error";
 
 const TEST_TIMEOUT_SECS = 10;
 
@@ -159,7 +159,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
       case "testing":
         return "loader-circle" as const;
       case "success":
-        return "check" as const;
+        return "circle-check" as const;
       case "failed":
         return "circle-alert" as const;
     }
@@ -181,15 +181,9 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
     const s = test();
     return s.kind === "failed" ? s.error : null;
   };
-  const copyTestError = async () => {
-    const e = testError();
-    if (!e) return;
-    await Clipboard.writeText(e);
-    toast.success(t("chat.copied"));
-  };
   const testNote = () => {
     const s = test();
-    if (s.kind === "success") return { text: t("conn_form.test_success_note", { ms: s.ms }), color: "text-data" };
+    if (s.kind === "success") return { text: t("conn_form.test_success_note", { ms: s.ms }), color: "text-success" };
     return null;
   };
 
@@ -362,7 +356,7 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
 
         <If when={!sqlite()}>
           <View class="gap-3">
-            <Toggle
+            <SwitchField
               testID="conn-ssh"
               checked={d().ssh}
               label={t("conn_form.ssh")}
@@ -466,32 +460,18 @@ function ConnectionForm(props: { conn?: Connection; database?: string; id: strin
       </Scroll>
 
       <If when={error()}>
-        {(e) => (
-          <ErrorText testID="conn-error" size="xs" text={e()} />
-        )}
+        {(e) => <ErrorBox testID="conn-error" text={e()} />}
       </If>
 
       <If when={testError()}>
-        {(e) => (
-          <View
-            testID="conn-test-error"
-            class="flex-row items-start gap-2 rounded-(--radius) border border-destructive/30 bg-destructive/5 py-2 pl-3 pr-1"
-          >
-            <Icon name="circle-alert" size={14} color="negative" class="mt-0.5" />
-            <Scroll class="min-w-0 flex-1" style={{ maxHeight: 132 }}>
-              <View selectable>
-                <Text class={`${FS.xs} ${MONO} text-negative`}>{e()}</Text>
-              </View>
-            </Scroll>
-            <IconButton icon="copy" size={13} tooltip={t("chat.copy")} onPress={() => void copyTestError()} />
-          </View>
-        )}
+        {(e) => <ErrorBox testID="conn-test-error" mono text={e()} />}
       </If>
 
       <View class="flex-row items-center justify-between gap-3 pt-2">
         <View class="min-w-0 flex-1 flex-row items-center gap-3">
-          <LoadingBtn
+          <Btn
             testID="conn-test"
+            variant="outline"
             icon={testIcon()}
             label={testLabel()}
             loading={test().kind === "testing"}

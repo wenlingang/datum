@@ -5,9 +5,9 @@ testdata:
     zh-CN: "-- 生成测试数据:向 %{table} 插入 %{count} 行(种子 %{seed})"
     zh-TW: "-- 產生測試資料:向 %{table} 插入 %{count} 列(種子 %{seed})"
   menu:
-    en: "Generate Test Data…"
-    zh-CN: "生成测试数据…"
-    zh-TW: "產生測試資料…"
+    en: "Generate Test Data"
+    zh-CN: "生成测试数据"
+    zh-TW: "產生測試資料"
   title:
     en: "Generate Test Data — %{table}"
     zh-CN: "生成测试数据 — %{table}"
@@ -29,9 +29,9 @@ testdata:
     zh-CN: 随机种子
     zh-TW: 隨機種子
   seed_invalid:
-    en: "Seed must be a whole number"
-    zh-CN: "种子必须是整数"
-    zh-TW: "種子必須是整數"
+    en: "Seed must be a whole number below 9000000000000000"
+    zh-CN: "种子必须是小于 9000000000000000 的整数"
+    zh-TW: "種子必須是小於 9000000000000000 的整數"
   new_seed:
     en: "New Random Seed"
     zh-CN: "换一个随机种子"

@@ -3,20 +3,20 @@
 // 行操作(取消 / 终止会话、KILL、VACUUM)与整库操作(SQLite VACUUM / ANALYZE)都先弹确认框。
 
 import { cleanup, Clipboard, effect, Scroll, signal, Text, untracked, View } from "nsh";
-import { Dialog } from "nsh/base";
 import { t } from "nsh/i18n";
 import { askAiReviewSql } from "../chat/index";
 import { db, errorText, sql as sqlNative } from "../lib/native";
 import type { DbKind, DiagAction, DiagResult, DiagSection } from "../lib/types";
 import { conns, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
-import { Btn, EnvBadge, Hint, Icon } from "../ui/kit";
+import { Btn, EnvBadge, Hint, Icon, EmptyState, ToggleBtn } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { formatBytes } from "./RedisInsight";
 import { ErrorText } from "../ui/error";
 import { DropMenu, MItem } from "../ui/menu";
 import { explainOn, openQueryOn, suggestIndexesOn } from "./index";
 import { namedPlaceholders } from "./placeholders";
+import { ConfirmFrame } from "../dialogs/controls";
 
 /** 自动刷新间隔。 */
 const AUTO_MS = 5000;
@@ -77,11 +77,12 @@ function warn(col: string, v: string | null): boolean {
   return false;
 }
 
-const ACTION_ICON: Record<DiagAction, "circle-x" | "x" | "eraser" | "scan-search"> = {
-  cancel: "circle-x",
-  terminate: "x",
-  kill_query: "circle-x",
-  kill: "x",
+// 取消查询 = 停止(方块);终止会话 / 连接 = 圆圈叉
+const ACTION_ICON: Record<DiagAction, "square" | "circle-x" | "eraser" | "scan-search"> = {
+  cancel: "square",
+  terminate: "circle-x",
+  kill_query: "square",
+  kill: "circle-x",
   vacuum_table: "eraser",
   optimize_table: "eraser",
   vacuum: "eraser",
@@ -178,7 +179,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
   const hasActions = () => props.section.rowActions.length > 0 || hasMenu();
   const actionsWidth = () => (props.section.rowActions.length > 0 && hasMenu() ? "w-[230px]" : "w-[150px]");
   return (
-    <If when={props.r.rows.length > 0} else={<Hint>{t("diag.empty")}</Hint>}>
+    <If when={props.r.rows.length > 0} else={<EmptyState compact title={t("diag.empty")} />}>
       <Scroll horizontal class="min-h-0">
         <View testID="diag-table" class="rounded-(--radius) border border-border">
           <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
@@ -188,7 +189,7 @@ function Table(props: { r: DiagResult; section: DiagSection; connId: string; kin
             <Each of={shown()}>
               {(c) => (
                 <Text
-                  class={`${FS.xs} ${colWidth(c())} font-bold text-muted-foreground line-clamp-2`}
+                  class={`${FS.xs} ${colWidth(c())} font-bold text-fg-faint line-clamp-2`}
                   classList={{ "text-right": isNumeric(c()) }}
                 >
                   {colLabel(c())}
@@ -269,21 +270,21 @@ function ConfirmDialog(props: { pending: Pending | null; busy: boolean; prod: bo
   const p = () => props.pending;
   const target = () => (p()?.args ?? []).join(".");
   return (
-    <Dialog
+    <ConfirmFrame
       testID="diag-confirm"
       open={p() !== null}
-      onOpenChange={(e) => !e.open && props.onClose()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[560px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={props.onClose}
+      title={p() ? t(`diag.confirm.${p()!.action}.title`, { target: target() }) : ""}
+      icon="triangle-alert"
+      iconColor="warning"
+      cancelLabel={t("diag.cancel")}
+      cancelTestID="diag-confirm-cancel"
+      confirmLabel={p() ? t(`diag.action.${p()!.action}`) : ""}
+      confirmTestID="diag-confirm-ok"
+      confirmVariant="danger"
+      confirmDisabled={props.busy}
+      onConfirm={props.onConfirm}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="triangle-alert" size={16} color="warning" />
-        <Text class={`${FS.base} font-bold text-popover-foreground`}>
-          {p() ? t(`diag.confirm.${p()!.action}.title`, { target: target() }) : ""}
-        </Text>
-      </View>
       <Text class={`${FS.sm} text-popover-foreground`}>
         {p() ? t(`diag.confirm.${p()!.action}.body`, { target: target() }) : ""}
       </Text>
@@ -297,17 +298,7 @@ function ConfirmDialog(props: { pending: Pending | null; busy: boolean; prod: bo
       <If when={props.prod}>
         <Text class={`${FS.xs} text-negative`}>{t("diag.confirm_prod")}</Text>
       </If>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("diag.cancel")} onPress={props.onClose} testID="diag-confirm-cancel" />
-        <Btn
-          variant="danger"
-          disabled={props.busy}
-          label={p() ? t(`diag.action.${p()!.action}`) : ""}
-          onPress={props.onConfirm}
-          testID="diag-confirm-ok"
-        />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }
 
@@ -410,17 +401,17 @@ export function Diagnostics(props: { connId: string }) {
           <Text class={`${FS.base} font-bold text-foreground`}>{t("diag.heading", { name: conn()?.name ?? "" })}</Text>
           <If when={conn()}>{(c) => <EnvBadge env={c().env} />}</If>
           <View class="flex-1" />
-          <Btn
+          <ToggleBtn
             testID="diag-auto"
-            small
-            variant={auto() ? "primary" : "outline"}
-            icon="rotate-ccw-clock"
+            icon="refresh-cw"
             label={t("diag.auto", { secs: AUTO_MS / 1000 })}
+            pressed={auto()}
             onPress={() => setAuto(!auto())}
           />
           <Btn
             testID="diag-refresh"
             small
+            variant="outline"
             icon="refresh-cw"
             label={current()?.manual ? t("diag.run") : t("diag.refresh")}
             disabled={loading() !== null}
@@ -433,14 +424,17 @@ export function Diagnostics(props: { connId: string }) {
               {(s) => (
                 <View
                   testID={`diag-tab-${s().key}`}
-                  class="-mb-px border-b-2 px-3 py-1.5"
-                  classList={{ "border-primary": active() === s().key, "border-transparent": active() !== s().key }}
+                  class="relative -mb-px px-3 py-1.5"
                   onPress={() => select(s().key)}
                 >
+                  {/* 选中下划线:与主标签栏一致的品牌渐变 */}
+                  <If when={active() === s().key}>
+                    <View class="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 bg-linear-to-r from-primary to-ai" />
+                  </If>
                   <Text
-                    class={`${FS.sm}`}
+                    class={`${FS.sm} font-medium`}
                     classList={{
-                      "font-bold text-foreground": active() === s().key,
+                      "text-foreground": active() === s().key,
                       "text-muted-foreground": active() !== s().key,
                     }}
                   >
@@ -517,7 +511,7 @@ export function Diagnostics(props: { connId: string }) {
                       {(u) => (
                         <View testID="diag-unavailable" class="gap-1 rounded-(--radius) border border-border bg-panel px-3 py-2">
                           <View class="flex-row items-start gap-1.5">
-                            <Icon name="info" size={13} color="warning" class="mt-0.5" />
+                            <Icon name="triangle-alert" size={13} color="warning" class="mt-0.5" />
                             <Text class={`${FS.sm} flex-1 text-foreground`}>{t(`diag.unavailable.${u().reason}`)}</Text>
                           </View>
                           <If when={u().detail}>

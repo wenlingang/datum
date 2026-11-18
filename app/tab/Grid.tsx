@@ -3,7 +3,7 @@
 //
 // 单元格不存状态:renderCell 只拿到行列号,值、暂存态都在绑定里从模型读(格子会被复用)。
 
-import { Clipboard, Text, View } from "nsh";
+import { Clipboard, effect, Text, untracked, View } from "nsh";
 import { DataTable, type DataTableColumn, type DataTableRef } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
@@ -264,6 +264,11 @@ export function ResultGrid(props: { m: TabModel }) {
   const m = props.m;
   let table: DataTableRef | undefined;
   let refit: ReturnType<typeof setTimeout> | undefined;
+  // 单元格 / 行详情弹窗打开时表格交出键盘:DataTable 获得焦点后按快捷键绑定 Esc、方向键、⌘C,
+  // 弹窗盖在上面时仍然生效(Esc 先被拿去清空选中,弹窗关不掉;方向键在背后移动选中)
+  effect(() => {
+    if (m.cell() !== null || m.rowDetail() !== null) untracked(() => table?.blur());
+  });
   const rows = () => {
     const result = m.result();
     return result ? viewIndices(m).map((i) => result.rows[i]) : [];

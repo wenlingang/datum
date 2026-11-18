@@ -2,7 +2,7 @@
 // 对应 GPUI 版 dialogs/settings.rs。
 
 import { Scroll, signal, Text, View, type JSX, type Signal } from "nsh";
-import { AlertDialog, Button } from "nsh/base";
+import { AlertDialog, Avatar, Button } from "nsh/base";
 import { t } from "nsh/i18n";
 import { ai, chat, dialogsNative, errorText, journal } from "../lib/native";
 import type { LanguagePreference, ProviderConfig, ThemePreference } from "../lib/types";
@@ -18,7 +18,7 @@ import {
 import { checkUpdates, installUpdate, updates } from "../store/update";
 import { journalSettings, saveJournalSettings } from "../store/journal";
 import { toast } from "../store/toast";
-import { Btn, color, Hint, Icon, IconButton, NavRow, SectionLabel, TextField, type IconName } from "../ui/kit";
+import { Btn, color, Hint, Icon, IconButton, NavRow, SectionLabel, TextField, SearchField, type IconName } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import {
   aiSettings,
@@ -30,7 +30,7 @@ import {
   providerSubtitle,
   reloadAiSettings,
 } from "./aiSettings";
-import { ActionMenu, CheckBox, DialogFrame, Dropdown, LoadingBtn, MaskedField, Toggle } from "./controls";
+import { ActionMenu, CheckBox, DialogFrame, Dropdown, MaskedField, SwitchField } from "./controls";
 import type { SettingsSection } from "./state";
 import { CopyButton, ErrorText } from "../ui/error";
 import { privacy, setDemoMode } from "../store/privacy";
@@ -40,7 +40,7 @@ const SECTIONS: { id: SettingsSection; icon: IconName; key: string }[] = [
   { id: "knowledge", icon: "file-text", key: "settings.section_knowledge" },
   { id: "privacy", icon: "lock", key: "settings.section_privacy" },
   { id: "appearance", icon: "type", key: "settings.section_appearance" },
-  { id: "about", icon: "refresh-cw", key: "settings.section_about" },
+  { id: "about", icon: "info", key: "settings.section_about" },
 ];
 
 /** 表单标签列宽度 */
@@ -186,23 +186,24 @@ function protocolLabel(id: string) {
 // 服务商头像的品牌色是数据色(各家品牌),不随主题变化;OpenAI 兼容用主色。
 const BRAND: Record<string, string> = { anthropic: "#d97757", gemini: "#3b82f6" };
 
-function Avatar(props: { provider: ProviderConfig; size: number }) {
+/** 服务商头像:nsh/base 的 Avatar,单字母放在 fallback 里(Avatar 自己取名字首字母会取两个),品牌色走 fallbackStyle。 */
+function ProviderAvatar(props: { provider: ProviderConfig; size: number }) {
   const tone = () => BRAND[props.provider.protocol] ?? color("primary");
   const initial = () => props.provider.name.trim().charAt(0).toUpperCase() || "?";
   return (
-    <View
-      class="shrink-0 items-center justify-center"
-      style={{
-        width: props.size,
-        height: props.size,
-        borderRadius: props.size * 0.3,
-        backgroundColor: `${tone().slice(0, 7)}29`,
-      }}
-    >
-      <Text class="font-bold" style={{ color: tone(), fontSize: props.size * 0.45 }}>
-        {initial()}
-      </Text>
-    </View>
+    <Avatar
+      name={props.provider.name}
+      accessibilityLabel=""
+      class="shrink-0"
+      style={{ width: props.size, height: props.size }}
+      fallbackClass="items-center justify-center"
+      fallbackStyle={{ borderRadius: props.size * 0.3, backgroundColor: `${tone().slice(0, 7)}29` }}
+      fallback={
+        <Text class="font-bold" style={{ color: tone(), fontSize: props.size * 0.45 }}>
+          {initial()}
+        </Text>
+      }
+    />
   );
 }
 
@@ -258,15 +259,13 @@ function AiSection(props: { ctx: Ctx }) {
                   accessibilityLabel={nameOf(p())}
                   selected={isSelected()}
                   onPress={() => select(p().id)}
-                  class="h-12 flex-row items-center gap-2.5 rounded-(--radius-lg) px-2.5 hover:bg-list-hover selected:bg-raised"
+                  // hover: 优先级高于 selected:,只给未选中项加悬停底色
+                  class={`h-12 flex-row items-center gap-2.5 rounded-(--radius-lg) px-2.5 ${isSelected() ? "bg-raised" : "hover:bg-list-hover"}`}
                   classList={{ "opacity-50": !p().enabled }}
                 >
-                  <Avatar provider={p()} size={28} />
+                  <ProviderAvatar provider={p()} size={28} />
                   <View class="min-w-0 flex-1 gap-0.5">
-                    <Text
-                      class={`${FS.sm} text-foreground line-clamp-1`}
-                      classList={{ "font-semibold": isSelected() }}
-                    >
+                    <Text class={`${FS.sm} font-medium text-foreground line-clamp-1`}>
                       {nameOf(p())}
                     </Text>
                     <Text class={`${FS.xs} text-fg-faint line-clamp-1`}>
@@ -404,14 +403,14 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
   return (
     <View class="gap-4">
       <View class="flex-row items-center gap-3 pb-1">
-        <Avatar provider={p()} size={40} />
+        <ProviderAvatar provider={p()} size={40} />
         <View class="min-w-0 flex-1 gap-1">
           <Text class={`${FS.lg} font-semibold text-foreground`}>{nameOf(p())}</Text>
           <Text class={`${FS.xs} text-fg-faint line-clamp-1`}>
             {p().baseUrl.trim() === "" ? protocolLabel(p().protocol) : `${protocolLabel(p().protocol)} · ${p().baseUrl.trim()}`}
           </Text>
         </View>
-        <Toggle
+        <SwitchField
           testID="provider-enabled"
           checked={p().enabled}
           label={t("settings.provider_enabled")}
@@ -476,9 +475,10 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
               </Text>
             </View>
             <View class="flex-1" />
-            <LoadingBtn
+            <Btn
               testID="models-fetch"
               small
+              variant="outline"
               icon="refresh-cw"
               label={fetching() ? t("settings.fetching") : t("settings.fetch_models")}
               loading={fetching()}
@@ -489,18 +489,13 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
         }
       >
         <View class="flex-row gap-2">
-          <View class="flex-1 justify-center">
-            <TextField
-              testID="model-filter"
-              value={filter()}
-              placeholder={t("settings.model_search_placeholder")}
-              onChange={({ value }) => filter.set(value)}
-              class="pl-8"
-            />
-            <View class="pointer-events-none absolute left-2.5">
-              <Icon name="search" size={14} color="fg-faint" />
-            </View>
-          </View>
+          <SearchField
+            testID="model-filter"
+            value={filter()}
+            placeholder={t("settings.model_search_placeholder")}
+            onChange={(v) => filter.set(v)}
+            class="flex-1"
+          />
           <View class="flex-1 justify-center">
             <TextField
               testID="model-add"
@@ -509,10 +504,10 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
               submitBehavior="submit"
               onChange={({ value }) => newModel.set(value)}
               onSubmit={addManualModel}
-              class="pl-8"
+              class="h-7 pl-7"
             />
             <View class="pointer-events-none absolute left-2.5">
-              <Icon name="plus" size={14} color="fg-faint" />
+              <Icon name="plus" size={13} color="fg-faint" />
             </View>
           </View>
         </View>
@@ -553,14 +548,14 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
                     </Text>
                     <If when={probe()?.state === "ok"}>
                       <View class="flex-row items-center gap-1">
-                        <Icon name="circle-check" size={13} color="env-local" />
-                        <Text class={`${FS.xs} text-env-local`}>{t("settings.model_available")}</Text>
+                        <Icon name="circle-check" size={13} color="success" />
+                        <Text class={`${FS.xs} text-success`}>{t("settings.model_available")}</Text>
                       </View>
                     </If>
                     <If when={probe()?.state === "failed" ? (probe() as { error: string }).error : null}>
                       {(err) => (
                         <View class="flex-row items-center gap-1" style={{ maxWidth: 220 }}>
-                          <Icon name="circle-x" size={13} color="negative" class="shrink-0" />
+                          <Icon name="circle-alert" size={13} color="negative" class="shrink-0" />
                           <Text class={`${FS.xs} text-negative line-clamp-1`}>{err()}</Text>
                           <CopyButton text={err()} />
                         </View>
@@ -573,10 +568,10 @@ function ProviderDetail(props: { id: string; ctx: Ctx; onDeleted: (next: string 
                         "opacity-0 group-hover:opacity-100": probe()?.state !== "running",
                       }}
                     >
-                      <LoadingBtn
+                      <Btn
                         testID={`model-test-${m().id}`}
                         variant="ghost"
-                        xsmall
+                        small
                         label={t("settings.model_test")}
                         loading={probe()?.state === "running"}
                         onPress={() => void testModel(m().id)}
@@ -684,7 +679,7 @@ function PrivacySection(props: { ctx: Ctx }) {
       <Hint>{t("settings.allow_prod_data_hint")}</Hint>
       {/* 演示模式:全局强制遮罩敏感数据、不能显示原值,隐藏连接细节(⌘⇧D / 顶栏按钮) */}
       <View class="pt-2">
-        <Toggle testID="demo-mode" checked={privacy.demo()} onChange={setDemoMode} label={t("mask.demo_mode")} />
+        <SwitchField testID="demo-mode" checked={privacy.demo()} onChange={setDemoMode} label={t("mask.demo_mode")} />
       </View>
       <Hint>{t("mask.demo_mode_hint")}</Hint>
       <Hint>{t("mask.settings_hint")}</Hint>
@@ -729,13 +724,13 @@ function JournalCard(props: { ctx: Ctx }) {
   const days = (n: number) => t("journal.settings_days", { n });
   return (
     <Card title={t("journal.settings_title")} class="mt-2 gap-3">
-      <Toggle
+      <SwitchField
         testID="journal-enabled"
         checked={current().enabled}
         onChange={(v) => update({ enabled: v })}
         label={t("journal.settings_enabled")}
       />
-      <Toggle
+      <SwitchField
         testID="journal-store-rows"
         checked={current().storeRows}
         onChange={(v) => update({ storeRows: v })}

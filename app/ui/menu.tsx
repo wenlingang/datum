@@ -2,7 +2,7 @@
 // 对应 GPUI 版 gpui-component 的 PopupMenu。菜单项在每次打开时才构建,可在里面读当前数据。
 
 import { Text, View, type JSX } from "nsh";
-import { ContextMenu, Menu, MenuItem, MenuSeparator, type Align, type Placement } from "nsh/base";
+import { ContextMenu, Menu, MenuItem, MenuSeparator, Submenu, type Align, type Placement } from "nsh/base";
 import { Icon } from "./kit";
 import { FS } from "./text";
 
@@ -60,22 +60,42 @@ export function MItem(props: { label: string; onSelect?: () => void; disabled?: 
   );
 }
 
-/** 可勾选的菜单项:左侧对勾表示开启。 */
+/** 可勾选的菜单项:左侧对勾表示开启(MenuItem 的 checked + indicator,读屏为 menuitemcheckbox)。 */
 export function MCheck(props: { label: string; checked: boolean; onSelect: () => void; disabled?: boolean }) {
   return (
     <MenuItem
+      checked={props.checked}
       onSelect={() => setTimeout(() => props.onSelect(), 0)}
       disabled={props.disabled}
       accessibilityLabel={props.label}
       class="h-7 flex-row items-center gap-1.5 rounded-(--radius) px-2 hover:bg-accent focus:bg-accent active:bg-secondary-active disabled:opacity-40"
+      indicatorClass="size-3.5 items-center justify-center opacity-0 checked:opacity-100"
+      indicator={<Icon name="check" size={13} color="popover-foreground" />}
     >
-      <View class="size-3.5 items-center justify-center">
-        <If when={props.checked}>
-          <Icon name="check" size={13} color="popover-foreground" />
-        </If>
-      </View>
       <Text class={`${FS.sm} text-popover-foreground`}>{props.label}</Text>
     </MenuItem>
+  );
+}
+
+/** 二级菜单:触发项外观同 MItem、右侧带箭头;指针移上去或按 → 展开,子项是 `children`。 */
+export function MSub(props: { label: string; children?: JSX.Element; disabled?: boolean; testID?: string }) {
+  return (
+    // Submenu 自己就是这一行条目(悬停 / 键盘聚焦 / 展开的样式写在它上面);trigger 只放内容,
+    // 不能再套 MenuItem——按下 MenuItem 会当作「选中」把整个菜单关掉
+    <Submenu
+      disabled={props.disabled}
+      offset={4}
+      testID={props.testID}
+      class="h-7 rounded-(--radius) px-2 hover:bg-accent focus:bg-accent aria-expanded:bg-accent disabled:opacity-40"
+      trigger={
+        <View class="h-full flex-row items-center gap-2">
+          <Text class={`${FS.sm} flex-1 text-popover-foreground`}>{props.label}</Text>
+          <Icon name="chevron-right" size={13} color="muted-foreground" />
+        </View>
+      }
+    >
+      {props.children}
+    </Submenu>
   );
 }
 

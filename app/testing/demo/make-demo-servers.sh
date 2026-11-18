@@ -78,7 +78,8 @@ SELECT g, (ARRAY['weekly', 'biweekly', 'monthly'])[1 + g % 3], (ARRAY['active', 
 FROM generate_series(1, 72) g;
 SQL
 
-  wait_for MySQL docker exec "$MY" mysql -uroot -e "select 1"
+  # 官方镜像初始化时先起临时服务、稍后才建 shop 库:等到 shop 能连上再灌数据
+  wait_for MySQL docker exec "$MY" mysql -uroot shop -e "select 1"
   docker exec -i "$MY" mysql -uroot shop <<'SQL'
 SET SESSION cte_max_recursion_depth = 500000;
 CREATE TABLE orders (
@@ -116,8 +117,20 @@ REDIS
   echo "demo servers ready"
 }
 
+# 诊断页「锁等待」截图用:A 开事务改 orders 第 1 行后一直占着(pg_sleep),B、C 改同一行被卡住。
+# 会话随容器一起由 down 清掉。
+locks() {
+  docker exec -d "$PG" psql -U postgres -d analytics -c "BEGIN; UPDATE orders SET status = 'shipped' WHERE id = 1; SELECT pg_sleep(900);"
+  sleep 1
+  docker exec -d "$PG" psql -U postgres -d analytics -c "UPDATE orders SET status = 'paid' WHERE id = 1;"
+  docker exec -d "$PG" psql -U postgres -d analytics -c "UPDATE orders SET status = 'delivered' WHERE id = 1;"
+  sleep 1
+  echo "lock waits ready"
+}
+
 case "${1:-}" in
   up) up ;;
   down) down ;;
-  *) echo "usage: $0 up|down" >&2; exit 2 ;;
+  locks) locks ;;
+  *) echo "usage: $0 up|down|locks" >&2; exit 2 ;;
 esac

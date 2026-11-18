@@ -16,8 +16,8 @@ import { closeTab, findTableTab } from "../store/workspace";
 import { openTable } from "../tab";
 import { type AlterState, type ImpactState, modelOf, reloadAfterSchemaChange, type RiskGate } from "../tab/model";
 import { RiskGateDialog } from "../tab/RiskDialog";
-import { ErrorText } from "../ui/error";
-import { Btn, Hint, Icon, IconButton, SectionLabel, TextField, tip } from "../ui/kit";
+import { ErrorText, ErrorBox } from "../ui/error";
+import { Btn, Hint, Icon, IconButton, SectionLabel, TextField, tip, Loading } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { alterTarget, closeAlterTable } from "./ops";
 
@@ -296,7 +296,7 @@ function AlterForm(props: { connId: string; table: string }) {
       closeOnBackdrop={false}
       testID="alter-dialog"
     >
-      <If when={!loading()} else={<Hint>{t("alter.loading")}</Hint>}>
+      <If when={!loading()} else={<Loading label={t("alter.loading")} />}>
         <If when={!loadError()} else={<ErrorText text={loadError() ?? ""} />}>
           <Scroll class="min-h-0 shrink" style={{ maxHeight: 380 }} contentClass="gap-3 pr-1">
             <View class="flex-row items-center gap-3">
@@ -532,18 +532,17 @@ function AlterForm(props: { connId: string; table: string }) {
                 class="flex-1 bg-editor"
               />
             </View>
-            <If when={applyError()}>{(e) => <ErrorText text={e()} />}</If>
+            <If when={applyError()}>{(e) => <ErrorBox testID="alter-apply-error" text={e()} />}</If>
             <If when={violations().length > 0}>
-              <View testID="alter-violations" class="gap-1 rounded-(--radius) border border-destructive/40 bg-destructive/10 px-2.5 py-1.5">
-                <Text class={`${FS.xs} font-bold text-negative`}>{t("alter.fk_failed", { count: violations().length })}</Text>
-                <Each of={violations().slice(0, 20)}>
-                  {(v) => (
-                    <Text class={`${FS.xs} ${MONO} text-foreground`}>
-                      {t("alter.violation", { table: v().table, rowid: v().rowid ?? "—", parent: v().parent })}
-                    </Text>
-                  )}
-                </Each>
-              </View>
+              <ErrorBox
+                testID="alter-violations"
+                mono
+                title={t("alter.fk_failed", { count: violations().length })}
+                text={violations()
+                  .slice(0, 20)
+                  .map((v) => t("alter.violation", { table: v.table, rowid: v.rowid ?? "—", parent: v.parent }))
+                  .join("\n")}
+              />
             </If>
           </View>
 

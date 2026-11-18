@@ -18,8 +18,8 @@ import {
 } from "../store/conns";
 import { privacy } from "../store/privacy";
 import { toast } from "../store/toast";
-import { closeConnTabs, setDetailOpen, workspace } from "../store/workspace";
-import { openTable } from "../tab";
+import { closeConnTabs, workspace } from "../store/workspace";
+import type { TableDetailView } from "../tab";
 
 /** 导出格式,菜单顺序与 GPUI 版一致。 */
 export const EXPORT_FORMATS: ExportFormat[] = ["csv", "xlsx", "json", "sql", "markdown"];
@@ -29,8 +29,8 @@ const EXT: Record<ExportFormat, string> = { csv: "csv", xlsx: "xlsx", json: "jso
 
 /** 结果栏「导出」菜单项文案。 */
 export const exportMenuLabel = (f: ExportFormat) => t("ops.export_as", { format: SHORT[f] });
-/** 表右键「导出整表」菜单项文案。 */
-export const exportTableLabel = (f: ExportFormat) => t("ops.export_table_as", { format: SHORT[f] });
+/** 格式名(表右键「导出整表」二级菜单的子项)。 */
+export const exportFormatName = (f: ExportFormat) => SHORT[f];
 
 /** 弹出保存对话框写入文本;成功 / 失败都给提示,取消不提示。 */
 export async function saveText(fileName: string, text: string, success: string) {
@@ -235,9 +235,22 @@ export async function dropDbByName(database: string) {
 
 // ------------------------------------------------------------ 表
 
-/** 右键表「查看表详情」:聚焦(或新开)该表 tab 后展开右栏。 */
-export function showTableDetail(connId: string, table: string) {
-  if (openTable(connId, table)) setDetailOpen(true);
+const tableDetailView = signal<TableDetailView | null>(null);
+
+/** 正在查看的表详情(TableDetailDialog 读取)。 */
+export const currentTableDetail = () => tableDetailView();
+export const closeTableDetail = () => tableDetailView.set(null);
+
+/** 右键表「查看表详情」:查表结构,弹窗显示字段与索引(不打开表的 tab)。 */
+export async function showTableDetail(connId: string, table: string) {
+  const conn = conns.get(connId);
+  if (!conn) return;
+  try {
+    const detail = await db.tableDetail(conn.kind, connId, table);
+    tableDetailView.set({ table, kind: conn.kind, detail });
+  } catch (e) {
+    toast.error(errorText(e));
+  }
 }
 
 export interface DdlView {

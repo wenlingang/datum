@@ -1,6 +1,7 @@
 // README / 介绍页截图。不进常规测试(run-tests.sh 不跑它),要在真机上跑:
 //   D=$(mktemp -d) && testing/demo/make-demo.sh "$D"
 //   testing/demo/make-demo-servers.sh up   # 新功能的截图要用 PG / MySQL / Redis 演示库(Docker),拍完 down
+//   testing/demo/make-demo-servers.sh locks  # diagnostics.png 要先造出锁等待
 //   mkdir -p testing/demo/out
 //   DATUM_CONFIG_DIR="$D" nsh test testing/demo/screenshots.test.tsx --target macos
 //   testing/demo/publish.sh        # 原图在 testing/demo/out/,缩放 / 裁剪后放进 docs/screenshots/
@@ -81,14 +82,14 @@ test("sql-editor.png:暗色,查询 tab 跑出按销售额排名的单品豆", as
   await app.screenshot(`${OUT}/sql-editor.png`);
 }, 90_000);
 
-test("table.png:亮色,products 表浏览 + 右侧行详情", async () => {
+test("table.png:亮色,products 表浏览 + 行详情弹窗", async () => {
   const app = await start("light");
   await openRoastery(app);
-  // 表右键「View Table Details」:打开表并展开右侧详情栏;再点一行,详情栏换成行详情
-  await app.rightClick("id:table-list >> label:products");
-  await app.press("label:View Table Details");
+  // 单击打开表;在一行上右键「View Details」打开行详情弹窗
+  await app.press("id:table-list >> label:products");
   await app.waitFor("text:Boquete Geisha", T);
-  await app.press("text:Boquete Geisha");
+  await app.rightClick("text:Boquete Geisha");
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-detail", T);
   await app.wait(800);
   await app.screenshot(`${OUT}/table.png`);
@@ -149,20 +150,22 @@ test("erd.png:亮色,roastery 整库的关系图", async () => {
 test("jsonb.png:暗色,PG 的 JSONB 行详情展开成树,点字段筛选整张表", async () => {
   const app = await start("dark");
   await app.press("id:rail-demo-analytics");
-  // 表右键「View Table Details」:打开表并展开右侧详情栏;再点一行,详情栏换成行详情
-  await app.rightClick("id:table-list >> label:web_events");
-  await app.press("label:View Table Details");
+  // 单击打开表;在一行上右键「View Details」打开行详情弹窗,JSON 树里点字段生成筛选(弹窗随之关闭)
+  await app.waitFor("id:table-list >> label:web_events", T);
+  await app.press("id:table-list >> label:web_events");
   await app.waitFor("text:/\"total_cents\": 1563/", T);
-  await app.press("text:/\"total_cents\": 1563/");
+  await app.rightClick("text:/\"total_cents\": 1563/");
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-json:payload", T);
   await app.press("id:json-node:customer");
   await app.waitFor("id:json-node:customer.tier", T);
   await app.press("id:json-node:customer.tier");
   await app.press("id:json-filter");
   await app.waitFor("id:filter-server-hint", T);
-  // 筛选后选中第 4 行(tier 也是 silver;第 1 行仍是选中状态,再点会取消选中),详情栏展开到这个字段
+  // 筛选后对另一行(tier 也是 silver)再打开行详情,展开到这个字段
   await app.waitFor("text:/\"total_cents\": 1902/", T);
-  await app.press("text:/\"total_cents\": 1902/");
+  await app.rightClick("text:/\"total_cents\": 1902/");
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-json:payload", T);
   await app.press("id:json-node:customer");
   await app.waitFor("id:json-node:customer.tier", T);
@@ -198,7 +201,7 @@ test("sqlite-alter.png:亮色,SQLite 表单改列类型,预览 12 步重建表�
   const app = await start("light");
   await openRoastery(app);
   await app.rightClick("id:table-list >> label:products");
-  await app.press("label:Alter Table…");
+  await app.press("label:Alter Table");
   await app.waitFor("id:alter-dialog", T);
   // 第 5 列 origin:TEXT → VARCHAR(40)
   await app.clear("id:alter-type:4");
@@ -245,12 +248,13 @@ INSERT INTO products_backup (id, category_id, sku, name, origin, region, roast_l
   await app.keyboard.press("mod+shift+enter");
   await app.waitFor("text:/Executed successfully/", T);
   await app.rightClick("id:table-list >> label:products");
-  await app.press("label:Compare Data With…");
+  await app.press("label:Compare with Another Table");
   await app.waitFor("id:data-diff", T);
   // 目标默认是同一连接里的同名表,改选副本:点下拉框里显示的表名打开,再选 products_backup
   await app.waitFor("id:ddiff-target-table >> text:products", T);
   await app.press("id:ddiff-target-table >> text:products");
-  await app.press("text:products_backup");
+  // 侧栏表列表里也有 products_backup(一整段文字),下拉列表在它之后出现:取第二个
+  await app.press("text:products_backup >> nth=1");
   await app.waitUntil(() => app.enabled("id:ddiff-run"), T);
   await app.press("id:ddiff-run");
   await app.waitFor("id:ddiff-summary", T);
@@ -299,9 +303,21 @@ test("test-data.png:暗色,给 orders 生成测试数据的对话框与预览", 
   const app = await start("dark");
   await openRoastery(app);
   await app.rightClick("id:table-list >> label:orders");
-  await app.press("label:Generate Test Data…");
+  await app.press("label:Generate Test Data");
   await app.waitFor("id:testdata-dialog", T);
   await app.waitFor("id:testdata-preview-grid", T);
   await app.wait(1000);
   await app.screenshot(`${OUT}/test-data.png`);
+}, 90_000);
+
+test("diagnostics.png:暗色,PG 诊断页的锁等待(先跑 make-demo-servers.sh locks)", async () => {
+  const app = await start("dark");
+  await app.press("id:rail-demo-analytics");
+  await app.waitFor("id:table-list >> label:orders", T);
+  await app.press("label:Database Diagnostics");
+  await app.waitFor("id:diag-tab-locks", T);
+  await app.press("id:diag-tab-locks");
+  await app.waitFor("text:/UPDATE orders SET status/", T);
+  await noToasts(app);
+  await app.screenshot(`${OUT}/diagnostics.png`);
 }, 90_000);

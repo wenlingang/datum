@@ -11,7 +11,7 @@ async function openAlter(table: string) {
   await app.press("id:rail-c-alter");
   await app.waitFor(`label:${table}`);
   await app.rightClick(`id:table-list >> label:${table}`);
-  await app.press("label:Alter Table…");
+  await app.press("label:Alter Table");
   await app.waitFor("id:alter-dialog");
   await app.waitFor("id:alter-mode");
   return app;
@@ -49,7 +49,7 @@ test("改列类型:预览重建表脚本,经危险语句确认后执行", async 
   // 再打开:类型与非空已生效(表清单刷新完再右键)
   await app.waitFor("id:table-list >> label:products", { timeout: 10_000 });
   await app.rightClick("id:table-list >> label:products");
-  await app.press("label:Alter Table…");
+  await app.press("label:Alter Table");
   await app.waitFor("id:alter-mode");
   expect(app.value("id:alter-type:2")).toBe("VARCHAR(40)");
   expect(app.texts()).toContain("No changes");
@@ -64,7 +64,7 @@ test("只改列名与加列:直接 ALTER TABLE,不走重建;已打开的表 tab 
   await app.press("id:table-list >> label:products");
   await app.waitFor("text:Boquete", { timeout: 10_000 });
   await app.rightClick("id:table-list >> label:products");
-  await app.press("label:Alter Table…");
+  await app.press("label:Alter Table");
   await app.waitFor("id:alter-mode");
   await app.clear("id:alter-name:3");
   await app.type("id:alter-name:3", "unit_price");
@@ -118,7 +118,7 @@ test("改表名:已打开的旧表 tab 关掉,换成新表名的 tab", async () 
   await app.press("id:table-list >> label:order_items");
   await app.waitFor("id:tab-strip >> label:order_items", { timeout: 10_000 });
   await app.rightClick("id:table-list >> label:order_items");
-  await app.press("label:Alter Table…");
+  await app.press("label:Alter Table");
   await app.waitFor("id:alter-mode");
   await app.clear("id:alter-table-name");
   await app.type("id:alter-table-name", "line_items");

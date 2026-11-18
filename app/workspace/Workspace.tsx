@@ -1,19 +1,20 @@
-// 主窗口工作区:顶栏 + [侧栏 | 标签页 | 详情栏 | AI 面板](可拖动宽度)+ 状态栏。
+// 主窗口工作区:顶栏 + [侧栏 | 标签页 | AI 面板](可拖动宽度)+ 状态栏。
 // 对应 GPUI 版 workspace/mod.rs 的 Render。标签页按连接隔离,见 store/workspace.ts。
 
 import { View } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { ChatPanel } from "../chat";
 import { PANEL, setPanelWidth, workspace } from "../store/workspace";
-import { DetailPanel, TabView } from "../tab";
+import { TableDetailDialog, TabView } from "../tab";
 import { installAppCommands } from "./commands";
+import { closeTableDetail, currentTableDetail } from "./ops";
 import { AlterTableDialog } from "./AlterTableDialog";
 import { TestDataDialog } from "./TestDataDialog";
 import { DdlDialog } from "./DdlDialog";
 import { EmptyWorkspace } from "./EmptyWorkspace";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
-import { TabStrip } from "./TabStrip";
+import { renameOnPressAnywhere, TabStrip } from "./TabStrip";
 import { TopBar } from "./TopBar";
 
 /** 中间栏:标签条 + 当前 tab(无 tab 时为空白工作区)。 */
@@ -51,25 +52,13 @@ function SidebarPanel() {
   );
 }
 
-/** 普通布局:侧栏 | 标签页 | 详情 | AI 面板。 */
+/** 普通布局:侧栏 | 标签页 | AI 面板。行详情、表详情是弹窗。 */
 function Editing() {
   return (
     <ResizablePanelGroup handleClass="bg-border" handleAccessibilityLabel="resize">
       <SidebarPanel />
       <ResizablePanel minSize={240}>
         <Center />
-      </ResizablePanel>
-      <ResizablePanel
-        visible={workspace.detailOpen()}
-        size={workspace.detailWidth()}
-        minSize={PANEL.detail.min}
-        maxSize={PANEL.detail.max}
-        fixed
-        onResize={({ size }) => setPanelWidth("detail", size)}
-      >
-        <View class="flex-1 bg-background" testID="detail-panel">
-          <DetailPanel />
-        </View>
       </ResizablePanel>
       <ResizablePanel
         visible={workspace.aiOpen()}
@@ -104,7 +93,8 @@ function Conversing() {
 export function Workspace() {
   installAppCommands();
   return (
-    <View class="flex-1 bg-background">
+    // 任意位置的按下:标签正在改名且没点在输入框里,就保存并退出改名
+    <View class="flex-1 bg-background" onTouchStart={renameOnPressAnywhere}>
       <TopBar />
       <View class="min-h-0 flex-1">
         <If when={workspace.aiFullscreen()} else={<Editing />}>
@@ -113,6 +103,7 @@ export function Workspace() {
       </View>
       <StatusBar />
       <DdlDialog />
+      <TableDetailDialog view={currentTableDetail()} onClose={closeTableDetail} />
       <AlterTableDialog />
       <TestDataDialog />
     </View>

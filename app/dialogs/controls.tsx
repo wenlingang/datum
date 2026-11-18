@@ -3,21 +3,28 @@
 
 import { EditorKeys } from "datum/native";
 import { batch, Overlay, Scroll, signal, Text, View, type JSX, type ViewRef } from "nsh";
-import { Button, Checkbox, Dialog, Input, Select, Switch, type InputProps } from "nsh/base";
+import { Button, Checkbox, Dialog, Input, Select, Switch, Toggle, ToggleGroup, type InputProps } from "nsh/base";
 import { t } from "nsh/i18n";
-import { color as tokenColor, Icon, IconButton, SectionLabel, TextField, tip, type IconName } from "../ui/kit";
+import { color as tokenColor, Icon, IconButton, SectionLabel, TextField, tip, Btn, type IconName, type ButtonVariant } from "../ui/kit";
 import { DropMenu, MItem, MSep } from "../ui/menu";
 import { FS } from "../ui/text";
 import { ErrorText } from "../ui/error";
 
-/** 对话框外框:标题 + 右上角关闭 + 内容。`width` 与 GPUI 版一致(点)。 */
+/** 对话框外框:标题(可带 16 号图标)+ 右上角关闭 + 内容;Esc 关闭。`width` 与 GPUI 版一致(点)。
+ *  应用里的对话框都用它(或下面的 ConfirmFrame),不要自己拼 Dialog 外观。 */
 export function DialogFrame(props: {
   open: boolean;
   onClose: () => void;
   title: string;
   width: number;
+  /** 标题前的图标(16 号) */
+  icon?: IconName;
+  /** 图标颜色 token(默认 foreground) */
+  iconColor?: string;
   /** 点遮罩是否关闭(默认 true) */
   closeOnBackdrop?: boolean;
+  /** 读屏角色:确认类用 alertdialog */
+  role?: "dialog" | "alertdialog";
   testID?: string;
   children: JSX.Element;
 }) {
@@ -25,6 +32,8 @@ export function DialogFrame(props: {
     <Dialog
       open={props.open}
       testID={props.testID}
+      role={props.role}
+      accessibilityLabel={props.title}
       animation="fade"
       closeOnBackdropPress={props.closeOnBackdrop ?? true}
       onOpenChange={({ open }) => {
@@ -35,11 +44,67 @@ export function DialogFrame(props: {
       style={{ width: props.width, maxWidth: "94%", maxHeight: "94%" }}
     >
       <View class="flex-row items-center gap-2">
-        <Text class={`${FS.lg} flex-1 font-semibold text-popover-foreground`}>{props.title}</Text>
-        <IconButton icon="x" label={t("import.close")} onPress={props.onClose} class="-mr-2" />
+        <If when={props.icon}>{(n) => <Icon name={n()} size={16} color={props.iconColor ?? "foreground"} />}</If>
+        <Text class={`${FS.lg} min-w-0 flex-1 font-semibold text-popover-foreground line-clamp-2`}>{props.title}</Text>
+        <IconButton
+          icon="x"
+          label={t("import.close")}
+          testID={props.testID ? `${props.testID}-dismiss` : undefined}
+          onPress={props.onClose}
+          class="-mr-2"
+        />
       </View>
       {props.children}
     </Dialog>
+  );
+}
+
+/** 确认框:DialogFrame 的外观 + 底部「取消 / 确认」。内容放说明、只读预览、勾选确认等。
+ *  nsh/base 的 AlertDialog 是系统原生弹窗,只放得下标题和一句话,只有这种纯文字确认才用它。 */
+export function ConfirmFrame(props: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  /** 默认 560 */
+  width?: number;
+  icon?: IconName;
+  iconColor?: string;
+  testID?: string;
+  cancelLabel: string;
+  cancelTestID?: string;
+  confirmLabel: string;
+  confirmTestID?: string;
+  /** 默认 primary;破坏性操作用 danger */
+  confirmVariant?: ButtonVariant;
+  confirmIcon?: IconName;
+  confirmDisabled?: boolean;
+  onConfirm: () => void;
+  children?: JSX.Element;
+}) {
+  return (
+    <DialogFrame
+      role="alertdialog"
+      open={props.open}
+      onClose={props.onClose}
+      title={props.title}
+      width={props.width ?? 560}
+      icon={props.icon}
+      iconColor={props.iconColor}
+      testID={props.testID}
+    >
+      <View class="min-h-0 shrink gap-3">{props.children}</View>
+      <View class="flex-row justify-end gap-2">
+        <Btn variant="outline" label={props.cancelLabel} onPress={props.onClose} testID={props.cancelTestID} />
+        <Btn
+          variant={props.confirmVariant ?? "primary"}
+          icon={props.confirmIcon}
+          label={props.confirmLabel}
+          disabled={props.confirmDisabled}
+          onPress={props.onConfirm}
+          testID={props.confirmTestID}
+        />
+      </View>
+    </DialogFrame>
   );
 }
 
@@ -60,7 +125,7 @@ export interface SegmentOption<T extends string> {
   color?: string;
 }
 
-/** 胶囊分段选择(如环境)。 */
+/** 胶囊分段选择(如环境):ToggleGroup 里一组单选的 Toggle。 */
 export function Segmented<T extends string>(props: {
   options: SegmentOption<T>[];
   value: T;
@@ -68,18 +133,21 @@ export function Segmented<T extends string>(props: {
   testID?: string;
 }) {
   return (
-    <View class="flex-row gap-1.5 rounded-full bg-raised p-1" testID={props.testID}>
+    <ToggleGroup class="flex-row gap-1.5 rounded-full bg-raised p-1" testID={props.testID}>
       <Each of={props.options} key={(o) => o.value}>
         {(o) => {
           const active = () => props.value === o().value;
           const tone = () => (active() ? (o().color ?? "foreground") : "fg-faint");
           return (
-            <Button
-              onPress={() => props.onChange(o().value)}
-              selected={active()}
+            <Toggle
+              pressed={active()}
+              // 单选:再点已选中的项(请求 pressed:false)不取消
+              onChange={(e) => {
+                if (e.pressed) props.onChange(o().value);
+              }}
               accessibilityLabel={o().label}
-              // 选中与未选中分开写:变体按 Tailwind 顺序生效,hover: 排在 selected: 后,混写时悬停会盖掉选中底色
-              class={`h-8 flex-1 flex-row items-center justify-center gap-2 rounded-full ${active() ? "bg-background shadow-sm" : "hover:bg-list-hover"}`}
+              // aria-pressed: 优先级高于 hover:,悬停不会盖掉选中底色
+              class="h-8 flex-1 flex-row items-center justify-center gap-2 rounded-full hover:bg-list-hover aria-pressed:bg-background aria-pressed:shadow-sm"
             >
               <If when={o().color}>
                 <View class="rounded-full" style={{ width: 7, height: 7, backgroundColor: tokenColor(tone()) }} />
@@ -87,14 +155,13 @@ export function Segmented<T extends string>(props: {
               <Text class={`${FS.xs} font-bold`} style={{ color: tokenColor(tone()) }}>
                 {o().label}
               </Text>
-            </Button>
+            </Toggle>
           );
         }}
       </Each>
-    </View>
+    </ToggleGroup>
   );
 }
-
 
 export interface DropdownItem {
   value: string;
@@ -139,9 +206,9 @@ export function Dropdown(props: {
       margin={8}
       class={props.class}
       style={props.style}
-      popupClass="min-w-40 rounded-(--radius) border border-border bg-popover p-1 shadow-lg"
+      popupClass="min-w-40 rounded-(--radius-lg) border border-border bg-popover p-1 shadow-lg"
       listClass="max-h-80"
-      itemClass="group h-8 flex-row items-center gap-2 rounded-(--radius) px-2 focus:bg-list-hover selected:bg-raised disabled:opacity-40"
+      itemClass="group h-7 flex-row items-center gap-2 rounded-(--radius) px-2 hover:bg-accent focus:bg-accent disabled:opacity-40"
       renderItem={(entry) => {
         const item = props.items[entry.index];
         return (
@@ -209,7 +276,7 @@ export function CheckBox(props: { checked: boolean; onChange: (v: boolean) => vo
 }
 
 /** 开关(服务商启用)。 */
-export function Toggle(props: { checked: boolean; onChange: (v: boolean) => void; label: string; testID?: string }) {
+export function SwitchField(props: { checked: boolean; onChange: (v: boolean) => void; label: string; testID?: string }) {
   return (
     <Switch
       checked={props.checked}
@@ -246,53 +313,6 @@ export function ActionMenu(props: { trigger: JSX.Element; actions: MenuAction[];
         )}
       </Each>
     </DropMenu>
-  );
-}
-
-/** 带加载态的描边/主按钮(测试连接、获取模型、开始导入)。 */
-export function LoadingBtn(props: {
-  label: string;
-  icon?: IconName;
-  loading?: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-  variant?: "outline" | "primary" | "ghost";
-  small?: boolean;
-  xsmall?: boolean;
-  tooltip?: string;
-  testID?: string;
-}) {
-  const v = () => props.variant ?? "outline";
-  const box = () =>
-    v() === "primary"
-      ? "bg-primary hover:bg-primary-hover active:bg-primary-active"
-      : v() === "ghost"
-        ? "hover:bg-list-hover active:bg-secondary-active"
-        : "border border-input hover:bg-list-hover active:bg-secondary-active";
-  const fg = () => (v() === "primary" ? "primary-foreground" : "foreground");
-  const size = () => (props.xsmall ? "h-6 px-2" : props.small ? "h-7 px-2.5" : "h-8 px-3");
-  return (
-    <Button
-      onPress={props.onPress}
-      disabled={props.disabled || props.loading}
-      testID={props.testID}
-      tooltip={props.tooltip ? tip(props.tooltip) : undefined}
-      class={`flex-row items-center justify-center gap-1.5 rounded-(--radius) disabled:opacity-50 ${size()} ${box()}`}
-    >
-      <If when={props.loading ? "loader-circle" : props.icon}>
-        {(name) => (
-          <Icon
-            name={name() as IconName}
-            size={props.xsmall || props.small ? 13 : 15}
-            color={fg()}
-            class={props.loading ? "animate-spin" : undefined}
-          />
-        )}
-      </If>
-      <Text class={`${props.xsmall || props.small ? FS.xs : FS.sm} font-medium`} style={{ color: tokenColor(fg()) }}>
-        {props.label}
-      </Text>
-    </Button>
   );
 }
 
@@ -397,7 +417,7 @@ export function SuggestField(props: {
           onPress={() => (open() ? close() : show())}
           class="rounded-(--radius) p-1 hover:bg-list-hover"
         >
-          <Icon name="chevrons-up-down" size={13} color="fg-faint" />
+          <Icon name="chevron-down" size={14} />
         </Button>
       </View>
       <If when={open()}>

@@ -59,7 +59,7 @@ test("连接菜单「数据与隐私」:列出按列名认出的敏感列,可设
   await app.press("id:rail-c-roastery");
   await app.waitFor("label:products");
   await app.press("label:Connection Actions");
-  await app.press("text:Data & Privacy…");
+  await app.press("text:Data & Privacy");
   await app.waitFor("id:privacy-dialog");
   // 列信息在后台加载
   await app.waitFor("id:privacy-col:customers.email", { timeout: 10_000 });

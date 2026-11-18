@@ -4,7 +4,7 @@
 // staging / prod 连接先过与危险语句一致的确认框;不超过 1000 行时也可复制成 INSERT 或在编辑器中打开。
 
 import { cleanup, Clipboard, effect, Scroll, signal, Text, View } from "nsh";
-import { DataTable, type DataTableColumn } from "nsh/base";
+import { DataTable, Progress, type DataTableColumn } from "nsh/base";
 import { t } from "nsh/i18n";
 import { DialogFrame, Dropdown } from "../dialogs/controls";
 import { errorText, testData } from "../lib/native";
@@ -28,7 +28,7 @@ import { openQueryOn } from "../tab";
 import { type AlterState, type ImpactState, modelOf, refresh, type RiskGate } from "../tab/model";
 import { RiskGateDialog } from "../tab/RiskDialog";
 import { ErrorText } from "../ui/error";
-import { Btn, color, Icon, IconButton, SectionLabel, TextField, tip } from "../ui/kit";
+import { Btn, color, Icon, IconButton, SectionLabel, TextField, tip, Loading } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { closeTestData, showTestData, testDataTarget } from "./ops";
 
@@ -126,7 +126,8 @@ function TestDataForm(props: { connId: string; table: string }) {
   };
   const seed = () => {
     const s = seedText().trim();
-    return /^\d{1,16}$/.test(s) && Number.isSafeInteger(Number(s)) ? Number(s) : null;
+    // 上限同原生的 SEED_LIMIT:更大的整数 nsh 会当浮点数传回原生层
+    return /^\d{1,16}$/.test(s) && Number(s) < 9e15 ? Number(s) : null;
   };
   const draftsInvalid = () => Object.values(drafts()).some((v) => v.trim() === "" || !Number.isFinite(Number(v)));
   const plan = (): TdPlan | null => {
@@ -380,7 +381,7 @@ function TestDataForm(props: { connId: string; table: string }) {
         when={analysis()}
         else={
           <View class="h-40 items-center justify-center">
-            <If when={loadError()} else={<Text class={`${FS.sm} text-fg-faint`}>{t("testdata.loading")}</Text>}>
+            <If when={loadError()} else={<Loading label={t("testdata.loading")} />}>
               {(e) => <ErrorText testID="testdata-load-error" text={e()} />}
             </If>
           </View>
@@ -561,10 +562,13 @@ function TestDataForm(props: { connId: string; table: string }) {
 
             <If when={running() ? (progress() ?? { rows: 0, total: rows() ?? 0 }) : null}>
               {(p) => (
-                <View class="gap-1.5" testID="testdata-progress">
-                  <View class="h-1.5 overflow-hidden rounded-full bg-raised">
-                    <View class="h-full rounded-full bg-primary" style={{ width: `${percent()}%` }} />
-                  </View>
+                <Progress
+                  testID="testdata-progress"
+                  value={percent()}
+                  class="gap-1.5"
+                  trackClass="h-1.5 overflow-hidden rounded-full bg-raised"
+                  indicatorClass="h-full rounded-full bg-primary"
+                >
                   <Text class={`${FS.xs} text-muted-foreground`}>
                     {t("testdata.progress", {
                       rows: p().rows.toLocaleString(),
@@ -572,7 +576,7 @@ function TestDataForm(props: { connId: string; table: string }) {
                       percent: percent(),
                     })}
                   </Text>
-                </View>
+                </Progress>
               )}
             </If>
 

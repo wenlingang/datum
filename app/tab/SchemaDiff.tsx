@@ -2,7 +2,7 @@
 // 右边是让目标库与源库一致的迁移脚本(删除类语句已注释),可复制或在目标库的编辑器里打开再执行。
 
 import { Clipboard, Scroll, signal, Text, View } from "nsh";
-import { Button, Editor } from "nsh/base";
+import { Editor, Toggle, ToggleGroup } from "nsh/base";
 import { t } from "nsh/i18n";
 import { connLabel } from "../chat/actions";
 import { db, errorText } from "../lib/native";
@@ -10,7 +10,7 @@ import type { DiffReport, TableDiff } from "../lib/types";
 import { conns } from "../store/conns";
 import { toast } from "../store/toast";
 import { ErrorText } from "../ui/error";
-import { Btn, DbIcon, EnvBadge, Hint, Icon } from "../ui/kit";
+import { Btn, DbIcon, EnvBadge, Hint, Icon, Loading, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { openQueryOn } from "./index";
 
@@ -82,22 +82,25 @@ export function SchemaDiff(props: { connId: string }) {
           <View class="flex-row flex-wrap items-center gap-1.5">
             <Text class={`${FS.xs} text-muted-foreground`}>{t("sdiff.target")}</Text>
             <If when={candidates().length > 0} else={<Hint class={FS.xs}>{t("sdiff.no_candidates")}</Hint>}>
-              <Each of={candidates()} key={(c) => c.id}>
-                {(c) => (
-                  <Button
-                    testID={`sdiff-target:${c().name}`}
-                    selected={targetId() === c().id}
-                    onPress={() => {
-                      targetId.set(c().id);
-                      report.set(null);
-                    }}
-                    class="h-7 flex-row items-center gap-1.5 rounded-(--radius) border border-border px-2.5 hover:bg-list-hover selected:border-primary selected:bg-selection"
-                  >
-                    <Text class={`${FS.sm} text-foreground`}>{connLabel(c())}</Text>
-                    <EnvBadge env={c().env} />
-                  </Button>
-                )}
-              </Each>
+              <ToggleGroup class="flex-row flex-wrap items-center gap-1.5">
+                <Each of={candidates()} key={(c) => c.id}>
+                  {(c) => (
+                    <Toggle
+                      testID={`sdiff-target:${c().name}`}
+                      pressed={targetId() === c().id}
+                      onChange={() => {
+                        targetId.set(c().id);
+                        report.set(null);
+                      }}
+                      accessibilityLabel={connLabel(c())}
+                      class="h-7 flex-row items-center gap-1.5 rounded-(--radius) border border-border px-2.5 hover:bg-list-hover aria-pressed:border-primary aria-pressed:bg-selection"
+                    >
+                      <Text class={`${FS.sm} text-foreground`}>{connLabel(c())}</Text>
+                      <EnvBadge env={c().env} />
+                    </Toggle>
+                  )}
+                </Each>
+              </ToggleGroup>
             </If>
           </View>
           <View class="flex-1" />
@@ -118,7 +121,9 @@ export function SchemaDiff(props: { connId: string }) {
         when={report()}
         else={
           <View class="flex-1 items-center justify-center p-6">
-            <Hint>{busy() ? t("sdiff.running") : t("sdiff.empty")}</Hint>
+            <If when={busy()} else={<Hint>{t("sdiff.empty")}</Hint>}>
+              <Loading label={t("sdiff.running")} />
+            </If>
           </View>
         }
       >
@@ -161,7 +166,7 @@ export function SchemaDiff(props: { connId: string }) {
             </Scroll>
             <View class="min-w-0 flex-1">
               <View class="h-10 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
-                <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("sdiff.script")}</Text>
+                <SectionLabel class="flex-1">{t("sdiff.script")}</SectionLabel>
                 <Btn testID="sdiff-copy" small variant="ghost" icon="copy" label={t("sdiff.copy")} onPress={() => void copy()} />
                 <Btn
                   testID="sdiff-open"

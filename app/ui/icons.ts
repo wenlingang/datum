@@ -17,6 +17,7 @@ import chevronsUpDown from "../assets/icons/chevrons-up-down.svg";
 import circleAlert from "../assets/icons/circle-alert.svg";
 import circleCheck from "../assets/icons/circle-check.svg";
 import circleX from "../assets/icons/circle-x.svg";
+import clock from "../assets/icons/clock.svg";
 import codeXml from "../assets/icons/code-xml.svg";
 import copy from "../assets/icons/copy.svg";
 import cpu from "../assets/icons/cpu.svg";
@@ -99,6 +100,7 @@ export const ICONS = {
   "circle-alert": circleAlert,
   "circle-check": circleCheck,
   "circle-x": circleX,
+  "clock": clock,
   "code-xml": codeXml,
   "copy": copy,
   "cpu": cpu,

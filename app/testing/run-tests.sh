@@ -159,6 +159,11 @@ if [ "$ONLY" = native ]; then
   D="$ROOT/native-chat"; mkdir -p "$D"
   echo "==> native-chat"
   DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" chat/typing.native.test.tsx || FAILED=1
+  D="$ROOT/native-workspace"; mkdir -p "$D"
+  sqlite3 "$D/roastery.db" "create table products(id integer primary key, name text);"
+  printf '[%s]\n' "$(conn c-roastery roastery "$D/roastery.db")" > "$D/connections.json"
+  echo "==> native-workspace"
+  DATUM_CONFIG_DIR="$D" nsh test --target "$(uname | tr A-Z a-z | sed 's/darwin/macos/')" workspace/workspace.native.test.tsx || FAILED=1
   D="$ROOT/native-erd"; mkdir -p "$D/saved"
   sqlite3 "$D/erd.db" "$ERD_SCHEMA"
   printf '[%s]\n' "$(conn c-erd erd "$D/erd.db")" > "$D/connections.json"

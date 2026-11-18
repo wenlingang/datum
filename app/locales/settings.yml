@@ -7,9 +7,9 @@ menu:
     zh-CN: 编辑
     zh-TW: 編輯
   settings:
-    en: Settings…
-    zh-CN: 设置…
-    zh-TW: 設定…
+    en: Settings
+    zh-CN: 设置
+    zh-TW: 設定
   hide:
     en: Hide Datum
     zh-CN: 隐藏 Datum
@@ -38,10 +38,6 @@ menu:
     en: Toggle Sidebar
     zh-CN: 显示/隐藏侧栏
     zh-TW: 顯示/隱藏側邊欄
-  toggle_detail:
-    en: Toggle Details Panel
-    zh-CN: 显示/隐藏详情栏
-    zh-TW: 顯示/隱藏詳細資訊欄
   toggle_ai:
     en: Toggle AI
     zh-CN: 显示/隐藏 AI

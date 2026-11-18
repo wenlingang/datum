@@ -12,11 +12,11 @@
 //   写过数据的脚本服务器不允许 KILL(UNKILLABLE):只提示可能需要 SHUTDOWN NOSAVE,不提供这个操作。
 // - 结果在 core 里按上限截断(单个字符串、每层元素、总节点、总字节、嵌套层数);这里展平成行虚拟列表显示。
 
-import { effect, List, signal, Text, untracked, View } from "nsh";
+import { computed, effect, keymap, signal, Text, untracked, View } from "nsh";
 import { EditorKeys } from "datum/native";
-import { Button, Dialog, Editor, Popover, ResizablePanel, ResizablePanelGroup } from "nsh/base";
+import { Button, Editor, Popover, ResizablePanel, ResizablePanelGroup, Tree, type TreeItem } from "nsh/base";
 import { t } from "nsh/i18n";
-import { CheckBox } from "../dialogs/controls";
+import { CheckBox, ConfirmFrame } from "../dialogs/controls";
 import { db, errorText, sql as sqlText } from "../lib/native";
 import type { LuaAnalysis, LuaSlotCheck, LuaValue } from "../lib/types";
 import { conns } from "../store/conns";
@@ -24,7 +24,7 @@ import { toast } from "../store/toast";
 import { viewFormat } from "../store/redisFormats";
 import { editorText } from "../ui/editor";
 import { ErrorText } from "../ui/error";
-import { Btn, Hint, Icon, IconButton, TextField, tip } from "../ui/kit";
+import { Btn, Hint, Icon, IconButton, TextField, tip, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { abandonLua, runLua, type LuaModel } from "./luaModel";
 import { formatBytes } from "./RedisInsight";
@@ -41,26 +41,32 @@ const ROW_H = 24;
 const FORMAT_KEY = "(lua)";
 const POPUP = "rounded-(--radius-lg) border border-border bg-popover shadow-lg";
 
-interface Row {
-  path: string;
-  depth: number;
+interface Node {
   label: string;
   v: LuaValue;
   /** 「另有 n 项未显示」行 */
   omitted?: number;
 }
 
-/** 结果树展平成行;`collapsed` 里的数组不展开。 */
-function flatten(v: LuaValue, collapsed: Set<string>): Row[] {
-  const out: Row[] = [];
-  const walk = (x: LuaValue, path: string, depth: number, label: string) => {
-    out.push({ path, depth, label, v: x });
-    if (x.type !== "array" || collapsed.has(path)) return;
-    x.items.forEach((it, i) => walk(it, `${path}.${i}`, depth + 1, `${i + 1})`));
-    if (x.len > x.items.length) out.push({ path: `${path}.more`, depth: depth + 1, label: "", v: { type: "nil" }, omitted: x.len - x.items.length });
+/** 结果转成 Tree 的条目;节点数据按 id 放进 `nodes`(renderItem 按 id 查),`folders` 是可展开的数组。 */
+function buildTree(v: LuaValue): { items: TreeItem[]; nodes: Map<string, Node>; folders: string[] } {
+  const nodes = new Map<string, Node>();
+  const folders: string[] = [];
+  const walk = (x: LuaValue, id: string, label: string): TreeItem => {
+    nodes.set(id, { label, v: x });
+    const item: TreeItem = { id, label: label || typeName(x) };
+    if (x.type !== "array" || x.items.length === 0) return item;
+    folders.push(id);
+    item.children = x.items.map((it, i) => walk(it, `${id}.${i}`, `${i + 1})`));
+    if (x.len > x.items.length) {
+      const more = `${id}.more`;
+      const n = x.len - x.items.length;
+      nodes.set(more, { label: "", v: { type: "nil" }, omitted: n });
+      item.children.push({ id: more, label: t("rlua.omitted", { n: n.toLocaleString() }), disabled: true });
+    }
+    return item;
   };
-  walk(v, "r", 0, "");
-  return out;
+  return { items: [walk(v, "r", "")], nodes, folders };
 }
 
 const oneLine = (s: string) => s.slice(0, ROW_CHARS).replace(/\r?\n/g, "↵").replace(/\t/g, " ");
@@ -82,61 +88,49 @@ function typeName(v: LuaValue): string {
   }
 }
 
-/** 结果的一行。 */
-function ResultRow(props: { row: Row; collapsed: boolean; onToggle: () => void; onView: () => void }) {
-  const r = () => props.row;
-  const v = () => r().v;
+/** 结果的一行(Tree 的 renderItem:只按 id 查节点数据,不读信号)。 */
+function ResultRow(props: { node: Node; depth: number; folder: boolean; onView: () => void }) {
+  const r = props.node;
+  const v = r.v;
   return (
-    <View class="flex-row items-center gap-2 pr-3 hover:bg-list-hover" style={{ height: ROW_H, paddingLeft: 12 + r().depth * 16 }}>
-      <If
-        when={v().type === "array" && r().omitted === undefined}
-        else={<View style={{ width: 14 }} />}
-      >
-        <IconButton
-          icon={props.collapsed ? "chevron-right" : "chevron-down"}
-          size={12}
-          class="p-0.5"
-          label={props.collapsed ? t("rlua.expand") : t("rlua.collapse")}
-          onPress={props.onToggle}
-        />
-      </If>
-      <If when={r().label}>
-        <Text class={`${FS.xs} ${MONO} shrink-0 text-fg-faint`}>{r().label}</Text>
-      </If>
-      <If
-        when={r().omitted === undefined}
-        else={<Text class={`${FS.xs} text-warning`}>{t("rlua.omitted", { n: (r().omitted ?? 0).toLocaleString() })}</Text>}
-      >
-        {(() => {
-          const x = v();
-          switch (x.type) {
+    // 选中底色画在内层:Tree 项只有 selected: 状态,优先级低于 hover:,挂在项上会被悬停色盖住
+    <View class="flex-1 flex-row items-center gap-2 pr-3 group-selected:bg-list-active" style={{ height: ROW_H, paddingLeft: 12 + props.depth * 16 }}>
+      <View class="w-3.5 items-center justify-center">
+        {props.folder ? <Icon name="chevron-right" size={12} class="group-aria-expanded:rotate-90" /> : null}
+      </View>
+      {r.label ? <Text class={`${FS.xs} ${MONO} shrink-0 text-fg-faint`}>{r.label}</Text> : null}
+      {r.omitted !== undefined ? (
+        <Text class={`${FS.xs} text-warning`}>{t("rlua.omitted", { n: r.omitted.toLocaleString() })}</Text>
+      ) : (
+        (() => {
+          switch (v.type) {
             case "nil":
               return <Text class={`${FS.xs} ${MONO} text-fg-faint`}>(nil)</Text>;
             case "int":
-              return <Text class={`${FS.xs} ${MONO} text-syntax-number`}>{`(integer) ${x.text}`}</Text>;
+              return <Text class={`${FS.xs} ${MONO} text-syntax-number`}>{`(integer) ${v.text}`}</Text>;
             case "status":
-              return <Text class={`${FS.xs} ${MONO} min-w-0 flex-1 text-success line-clamp-1`}>{x.text}</Text>;
+              return <Text class={`${FS.xs} ${MONO} min-w-0 flex-1 text-success line-clamp-1`}>{v.text}</Text>;
             case "error":
-              return <Text class={`${FS.xs} ${MONO} min-w-0 flex-1 text-negative line-clamp-1`}>{`(error) ${x.text}`}</Text>;
+              return <Text class={`${FS.xs} ${MONO} min-w-0 flex-1 text-negative line-clamp-1`}>{`(error) ${v.text}`}</Text>;
             case "array":
               return (
                 <Text class={`${FS.xs} text-muted-foreground`}>
-                  {x.len === 0 ? t("rlua.empty_array") : t("rlua.array_items", { n: x.len.toLocaleString() })}
+                  {v.len === 0 ? t("rlua.empty_array") : t("rlua.array_items", { n: v.len.toLocaleString() })}
                 </Text>
               );
             case "str":
               return (
                 <>
                   <Text class={`${FS.xs} ${MONO} min-w-0 flex-1 text-syntax-string line-clamp-1`}>
-                    {x.b64 ? t("rlua.binary") : `"${oneLine(x.text)}"`}
+                    {v.b64 ? t("rlua.binary") : `"${oneLine(v.text)}"`}
                   </Text>
-                  <Text class={`${FS["2xs"]} ${MONO} shrink-0 text-fg-faint`}>{formatBytes(x.len)}</Text>
+                  <Text class={`${FS["2xs"]} ${MONO} shrink-0 text-fg-faint`}>{formatBytes(v.len)}</Text>
                   <Btn small variant="ghost" label={t("rlua.view")} onPress={props.onView} />
                 </>
               );
           }
-        })()}
-      </If>
+        })()
+      )}
     </View>
   );
 }
@@ -171,7 +165,7 @@ function ErrorResult(props: { text: string; hint: string | null }) {
       <If when={props.hint}>
         {(h) => (
           <View class="flex-row items-start gap-2 rounded-(--radius) border border-warning bg-panel px-3 py-2">
-            <Icon name="circle-alert" size={14} color="warning" />
+            <Icon name="triangle-alert" size={14} color="warning" />
             <Text testID="rlua-error-hint" class={`${FS.sm} min-w-0 flex-1 text-foreground`}>
               {t(`rlua.hint.${h()}`)}
             </Text>
@@ -185,24 +179,24 @@ function ErrorResult(props: { text: string; hint: string | null }) {
 
 function Results(props: { m: LuaModel }) {
   const m = props.m;
-  const collapsed = signal<Set<string>>(new Set());
   const view = signal<ElementView | null>(null);
+  const tree = computed(() => {
+    const o = m.outcome();
+    return o ? buildTree(o.value) : null;
+  });
+  const expanded = signal<string[]>([]);
   // 新结果:全部展开
   effect(() => {
-    m.outcome();
-    untracked(() => collapsed.set(new Set()));
+    const tr = tree();
+    untracked(() => expanded.set(tr?.folders ?? []));
   });
-  const rows = () => {
-    const o = m.outcome();
-    return o ? flatten(o.value, collapsed()) : [];
+  /** 字符串元素:弹窗查看(格式识别)。 */
+  const openView = (id: string) => {
+    const node = untracked(() => tree())?.nodes.get(id);
+    const x = node?.v;
+    if (!node || x?.type !== "str") return;
+    view.set({ title: node.label ? `${t("rlua.result")} ${node.label}` : t("rlua.result"), items: [{ name: "", source: { text: x.text, b64: x.b64 ?? null } }] });
   };
-  const toggle = (path: string) =>
-    collapsed.update((s) => {
-      const next = new Set(s);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
   const summary = () => {
     const o = m.outcome();
     if (!o) return "";
@@ -240,27 +234,20 @@ function Results(props: { m: LuaModel }) {
               <If
                 when={o().value.type === "str" ? (o().value as Extract<LuaValue, { type: "str" }>) : null}
                 else={
-                  <List
+                  <Tree
                     testID="rlua-result"
-                    each={rows()}
-                    keyExtractor={(r) => r.path}
-                    estimatedItemSize={ROW_H}
+                    accessibilityLabel={t("rlua.result")}
                     class="min-h-0 flex-1"
-                  >
-                    {(r) => (
-                      <ResultRow
-                        row={r()}
-                        collapsed={collapsed().has(r().path)}
-                        onToggle={() => toggle(r().path)}
-                        onView={() => {
-                          const x = r().v;
-                          if (x.type === "str") {
-                            view.set({ title: r().label ? `${t("rlua.result")} ${r().label}` : t("rlua.result"), items: [{ name: "", source: { text: x.text, b64: x.b64 ?? null } }] });
-                          }
-                        }}
-                      />
-                    )}
-                  </List>
+                    items={tree()?.items ?? []}
+                    expanded={expanded()}
+                    onExpandedChange={(e) => expanded.set(e.expanded)}
+                    onAction={(e) => openView(e.id)}
+                    itemClass="group flex-row items-center hover:bg-list-hover disabled:opacity-100"
+                    renderItem={(e) => {
+                      const node = untracked(() => tree())?.nodes.get(e.id);
+                      return node ? <ResultRow node={node} depth={e.depth} folder={e.folder} onView={() => openView(e.id)} /> : <View />;
+                    }}
+                  />
                 }
               >
                 {(s) => (
@@ -294,7 +281,7 @@ function ParamList(props: {
   return (
     <View class="gap-1.5">
       <View class="flex-row items-center gap-2">
-        <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{props.title}</Text>
+        <SectionLabel class="flex-1">{props.title}</SectionLabel>
         <Btn
           small
           variant="ghost"
@@ -322,9 +309,8 @@ function ParamList(props: {
               <Text class={`${FS["2xs"]} ${MONO} w-[44px] text-right text-fg-faint`}>{props.slots?.[i()]}</Text>
             </If>
             <IconButton
+              small
               icon="x"
-              size={12}
-              class="p-1"
               label={`${t("rlua.remove")} ${props.name}[${i() + 1}]`}
               tooltip={t("rlua.remove")}
               onPress={() => props.onChange(props.values.filter((_, j) => j !== i()))}
@@ -348,22 +334,28 @@ function ConfirmRun(props: { gate: Gate | null; connName: string; onClose: () =>
   const g = () => props.gate;
   const needAck = () => !!g() && (g()!.prod || g()!.analysis.dangerous.length > 0);
   return (
-    <Dialog
+    <ConfirmFrame
       testID="rlua-confirm"
       open={g() !== null}
-      onOpenChange={(e) => {
-        if (!e.open) props.onClose();
+      onClose={() => {
         acked.set(false);
+        props.onClose();
       }}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[560px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      title={t("rlua.confirm_title")}
+      icon="triangle-alert"
+      iconColor="warning"
+      cancelLabel={t("rlua.cancel")}
+      cancelTestID="rlua-confirm-cancel"
+      confirmLabel={t("rlua.confirm_run")}
+      confirmTestID="rlua-confirm-ok"
+      confirmIcon="play"
+      confirmVariant={g()?.analysis.mayWrite || (g()?.analysis.dangerous.length ?? 0) > 0 ? "danger" : "primary"}
+      confirmDisabled={needAck() && !acked()}
+      onConfirm={() => {
+        acked.set(false);
+        props.onConfirm();
+      }}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="triangle-alert" size={16} color="warning" />
-        <Text class={`${FS.base} min-w-0 flex-1 font-bold text-popover-foreground`}>{t("rlua.confirm_title")}</Text>
-      </View>
       <If when={g()?.prod}>
         <Text testID="rlua-confirm-prod" class={`${FS.sm} font-bold text-negative`}>
           {t("rlua.confirm_prod", { name: props.connName })}
@@ -409,21 +401,7 @@ function ConfirmRun(props: { gate: Gate | null; connName: string; onClose: () =>
           </Text>
         </View>
       </If>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("rlua.cancel")} onPress={props.onClose} testID="rlua-confirm-cancel" />
-        <Btn
-          variant={g()?.analysis.mayWrite || (g()?.analysis.dangerous.length ?? 0) > 0 ? "danger" : "primary"}
-          icon="play"
-          disabled={needAck() && !acked()}
-          label={t("rlua.confirm_run")}
-          onPress={() => {
-            acked.set(false);
-            props.onConfirm();
-          }}
-          testID="rlua-confirm-ok"
-        />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }
 
@@ -562,7 +540,7 @@ export function RedisLua(props: { m: LuaModel }) {
                 testID="rlua-run"
                 icon={running() ? "loader-circle" : "play"}
                 label={t("rlua.run")}
-                kbd="⌘↵"
+                kbd={keymap.label("mod+enter")}
                 disabled={running() || !m.script().trim()}
                 onPress={() => void requestRun()}
               />

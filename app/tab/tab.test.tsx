@@ -85,7 +85,7 @@ test("编辑暂存后 ⌘S 一次提交", async () => {
   await app.type("id:cell-editor", "Edited ");
   await app.press("id:cell-stage");
   await app.waitFor("text:Staged");
-  await app.press("label:x");
+  await app.press("id:cell-dialog-dismiss");
   await app.waitFor("text:Edit Cell", { state: "gone" });
   await app.keyboard.press("mod+s");
   await app.waitUntil(() => app.texts().includes("Edited Coffee 1"), { timeout: 15000 });
@@ -127,7 +127,7 @@ test("写操作可撤销:执行后撤销把数据恢复原样;不能撤销时说
   const app = await start();
   await replaceSql(app, "UPDATE products SET origin = 'Undo test' WHERE id <= 3");
   await app.press("id:run");
-  await app.waitUntil(() => hasText(app, "✓ Executed successfully · 3 rows affected"), { timeout: 15000 });
+  await app.waitUntil(() => hasText(app, "Executed successfully · 3 rows affected"), { timeout: 15000 });
   await app.waitFor("text:Can be undone: restores the 3 rows as they were before");
   await app.press("id:undo");
   await app.waitFor("id:undo-dialog");
@@ -147,7 +147,7 @@ test("写操作可撤销:执行后撤销把数据恢复原样;不能撤销时说
   await app.keyboard.press("mod+a");
   await app.type("id:sql-editor", "UPDATE products SET origin = 'x' WHERE id < 0");
   await app.press("id:run");
-  await app.waitUntil(() => hasText(app, "✓ Executed successfully"), { timeout: 15000 });
+  await app.waitUntil(() => hasText(app, "Executed successfully"), { timeout: 15000 });
   expect(app.shows("id:undo")).toBe(false);
   expect(app.shows("id:undo-unavailable")).toBe(false);
   // DDL 不能撤销:执行照常,并说明原因(用一张临时表,不动其他测试用的数据)
@@ -155,7 +155,7 @@ test("写操作可撤销:执行后撤销把数据恢复原样;不能撤销时说
   await app.keyboard.press("mod+a");
   await app.type("id:sql-editor", "CREATE TABLE undo_scratch (id INTEGER)");
   await app.press("id:run");
-  await app.waitUntil(() => hasText(app, "✓ Executed successfully"), { timeout: 15000 });
+  await app.waitUntil(() => hasText(app, "Executed successfully"), { timeout: 15000 });
   await app.waitFor("id:undo-unavailable");
   expect(hasText(app, "Can't be undone: Undo is only available for single-table UPDATE and DELETE")).toBe(true);
   app.dispose();
@@ -176,7 +176,7 @@ test("破坏性语句先审查:取消不执行,确认才执行", async () => {
   await app.waitFor("text:Will affect 400 rows", { timeout: 15000 });
   await app.waitFor("text:Showing the first 10 of 400 rows");
   await app.press("id:risk-confirm");
-  await app.waitUntil(() => hasText(app, "✓ Executed successfully · 400 rows affected"), { timeout: 15000 });
+  await app.waitUntil(() => hasText(app, "Executed successfully · 400 rows affected"), { timeout: 15000 });
 });
 
 test("prod 连接:带 WHERE 的写语句也先确认并预估影响范围", async () => {
@@ -185,7 +185,7 @@ test("prod 连接:带 WHERE 的写语句也先确认并预估影响范围", asyn
   let app = await start();
   await replaceSql(app, sql);
   await app.press("id:run");
-  await app.waitUntil(() => hasText(app, "✓ Executed successfully · 5 rows affected"), { timeout: 15000 });
+  await app.waitUntil(() => hasText(app, "Executed successfully · 5 rows affected"), { timeout: 15000 });
   expect(app.shows("id:risk-dialog")).toBe(false);
   app.dispose();
   // 换成 prod(SQLite 不读密码,改环境不影响连接)
@@ -436,7 +436,7 @@ test("多条写语句一起执行也能撤销;过后还能从历史里撤销", a
   await check("SELECT COUNT(*) || ' left' AS n FROM products WHERE id BETWEEN 20 AND 22 AND COALESCE(origin, '') <> 'Multi'", "3 left");
 
   // 单条写语句执行后又跑了别的:从历史里还能撤销这一条
-  await check("UPDATE products SET origin = 'Later' WHERE id = 30", "✓ Executed successfully · 1 rows affected");
+  await check("UPDATE products SET origin = 'Later' WHERE id = 30", "Executed successfully · 1 rows affected");
   await check("SELECT 'other' AS x", "other");
   await app.press("id:history");
   await app.waitUntil(() => app.texts().some((x) => x.startsWith("Undo (1 rows)")), { timeout: 5000 });

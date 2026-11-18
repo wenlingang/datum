@@ -7,7 +7,7 @@ import { List, signal, Text, View } from "nsh";
 import { t } from "nsh/i18n";
 import { defaultName, deleteSnippet, saveSnippet, searchSnippets, type Snippet, type SnippetLang } from "../store/snippets";
 import { toast } from "../store/toast";
-import { Btn, Icon, IconButton, TextField } from "../ui/kit";
+import { Btn, Icon, IconButton, TextField, EmptyState } from "../ui/kit";
 import { FS } from "../ui/text";
 import { openRedisLua } from "./luaModel";
 import { insertAtCursor, selectionText, type TabModel } from "./model";
@@ -111,11 +111,7 @@ export function SnippetList(props: {
       </If>
       <If
         when={found().length > 0}
-        else={
-          <Text class={`${FS.xs} px-4 py-6 text-center text-fg-faint`}>
-            {query() ? t("snippets.no_match") : t("snippets.empty")}
-          </Text>
-        }
+        else={<EmptyState compact title={query() ? t("snippets.no_match") : t("snippets.empty")} />}
       >
         <List
           each={found()}

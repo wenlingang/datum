@@ -2,7 +2,7 @@
 // 破坏性语句标红并在执行前确认。对应 GPUI 版 chat/sql_card.rs。
 
 import { cleanup, signal, Text, View } from "nsh";
-import { Dialog, Editor } from "nsh/base";
+import { Editor } from "nsh/base";
 import { t } from "nsh/i18n";
 import { errorText, sql as sqlNative } from "../lib/native";
 import type { DbKind, WriteImpact } from "../lib/types";
@@ -15,6 +15,7 @@ import { askConfirm, cardState, closeConfirm, confirmRequest, type ConfirmReques
 import { chatDeps } from "./deps";
 import { ResultTable } from "./ToolCard";
 import { ErrorText } from "../ui/error";
+import { ConfirmFrame } from "../dialogs/controls";
 
 type ImpactState = { state: "loading" } | { state: "ok"; impact: WriteImpact } | { state: "none" } | { state: "error"; error: string };
 
@@ -325,7 +326,10 @@ function CardUndo(props: { cardKey: string }) {
                 </If>
               }
             >
-              <Text class={`${FS.xs} text-data`}>{`✓ ${t("undo.done", { rows: u().rows })}`}</Text>
+              <View class="flex-row items-center gap-1.5">
+                <Icon name="circle-check" size={12} color="success" />
+                <Text class={`${FS.xs} text-success`}>{t("undo.done", { rows: u().rows })}</Text>
+              </View>
             </If>
           </If>
         </View>
@@ -342,8 +346,8 @@ function CardResult(props: { run: ReturnType<typeof cardState>["run"] }) {
       <If when={done()}>
         {(summary) => (
           <View class="flex-row items-center gap-1.5 border-t border-border px-2.5 py-1.5">
-            <Icon name="check" size={12} color="data" />
-            <Text class={`${FS.xs} flex-1 text-data`}>{summary()}</Text>
+            <Icon name="circle-check" size={12} color="success" />
+            <Text class={`${FS.xs} flex-1 text-success`}>{summary()}</Text>
           </View>
         )}
       </If>
@@ -377,19 +381,18 @@ export function SqlConfirmDialog() {
         const what = () =>
           req().statements > 1 ? t("sql_card.n_statements", { count: req().statements }) : t("sql_card.statement");
         return (
-          <Dialog
+          <ConfirmFrame
             testID="sql-confirm"
             open
-            animation="fade"
-            onOpenChange={({ open }) => {
-              if (!open) closeConfirm();
-            }}
-            class="m-auto w-[560px] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
-            backdropClass="bg-overlay"
+            onClose={closeConfirm}
+            title={req().insert ? t("sql_card.run_in_editor") : t("sql_card.run_sql")}
+            cancelLabel={t("sql_card.cancel")}
+            cancelTestID="sql-confirm-cancel"
+            confirmLabel={req().insert ? t("sql_card.confirm_run_in_editor") : t("sql_card.confirm_run")}
+            confirmTestID="sql-confirm-ok"
+            confirmVariant={req().destructive ? "danger" : "primary"}
+            onConfirm={() => void confirmed(req())}
           >
-            <Text class={`${FS.base} font-bold text-popover-foreground`}>
-              {req().insert ? t("sql_card.run_in_editor") : t("sql_card.run_sql")}
-            </Text>
             <Text class={`${FS.sm} text-popover-foreground`}>
               {req().insert
                 ? t("sql_card.confirm_body_insert", { target: req().target, what: what() })
@@ -405,16 +408,7 @@ export function SqlConfirmDialog() {
                 <Text class={`${FS.xs} flex-1 font-bold text-destructive`}>{t("sql_card.destructive_warning")}</Text>
               </View>
             </If>
-            <View class="flex-row justify-end gap-2 pt-1">
-              <Btn label={t("sql_card.cancel")} variant="outline" onPress={closeConfirm} testID="sql-confirm-cancel" />
-              <Btn
-                testID="sql-confirm-ok"
-                label={req().insert ? t("sql_card.confirm_run_in_editor") : t("sql_card.confirm_run")}
-                variant={req().destructive ? "danger" : "primary"}
-                onPress={() => void confirmed(req())}
-              />
-            </View>
-          </Dialog>
+          </ConfirmFrame>
         );
       }}
     </If>

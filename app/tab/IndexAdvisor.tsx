@@ -9,7 +9,7 @@ import { aiStore } from "../store/ai";
 import { conns, loadTables } from "../store/conns";
 import { toast } from "../store/toast";
 import { ErrorText } from "../ui/error";
-import { Btn, EnvBadge, Hint, Icon, IconButton } from "../ui/kit";
+import { Btn, EnvBadge, Hint, Icon, IconButton, Loading, SectionLabel } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { type AdvisorModel, fmtCost, runAdvice } from "./advisorModel";
 import { openQueryOn } from "./index";
@@ -125,10 +125,10 @@ function Compare(props: { m: AdvisorModel }) {
   return (
     <View class="min-h-0 flex-1">
       <View class="h-9 shrink-0 flex-row items-center gap-3 border-b border-border px-4">
-        <Text class={`${FS.xs} font-bold text-muted-foreground`}>{t("advisor.compare")}</Text>
+        <SectionLabel>{t("advisor.compare")}</SectionLabel>
         <If when={verified().length > 0}>
           <Scroll horizontal class="min-w-0 flex-1">
-            <Tabs class="flex-row gap-1" indicatorClass="bottom-0 h-[2px] bg-primary">
+            <Tabs class="flex-row gap-1" indicatorClass="bottom-0 h-0.5 bg-linear-to-r from-primary to-ai">
               <Each of={verified()} key={(x) => x.c.name}>
                 {(x) => (
                   <Tab
@@ -137,7 +137,7 @@ function Compare(props: { m: AdvisorModel }) {
                     onPress={() => props.m.compare.set(x().i)}
                     class="h-9 justify-center px-2"
                   >
-                    <Text class={`${FS.xs} ${MONO}`} classList={{ "font-bold text-foreground": props.m.compare() === x().i, "text-muted-foreground": props.m.compare() !== x().i }}>
+                    <Text class={`${FS.xs} ${MONO} font-medium`} classList={{ "text-foreground": props.m.compare() === x().i, "text-muted-foreground": props.m.compare() !== x().i }}>
                       {x().c.name}
                     </Text>
                   </Tab>
@@ -145,7 +145,7 @@ function Compare(props: { m: AdvisorModel }) {
               </Each>
               <If when={advice()?.combo?.verify.plan}>
                 <Tab testID="advisor-compare:combo" selected={props.m.compare() === -1} onPress={() => props.m.compare.set(-1)} class="h-9 justify-center px-2">
-                  <Text class={FS.xs} classList={{ "font-bold text-foreground": props.m.compare() === -1, "text-muted-foreground": props.m.compare() !== -1 }}>
+                  <Text class={`${FS.xs} font-medium`} classList={{ "text-foreground": props.m.compare() === -1, "text-muted-foreground": props.m.compare() !== -1 }}>
                     {t("advisor.combo_tab")}
                   </Text>
                 </Tab>
@@ -156,7 +156,7 @@ function Compare(props: { m: AdvisorModel }) {
       </View>
       <View class="min-h-0 flex-1 flex-row">
         <View testID="advisor-plan-before" class="min-w-0 flex-1 border-r border-border">
-          <Text class={`${FS.xs} px-4 pt-2 font-bold text-muted-foreground`}>{t("advisor.plan_before")}</Text>
+          <SectionLabel class="px-4 pt-2">{t("advisor.plan_before")}</SectionLabel>
           <If
             when={advice()?.baseline?.tree ? advice()!.baseline : null}
             else={<Hint class={`${FS.xs} px-4 py-2`}>{advice()?.baselineError ? t("advisor.baseline_failed", { error: advice()!.baselineError! }) : t("advisor.no_plan_tree")}</Hint>}
@@ -165,9 +165,9 @@ function Compare(props: { m: AdvisorModel }) {
           </If>
         </View>
         <View testID="advisor-plan-after" class="min-w-0 flex-1">
-          <Text class={`${FS.xs} px-4 pt-2 font-bold text-muted-foreground line-clamp-1`}>
+          <SectionLabel class="px-4 pt-2 line-clamp-1">
             {after() ? t("advisor.plan_after", { name: after()!.label }) : t("advisor.plan_after_empty")}
-          </Text>
+          </SectionLabel>
           <If when={after()?.plan.tree ? after()!.plan : null} else={<Hint class={`${FS.xs} px-4 py-2`}>{t("advisor.no_after_plan")}</Hint>}>
             {(p) => <PlanView plan={p()} />}
           </If>
@@ -221,7 +221,9 @@ export function IndexAdvisor(props: { m: AdvisorModel }) {
           <Btn
             testID="advisor-rerun"
             small
-            icon={m.busy() && !m.aiBusy() ? "loader-circle" : "refresh-cw"}
+            variant="outline"
+            icon="refresh-cw"
+            loading={m.busy() && !m.aiBusy()}
             label={t("advisor.rerun")}
             disabled={m.busy()}
             onPress={() => void runAdvice(m)}
@@ -277,7 +279,9 @@ export function IndexAdvisor(props: { m: AdvisorModel }) {
         when={advice()}
         else={
           <View class="flex-1 items-center justify-center p-6">
-            <Hint>{m.busy() ? t("advisor.running") : ""}</Hint>
+            <If when={m.busy()}>
+              <Loading label={t("advisor.running")} />
+            </If>
           </View>
         }
       >

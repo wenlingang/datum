@@ -38,3 +38,8 @@ ssh:
     en: Cancel
     zh-CN: 取消
     zh-TW: 取消
+search_field:
+  clear:
+    en: Clear
+    zh-CN: 清除
+    zh-TW: 清除

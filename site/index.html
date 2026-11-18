@@ -471,7 +471,7 @@ document.documentElement.classList.add("js");
           <p class="muted" lang="en">Filter by typing a sentence: "last 7 days, status failed, amount over 100" becomes AND / OR conditions you can still edit.</p>
           <p class="muted" lang="zh-CN">筛选可以直接说一句话：「最近 7 天、状态失败、金额大于 100」会变成可以继续修改的且 / 或条件。</p>
         </div>
-        <img class="shot" src="screenshots/table.png" width="1600" height="1024" loading="lazy" alt="Browsing a table with the row details panel open">
+        <img class="shot" src="screenshots/table.png" width="1600" height="1024" loading="lazy" alt="Browsing a table with a row opened in the details dialog">
       </div>
 
       <div class="scene">
@@ -619,7 +619,7 @@ document.documentElement.classList.add("js");
             <p lang="en">JSONB cells open as a tree. Click a field to filter the whole table on it, and the editor suggests keys after <code>-&gt;'</code>, level by level. Explain plans are drawn as a tree with the costliest step marked.</p>
             <p lang="zh-CN">JSONB 单元格展开成树，点一个字段就能按它筛选整张表；编辑器在 <code>-&gt;'</code> 之后逐级提示键名。执行计划画成树，标出最耗时的一步。</p>
           </div>
-          <img class="shot" src="screenshots/jsonb.png" width="1740" height="884" loading="lazy" alt="A PostgreSQL table filtered on a JSONB field, with the row's JSON shown as a tree">
+          <img class="shot" src="screenshots/jsonb.png" width="1740" height="940" loading="lazy" alt="A PostgreSQL table filtered on a JSONB field, with the row's JSON shown as a tree">
         </div>
         <div class="dbrow flip">
           <div>
@@ -627,7 +627,7 @@ document.documentElement.classList.add("js");
             <p lang="en">Edit hashes, lists, sets, sorted sets and streams as tables. Values are recognized as JSON, MessagePack, gzip, Java serialization or Protobuf. Watch Pub/Sub and MONITOR live, run Lua with KEYS and ARGV forms, and analyze memory across every node of a cluster.</p>
             <p lang="zh-CN">Hash、List、Set、ZSet、Stream 都能像表格一样编辑。值会被自动识别为 JSON、MessagePack、gzip、Java 序列化或 Protobuf。实时查看 Pub/Sub 与 MONITOR，用表单填 KEYS、ARGV 执行 Lua，集群下逐个节点分析内存。</p>
           </div>
-          <img class="shot" src="screenshots/redis.png" width="1500" height="710" loading="lazy" alt="A Redis hash shown as an editable table of fields and values">
+          <img class="shot" src="screenshots/redis.png" width="1500" height="463" loading="lazy" alt="A Redis hash shown as an editable table of fields and values">
         </div>
         <div class="dbrow">
           <div>
@@ -635,7 +635,7 @@ document.documentElement.classList.add("js");
             <p lang="en">Before an <code>ALTER TABLE</code> runs, Datum tells you whether it is INSTANT, INPLACE or a full copy, whether it blocks writes, and roughly how long it takes on this table, and suggests gh‑ost when it's risky. A character-set check finds utf8mb3 columns and mismatched collations that quietly disable indexes.</p>
             <p lang="zh-CN">执行 <code>ALTER TABLE</code> 之前，先告诉你它是 INSTANT、INPLACE 还是整表复制，会不会挡住写入，在这张表上大概要多久；风险高时建议改用 gh‑ost。字符集体检能找出仍是 utf8mb3 的列，以及让索引悄悄失效的排序规则不一致。</p>
           </div>
-          <img class="shot" src="screenshots/mysql-alter.png" width="1120" height="976" loading="lazy" alt="Before an ALTER TABLE runs on MySQL: a full table copy on 400,000 rows, flagged high risk, with a safer way to write it">
+          <img class="shot" src="screenshots/mysql-alter.png" width="1160" height="1038" loading="lazy" alt="Before an ALTER TABLE runs on MySQL: a full table copy on 400,000 rows, flagged high risk, with a safer way to write it">
         </div>
         <div class="dbrow flip">
           <div>

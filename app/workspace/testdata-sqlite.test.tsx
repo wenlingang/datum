@@ -16,7 +16,7 @@ function statRows(app: Awaited<ReturnType<typeof open>>) {
 
 async function openDialog(app: Awaited<ReturnType<typeof open>>, table: string) {
   await app.rightClick(`id:table-list >> label:${table}`);
-  await app.press("label:Generate Test Data…");
+  await app.press("label:Generate Test Data");
   await app.waitFor("id:testdata-dialog");
   await app.waitFor("id:testdata-rows", { timeout: 10_000 });
 }

@@ -65,7 +65,7 @@ export function PlanView(props: { plan: Plan }) {
               <View class="flex-row flex-wrap items-center gap-1.5">
                 <Text class={`${FS.sm} font-bold text-foreground`}>{r().node.label}</Text>
                 <If when={hottest() === r().node && (rows().length > 1)}>
-                  <Text class={`${FS["2xs"]} rounded-full bg-warning px-1.5 font-bold text-background`}>{t("plan.hottest")}</Text>
+                  <Text class={`${FS["2xs"]} rounded-full bg-warning px-1.5 font-bold text-warning-foreground`}>{t("plan.hottest")}</Text>
                 </If>
                 <If when={r().node.fullScan}>
                   <Text class={`${FS["2xs"]} rounded-full border border-warning px-1.5 font-bold text-warning`}>{t("plan.full_scan")}</Text>

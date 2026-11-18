@@ -76,6 +76,14 @@ workspace:
     en: Close Other Tabs
     zh-CN: 关闭其他标签页
     zh-TW: 關閉其他分頁
+  close_tabs_left:
+    en: Close Tabs to the Left
+    zh-CN: 关闭左侧全部
+    zh-TW: 關閉左側全部
+  close_tabs_right:
+    en: Close Tabs to the Right
+    zh-CN: 关闭右侧全部
+    zh-TW: 關閉右側全部
   rename:
     en: Rename
     zh-CN: 重命名
@@ -158,9 +166,9 @@ workspace:
     zh-TW: "對話綁定的連線已不存在"
 sidebar:
   alter_table:
-    en: "Alter Table…"
-    zh-CN: "修改表结构…"
-    zh-TW: "修改資料表結構…"
+    en: "Alter Table"
+    zh-CN: "修改表结构"
+    zh-TW: "修改資料表結構"
   search_tables:
     en: Search tables
     zh-CN: 搜索表
@@ -206,25 +214,25 @@ sidebar:
     zh-CN: "导入数据库(SQL)"
     zh-TW: "匯入資料庫(SQL)"
   import_data:
-    en: "Import CSV / JSON…"
-    zh-CN: "导入 CSV / JSON…"
-    zh-TW: "匯入 CSV / JSON…"
+    en: "Import CSV / JSON"
+    zh-CN: "导入 CSV / JSON"
+    zh-TW: "匯入 CSV / JSON"
   export_database:
     en: Export Database
     zh-CN: 导出数据库
     zh-TW: 匯出資料庫
   schema_diff:
-    en: Compare Schema…
-    zh-CN: 结构对比…
-    zh-TW: 結構比對…
+    en: Compare Schema
+    zh-CN: 结构对比
+    zh-TW: 結構比對
   data_diff:
-    en: Compare Data…
-    zh-CN: 数据对比…
-    zh-TW: 資料比對…
+    en: Compare Data
+    zh-CN: 数据对比
+    zh-TW: 資料比對
   data_diff_table:
-    en: Compare Data With…
-    zh-CN: 与其他表对比数据…
-    zh-TW: 與其他資料表比對資料…
+    en: Compare with Another Table
+    zh-CN: 与其他表对比数据
+    zh-TW: 與其他資料表比對資料
   delete:
     en: Delete
     zh-CN: 删除
@@ -237,6 +245,10 @@ sidebar:
     en: View Table Details
     zh-CN: 查看表详情
     zh-TW: 檢視資料表詳細資料
+  export_table:
+    en: Export Table
+    zh-CN: 导出整表
+    zh-TW: 匯出整張資料表
   view_ddl:
     en: View CREATE Statement
     zh-CN: 查看建表语句
@@ -258,18 +270,10 @@ sidebar:
     zh-CN: 从左侧选择一个连接
     zh-TW: 從左側選擇一個連線
 detail:
-  details:
-    en: Details
-    zh-CN: 详情
-    zh-TW: 詳細資料
   row_detail:
     en: Row Details
     zh-CN: 行详情
     zh-TW: 列詳細資料
-  key_detail:
-    en: Key Details
-    zh-CN: KEY 详情
-    zh-TW: KEY 詳細資料
   ttl_never:
     en: Never expires
     zh-CN: 永不过期
@@ -278,18 +282,6 @@ detail:
     en: Does not exist
     zh-CN: 不存在
     zh-TW: 不存在
-  key:
-    en: Key
-    zh-CN: 键
-    zh-TW: 鍵
-  type:
-    en: Type
-    zh-CN: 类型
-    zh-TW: 類型
-  size:
-    en: Size
-    zh-CN: 大小
-    zh-TW: 大小
   columns_n:
     en: "Columns (%{count})"
     zh-CN: "字段(%{count})"
@@ -315,10 +307,6 @@ ops:
     en: "Export as %{format}"
     zh-CN: "导出为 %{format}"
     zh-TW: "匯出為 %{format}"
-  export_table_as:
-    en: "Export Table (%{format})"
-    zh-CN: "导出整表(%{format})"
-    zh-TW: "匯出整張資料表(%{format})"
   write_failed:
     en: "Failed to write file: %{error}"
     zh-CN: "写入文件失败:%{error}"
@@ -550,9 +538,9 @@ alter:
     zh-TW: "%{table} 的 rowid %{rowid} → 在 %{parent} 中找不到對應列"
 mask:
   menu:
-    en: "Data & Privacy…"
-    zh-CN: "数据与隐私…"
-    zh-TW: "資料與隱私…"
+    en: "Data & Privacy"
+    zh-CN: "数据与隐私"
+    zh-TW: "資料與隱私"
   dialog_title:
     en: "Data & Privacy · %{name}"
     zh-CN: "数据与隐私 · %{name}"

@@ -84,11 +84,14 @@ test("显示原值:右键只揭开这一格;弹窗里遮罩值只读,显示原�
 test("行详情:敏感字段遮罩", async () => {
   const app = await start();
   await openCustomers(app);
-  await app.press("text:Alice");
-  await app.press("label:detail");
+  await app.rightClick("text:Alice");
+  await app.chooseMenuItem("View Details");
   await app.waitFor("id:row-detail", { timeout: 5000 });
   expect(app.shows("id:row-masked:email")).toBe(true);
   expect(app.texts().filter((s) => s === "alice@example.com")).toEqual([]);
+  // Esc 关掉弹窗
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:row-detail"));
   app.dispose();
 });
 

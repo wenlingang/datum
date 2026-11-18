@@ -2,7 +2,7 @@
 // 扫描在 core 后台进行,这里轮询进度;离开 tab 不取消(回来接着看),「取消」按钮才中止。
 
 import { cleanup, effect, type JSX, Scroll, signal, Text, untracked, View } from "nsh";
-import { Dialog } from "nsh/base";
+import { Dialog, Progress } from "nsh/base";
 import { t } from "nsh/i18n";
 import { db, errorText } from "../lib/native";
 import type {
@@ -17,11 +17,12 @@ import type {
 import { conns } from "../store/conns";
 import { recordWrite } from "../store/journal";
 import { toast } from "../store/toast";
-import { Btn, Hint, Icon, IconButton, SectionLabel } from "../ui/kit";
+import { Btn, Hint, Icon, IconButton, SectionLabel, Loading } from "../ui/kit";
 import { FS, MONO } from "../ui/text";
 import { openTable } from "./index";
 import { ErrorText } from "../ui/error";
 import { RedisKeyEditor } from "./RedisKeyEditor";
+import { ConfirmFrame } from "../dialogs/controls";
 
 type Load<T> = { state: "loading" } | { state: "ok"; value: T } | { state: "error"; error: string };
 
@@ -35,7 +36,7 @@ function Loaded<T>(props: { load: Load<T>; error?: (e: string) => string; childr
     <If
       when={props.load.state === "ok"}
       else={
-        <If when={props.load.state === "error"} else={<Hint>{t("rinsight.loading")}</Hint>}>
+        <If when={props.load.state === "error"} else={<Loading label={t("rinsight.loading")} />}>
           <ErrorText text={props.error ? props.error(err()) : err()} />
         </If>
       }
@@ -141,15 +142,15 @@ function KeyTable(props: {
   return (
     <View testID={props.testID} class="rounded-(--radius) border border-border">
       <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
-        <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>key</Text>
+        <SectionLabel class="flex-1">key</SectionLabel>
         <If when={cluster()}>
-          <Text class={`${FS.xs} w-[130px] font-bold text-muted-foreground`}>node</Text>
+          <SectionLabel class="w-[130px]">node</SectionLabel>
         </If>
-        <Text class={`${FS.xs} w-[70px] font-bold text-muted-foreground`}>{t("rinsight.col_type")}</Text>
-        <Text class={`${FS.xs} w-[90px] text-right font-bold text-muted-foreground`}>
+        <SectionLabel class="w-[70px]">{t("rinsight.col_type")}</SectionLabel>
+        <SectionLabel class="w-[90px] text-right">
           {props.metric === "bytes" ? t("rinsight.col_memory") : t("rinsight.col_freq")}
-        </Text>
-        <Text class={`${FS.xs} w-[90px] text-right font-bold text-muted-foreground`}>TTL</Text>
+        </SectionLabel>
+        <SectionLabel class="w-[90px] text-right">TTL</SectionLabel>
         <View class="w-[28px]" />
       </View>
       <Each of={props.keys} key={(k) => `${k.node ?? ""}\u0000${k.key}`}>
@@ -295,7 +296,7 @@ function KeyValueDialog(props: {
       class="m-auto h-[640px] max-h-[88%] w-[860px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
     >
       <If when={error()}>{(e) => <ErrorText text={e()} />}</If>
-      <If when={value()} else={<If when={!error()}><Hint>{t("rinsight.loading")}</Hint></If>}>
+      <If when={value()} else={<If when={!error()}><Loading label={t("rinsight.loading")} /></If>}>
         <RedisKeyEditor
           connId={props.connId}
           node={props.target?.node ?? null}
@@ -327,21 +328,22 @@ function DeleteDialog(props: {
 }) {
   const k = () => props.target;
   return (
-    <Dialog
+    <ConfirmFrame
       testID="ri-delete"
       open={k() !== null}
-      onOpenChange={(e) => !e.open && props.onClose()}
-      closeOnEscape
-      animation="fade"
-      backdropClass="bg-overlay"
-      class="m-auto w-[520px] max-w-[92%] gap-3 rounded-(--radius-lg) border border-border bg-popover p-5 shadow-lg"
+      onClose={props.onClose}
+      title={t("rinsight.delete_title", { key: k()?.key ?? "" })}
+      icon="triangle-alert"
+      iconColor="warning"
+      width={520}
+      cancelLabel={t("rinsight.cancel")}
+      cancelTestID="ri-delete-cancel"
+      confirmLabel={t("rinsight.delete_key")}
+      confirmTestID="ri-delete-ok"
+      confirmVariant="danger"
+      confirmDisabled={props.busy}
+      onConfirm={props.onConfirm}
     >
-      <View class="flex-row items-center gap-2">
-        <Icon name="triangle-alert" size={16} color="warning" />
-        <Text class={`${FS.base} min-w-0 flex-1 font-bold text-popover-foreground line-clamp-2`}>
-          {t("rinsight.delete_title", { key: k()?.key ?? "" })}
-        </Text>
-      </View>
       <Text class={`${FS.sm} text-popover-foreground`}>{t("rinsight.delete_body")}</Text>
       <Text class={`${FS.xs} ${MONO} text-muted-foreground`}>
         {k() ? `${k()!.type} · ${formatBytes(k()!.bytes ?? 0)} · TTL ${formatTtl(k()!.ttlMs)}${k()!.node ? ` · ${k()!.node}` : ""}` : ""}
@@ -349,11 +351,7 @@ function DeleteDialog(props: {
       <If when={props.prod}>
         <Text class={`${FS.xs} text-negative`}>{t("rinsight.delete_prod")}</Text>
       </If>
-      <View class="flex-row justify-end gap-2 pt-1">
-        <Btn variant="outline" label={t("rinsight.cancel")} onPress={props.onClose} testID="ri-delete-cancel" />
-        <Btn variant="danger" disabled={props.busy} label={t("rinsight.delete_key")} onPress={props.onConfirm} testID="ri-delete-ok" />
-      </View>
-    </Dialog>
+    </ConfirmFrame>
   );
 }
 
@@ -409,10 +407,10 @@ function SlowLog(props: { entries: RedisSlowEntry[] }) {
     <If when={props.entries.length > 0} else={<Hint>{t("rinsight.slowlog_empty")}</Hint>}>
       <View testID="ri-slowlog" class="rounded-(--radius) border border-border">
         <View class="flex-row gap-3 border-b border-border bg-panel px-3 py-1.5">
-          <Text class={`${FS.xs} w-[150px] font-bold text-muted-foreground`}>{t("rinsight.col_time")}</Text>
-          <Text class={`${FS.xs} w-[80px] text-right font-bold text-muted-foreground`}>{t("rinsight.col_duration")}</Text>
-          <Text class={`${FS.xs} flex-1 font-bold text-muted-foreground`}>{t("rinsight.col_command")}</Text>
-          <Text class={`${FS.xs} w-[160px] font-bold text-muted-foreground`}>{t("rinsight.col_client")}</Text>
+          <SectionLabel class="w-[150px]">{t("rinsight.col_time")}</SectionLabel>
+          <SectionLabel class="w-[80px] text-right">{t("rinsight.col_duration")}</SectionLabel>
+          <SectionLabel class="flex-1">{t("rinsight.col_command")}</SectionLabel>
+          <SectionLabel class="w-[160px]">{t("rinsight.col_client")}</SectionLabel>
         </View>
         <Each of={props.entries}>
           {(e) => (
@@ -549,139 +547,144 @@ export function RedisInsight(props: { connId: string }) {
   }
 
   return (
-    <Scroll testID="redis-insight" class="min-h-0 flex-1 bg-background" contentClass="gap-6 px-5 py-4">
-      <View class="flex-row items-center gap-3">
+    <View testID="redis-insight" class="min-h-0 flex-1 bg-background">
+      {/* 标题行固定在顶部,不随下面的内容滚走 */}
+      <View class="shrink-0 flex-row items-center gap-3 px-5 pt-4 pb-3">
         <Icon name="activity" size={16} color="data" />
         <Text class={`${FS.base} flex-1 font-bold text-foreground`}>
           {t("rinsight.heading", { name: conn()?.name ?? "", db: conn()?.database || "0" })}
         </Text>
-        <Btn small icon="refresh-cw" label={t("rinsight.refresh")} onPress={() => void loadOverview()} />
+        <Btn small variant="outline" icon="refresh-cw" label={t("rinsight.refresh")} onPress={() => void loadOverview()} />
       </View>
+      <Scroll class="min-h-0 flex-1" contentClass="gap-6 px-5 pt-3 pb-4">
+        <Section title={t("rinsight.overview")}>
+          <Loaded load={overview()}>{(o) => <Overview o={o} />}</Loaded>
+        </Section>
 
-      <Section title={t("rinsight.overview")}>
-        <Loaded load={overview()}>{(o) => <Overview o={o} />}</Loaded>
-      </Section>
-
-      <Section
-        title={t("rinsight.scan")}
-        right={
-          <If
-            when={running()}
-            else={
-              <Btn
-                testID="ri-start"
-                small
-                variant="primary"
-                icon="play"
-                label={report() ? t("rinsight.rescan") : t("rinsight.start")}
-                onPress={() => void start()}
-              />
-            }
-          >
-            <Btn testID="ri-cancel" small icon="x" label={t("rinsight.cancel")} onPress={() => void db.redisAnalysisCancel(id)} />
-          </If>
-        }
-      >
-        <Hint class={FS.xs}>{t("rinsight.scan_hint", { max: (200000).toLocaleString() })}</Hint>
-        <If when={startError()}>{(e) => <ErrorText text={e()} />}</If>
-        <If when={report()}>
-          {(r) => (
-            <View class="gap-5">
-              <View class="gap-1.5">
-                <View class="h-1.5 rounded-full bg-raised">
-                  <View class="h-1.5 rounded-full bg-primary" style={{ width: `${progress()}%` }} />
+        <Section
+          title={t("rinsight.scan")}
+          right={
+            <If
+              when={running()}
+              else={
+                <Btn
+                  testID="ri-start"
+                  small
+                  variant="primary"
+                  icon="play"
+                  label={report() ? t("rinsight.rescan") : t("rinsight.start")}
+                  onPress={() => void start()}
+                />
+              }
+            >
+              <Btn testID="ri-cancel" small icon="square" label={t("rinsight.cancel")} onPress={() => void db.redisAnalysisCancel(id)} />
+            </If>
+          }
+        >
+          <Hint class={FS.xs}>{t("rinsight.scan_hint", { max: (200000).toLocaleString() })}</Hint>
+          <If when={startError()}>{(e) => <ErrorText text={e()} />}</If>
+          <If when={report()}>
+            {(r) => (
+              <View class="gap-5">
+                <View class="gap-1.5">
+                  <Progress
+                    value={progress()}
+                    accessibilityLabel={t("rinsight.scan")}
+                    trackClass="h-1.5 rounded-full bg-raised"
+                    indicatorClass="h-1.5 rounded-full bg-primary"
+                  />
+                  <Text testID="ri-progress" class={`${FS.xs} text-muted-foreground`}>
+                    {r().done
+                      ? r().error
+                        ? t("rinsight.scan_failed", { error: r().error ?? "" })
+                        : r().cancelled
+                          ? t("rinsight.scan_cancelled", { scanned: r().scanned.toLocaleString() })
+                          : r().truncated
+                            ? t("rinsight.scan_truncated", { scanned: r().scanned.toLocaleString(), total: r().total.toLocaleString() })
+                            : t("rinsight.scan_done", { scanned: r().scanned.toLocaleString(), bytes: formatBytes(r().totalBytes) })
+                      : t("rinsight.scanning", { scanned: r().scanned.toLocaleString(), total: r().total.toLocaleString() })}
+                  </Text>
+                  <If when={!r().memorySupported}>
+                    <Text class={`${FS.xs} text-warning`}>{t("rinsight.no_memory_usage")}</Text>
+                  </If>
                 </View>
-                <Text testID="ri-progress" class={`${FS.xs} text-muted-foreground`}>
-                  {r().done
-                    ? r().error
-                      ? t("rinsight.scan_failed", { error: r().error ?? "" })
-                      : r().cancelled
-                        ? t("rinsight.scan_cancelled", { scanned: r().scanned.toLocaleString() })
-                        : r().truncated
-                          ? t("rinsight.scan_truncated", { scanned: r().scanned.toLocaleString(), total: r().total.toLocaleString() })
-                          : t("rinsight.scan_done", { scanned: r().scanned.toLocaleString(), bytes: formatBytes(r().totalBytes) })
-                    : t("rinsight.scanning", { scanned: r().scanned.toLocaleString(), total: r().total.toLocaleString() })}
-                </Text>
-                <If when={!r().memorySupported}>
-                  <Text class={`${FS.xs} text-warning`}>{t("rinsight.no_memory_usage")}</Text>
+
+                <If when={r().scanned > 0}>
+                  <View class="gap-5">
+                    <If when={r().memorySupported}>
+                      <Section title={t("rinsight.biggest")}>
+                        <KeyTable
+                          testID="ri-biggest"
+                          connId={id}
+                          keys={r().biggest}
+                          metric="bytes"
+                          onView={view}
+                          onDelete={(k) => deleting.set(k)}
+                        />
+                      </Section>
+                    </If>
+                    <If when={r().cluster}>
+                      <Section title={t("rinsight.cluster_nodes")}>
+                        <Nodes r={r()} />
+                      </Section>
+                    </If>
+                    <Section title={t("rinsight.prefixes")}>
+                      <PrefixTree r={r()} />
+                    </Section>
+                    <View class="flex-row gap-6">
+                      <View class="min-w-0 flex-1">
+                        <Section title={t("rinsight.ttl")}>
+                          <TtlDist r={r()} />
+                        </Section>
+                      </View>
+                      <View class="min-w-0 flex-1">
+                        <Section title={t("rinsight.types")}>
+                          <Groups testID="ri-types" groups={r().types} r={r()} />
+                        </Section>
+                      </View>
+                    </View>
+                    <Section title={t("rinsight.hottest")}>
+                      <If when={r().lfu} else={<Hint class={FS.xs}>{t("rinsight.hot_needs_lfu")}</Hint>}>
+                        <KeyTable
+                          testID="ri-hottest"
+                          connId={id}
+                          keys={r().hottest}
+                          metric="freq"
+                          onView={view}
+                          onDelete={(k) => deleting.set(k)}
+                        />
+                      </If>
+                    </Section>
+                  </View>
                 </If>
               </View>
+            )}
+          </If>
+        </Section>
 
-              <If when={r().scanned > 0}>
-                <View class="gap-5">
-                  <If when={r().memorySupported}>
-                    <Section title={t("rinsight.biggest")}>
-                      <KeyTable
-                        testID="ri-biggest"
-                        connId={id}
-                        keys={r().biggest}
-                        metric="bytes"
-                        onView={view}
-                        onDelete={(k) => deleting.set(k)}
-                      />
-                    </Section>
-                  </If>
-                  <If when={r().cluster}>
-                    <Section title={t("rinsight.cluster_nodes")}>
-                      <Nodes r={r()} />
-                    </Section>
-                  </If>
-                  <Section title={t("rinsight.prefixes")}>
-                    <PrefixTree r={r()} />
-                  </Section>
-                  <View class="flex-row gap-6">
-                    <View class="min-w-0 flex-1">
-                      <Section title={t("rinsight.ttl")}>
-                        <TtlDist r={r()} />
-                      </Section>
-                    </View>
-                    <View class="min-w-0 flex-1">
-                      <Section title={t("rinsight.types")}>
-                        <Groups testID="ri-types" groups={r().types} r={r()} />
-                      </Section>
-                    </View>
-                  </View>
-                  <Section title={t("rinsight.hottest")}>
-                    <If when={r().lfu} else={<Hint class={FS.xs}>{t("rinsight.hot_needs_lfu")}</Hint>}>
-                      <KeyTable
-                        testID="ri-hottest"
-                        connId={id}
-                        keys={r().hottest}
-                        metric="freq"
-                        onView={view}
-                        onDelete={(k) => deleting.set(k)}
-                      />
-                    </If>
-                  </Section>
-                </View>
-              </If>
-            </View>
-          )}
-        </If>
-      </Section>
+        <Section title={t("rinsight.slowlog")}>
+          <Loaded load={slowlog()} error={(error) => t("rinsight.slowlog_failed", { error })}>
+            {(entries) => <SlowLog entries={entries} />}
+          </Loaded>
+        </Section>
 
-      <Section title={t("rinsight.slowlog")}>
-        <Loaded load={slowlog()} error={(error) => t("rinsight.slowlog_failed", { error })}>
-          {(entries) => <SlowLog entries={entries} />}
-        </Loaded>
-      </Section>
-
-      <KeyValueDialog
-        connId={id}
-        target={viewing()}
-        onClose={() => viewing.set(null)}
-        onRenamed={(from) => {
-          viewing.set(null);
-          dropFromReport(from.key, from.node);
-        }}
-      />
-      <DeleteDialog
-        target={deleting()}
-        prod={conn()?.env === "prod"}
-        busy={busy()}
-        onClose={() => deleting.set(null)}
-        onConfirm={() => void confirmDelete()}
-      />
-    </Scroll>
+        <KeyValueDialog
+          connId={id}
+          target={viewing()}
+          onClose={() => viewing.set(null)}
+          onRenamed={(from) => {
+            viewing.set(null);
+            dropFromReport(from.key, from.node);
+          }}
+        />
+        <DeleteDialog
+          target={deleting()}
+          prod={conn()?.env === "prod"}
+          busy={busy()}
+          onClose={() => deleting.set(null)}
+          onConfirm={() => void confirmDelete()}
+        />
+      </Scroll>
+    </View>
   );
 }

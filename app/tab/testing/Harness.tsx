@@ -1,4 +1,4 @@
-// 临时开发入口:不经外壳,直接挂 TabView + DetailPanel + TabStatus,验证查询/表浏览标签页。
+// 临时开发入口:不经外壳,直接挂 TabView + TabStatus,验证查询/表浏览标签页。
 // 用法(只连临时目录里的库):DATUM_CONFIG_DIR=<临时目录> nsh run TabDev.tsx --port <端口>
 // (nsh 以入口所在目录为应用目录,入口须在 app/ 下,故由 app/TabDev.tsx 引入本文件;tab/tab.test.tsx 也用它。)
 // 明暗由配置目录的 ui_prefs.json 决定。下面的 DATUM_DEV_* 只在 JS 能读到宿主环境变量时生效(macOS 开发宿主读不到)。
@@ -8,11 +8,10 @@ import { Button } from "nsh/base";
 import { activate, conns, loadTables, reloadConnections } from "../../store/conns";
 import { apply as applyPrefs } from "../../store/prefs";
 import { dismissToast, toasts } from "../../store/toast";
-import { focusTab, setDetailOpen, toggleDetail, workspace } from "../../store/workspace";
+import { focusTab, workspace } from "../../store/workspace";
 import { DbIcon, Dot, Icon, IconButton } from "../../ui/kit";
 import { FS } from "../../ui/text";
 import {
-  DetailPanel,
   modelOf,
   newQueryTab,
   openDiagnostics,
@@ -23,6 +22,7 @@ import {
   TabStatus,
   TabView,
 } from "../index";
+import { openRowDetail } from "../model";
 
 applyPrefs();
 reloadConnections();
@@ -54,14 +54,13 @@ async function boot() {
     const t = workspace.tabs().find((x) => x.kind === "table");
     if (t) focusTab(t);
   } else if (q) focusTab(q);
-  // 截图用:自动运行查询 / 打开详情栏并选中一行
+  // 截图用:自动运行查询 / 打开某一行的行详情弹窗
   if (env("DATUM_DEV_RUN") && view !== "table") runTabCommand("run");
   const row = env("DATUM_DEV_ROW");
   if (row) {
     setTimeout(() => {
       const m = modelOf(workspace.activeTab());
-      m?.selectedRow.set(Number(row));
-      setDetailOpen(true);
+      if (m) openRowDetail(m, Number(row));
     }, 800);
   }
 }
@@ -110,7 +109,6 @@ function TabStrip() {
       <Button testID="open-journal" onPress={() => connId && openJournal(connId)} class="px-1.5">
         <Icon name="scroll-text" size={13} />
       </Button>
-      <IconButton icon="panel-left" tooltip="detail" active={workspace.detailOpen()} onPress={toggleDetail} />
     </View>
   );
 }
@@ -143,11 +141,6 @@ function Dev() {
         <View class="min-w-0 flex-1">
           <If when={workspace.activeTab()}>{(t) => <TabView tab={t()} />}</If>
         </View>
-        <If when={workspace.detailOpen()}>
-          <View class="w-[340px]">
-            <DetailPanel />
-          </View>
-        </If>
       </View>
       <StatusBar />
       <View class="absolute bottom-10 right-4 w-80 gap-2" style={{ pointerEvents: "box-none" }}>

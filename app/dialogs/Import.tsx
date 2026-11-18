@@ -9,10 +9,10 @@ import { db, dialogsNative, errorText, sql, store } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { conns, refreshTables } from "../store/conns";
 import { recordWrite } from "../store/journal";
-import { Btn, DbIcon, color } from "../ui/kit";
+import { Btn, DbIcon, color, SectionLabel } from "../ui/kit";
 import { editorText } from "../ui/editor";
 import { FS } from "../ui/text";
-import { DialogFrame, Dropdown, LoadingBtn, Segmented } from "./controls";
+import { DialogFrame, Dropdown, Segmented } from "./controls";
 import { ErrorText } from "../ui/error";
 import { ImportDataView } from "./ImportData";
 import type { ImportMode } from "./state";
@@ -149,7 +149,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
     }
   }
 
-  const label = (s: string) => <Text class={`${FS.xs} font-bold text-muted-foreground`}>{s}</Text>;
+  const label = (s: string) => <SectionLabel>{s}</SectionLabel>;
 
   return (
     <View class="gap-3.5">
@@ -173,9 +173,10 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
       <View class="gap-1.5">
         <View class="flex-row items-center justify-between">
           {label(t("import.sql_content"))}
-          <LoadingBtn
+          <Btn
             testID="import-file"
-            xsmall
+            small
+            variant="outline"
             icon="file-up"
             label={t("import.choose_file")}
             disabled={running()}
@@ -217,7 +218,7 @@ function ImportView(props: { connId: string; running: Signal<boolean>; onClose: 
       </If>
       <View class="flex-row justify-end gap-2.5">
         <Btn testID="import-close" variant="outline" label={t("import.close")} disabled={running()} onPress={props.onClose} />
-        <LoadingBtn
+        <Btn
           testID="import-run"
           variant="primary"
           loading={running()}

@@ -40,7 +40,7 @@ import { journalIdsOf, newJournalId, recordWrite } from "../store/journal";
 import { maxRows } from "../store/prefs";
 import { hideInDemo } from "../store/privacy";
 import { toast } from "../store/toast";
-import { setDetailOpen, type WorkTab } from "../store/workspace";
+import type { WorkTab } from "../store/workspace";
 import { openIndexAdvisor } from "./advisorModel";
 import { caretOf, primaryRange } from "./textpos";
 
@@ -164,8 +164,10 @@ export interface TabModel {
   /** 暂存删除的行(主键值) */
   readonly deletes: Signal<string[]>;
   readonly err: Signal<string | null>;
-  /** 视图中选中的行(右栏行详情) */
+  /** 视图中选中的行 */
   readonly selectedRow: Signal<number | null>;
+  /** 行详情弹窗正在看的行(视图下标);null = 关闭 */
+  readonly rowDetail: Signal<number | null>;
   /** 当前结果来自查询(SELECT)还是非查询语句(DDL/DML) */
   readonly resultIsQuery: Signal<boolean>;
   readonly sort: Signal<SortState | null>;
@@ -283,6 +285,7 @@ export function createModel(kind: "table" | "query", connId: string, dbKind: DbK
     deletes: signal<string[]>([]),
     err: signal<string | null>(null),
     selectedRow: signal<number | null>(null),
+    rowDetail: signal<number | null>(null),
     resultIsQuery: signal(true),
     sort: signal<SortState | null>(null),
     elapsedMs: signal<number | null>(null),
@@ -1159,10 +1162,16 @@ export function openCell(m: TabModel, viewIx: number, colIx: number) {
   });
 }
 
-/** 右键「查看详情」:选中该行并打开右栏行详情。 */
+/** 右键「查看详情」:选中该行并打开行详情弹窗。 */
 export function openRowDetail(m: TabModel, viewIx: number) {
-  m.selectedRow.set(viewIx);
-  setDetailOpen(true);
+  batch(() => {
+    m.selectedRow.set(viewIx);
+    m.rowDetail.set(viewIx);
+  });
+}
+
+export function closeRowDetail(m: TabModel) {
+  m.rowDetail.set(null);
 }
 
 export function clearSelection(m: TabModel) {

@@ -12,8 +12,8 @@ import { workspace } from "../store/workspace";
 import { openDataDiff, openDiagnostics, openJournal, openRedisInsight, openRedisLive, openRedisLua, openSchemaDiff, openTable } from "../tab";
 import { NewKeyDialog } from "../tab/RedisKeyEditor";
 import { MiddleEllipsis } from "../ui/ellipsis";
-import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, TextField, tip } from "../ui/kit";
-import { CtxMenu, DropMenu, MItem, MSep } from "../ui/menu";
+import { color, EnvBadge, envLabel, envToken, Icon, IconButton, type IconName, SearchField, tip } from "../ui/kit";
+import { CtxMenu, DropMenu, MItem, MSep, MSub } from "../ui/menu";
 import { FS, MONO } from "../ui/text";
 import { openErdForActive } from "./commands";
 import {
@@ -25,7 +25,7 @@ import {
   exportDatabase,
   exportDbByName,
   exportTable,
-  exportTableLabel,
+  exportFormatName,
   pickDatabase,
   showAlterTable,
   showDdl,
@@ -102,9 +102,11 @@ function TableMenuItems(props: { connId: string; kind: DbKind; table: string }) 
       </If>
       <MItem label={t("testdata.menu")} onSelect={() => showTestData(connId, table)} />
       <MSep />
-      {EXPORT_FORMATS.map((f) => (
-        <MItem label={exportTableLabel(f)} onSelect={() => void exportTable(connId, table, f)} />
-      ))}
+      <MSub label={t("sidebar.export_table")} testID="export-table-menu">
+        {EXPORT_FORMATS.map((f) => (
+          <MItem label={exportFormatName(f)} onSelect={() => void exportTable(connId, table, f)} />
+        ))}
+      </MSub>
     </>
   );
 }
@@ -123,48 +125,61 @@ function DbMenuItems(props: { kind: DbKind; db: string }) {
   );
 }
 
-/** 连接竖轨:每个连接一个图标(右下角环境色点),底部「+」新建连接。 */
+/** 连接竖轨:每个连接一个中性方块 + 放大的数据库标志(靠标志轮廓认类型,不按库上色),
+ *  右下角环境色点;跟在后面的「+」新建连接。
+ *  连接多了只滚图标列表,「+」在滚动区外面,不会被滚走。 */
 function Rail() {
   return (
-    <Scroll class="w-12 shrink-0 bg-rail" contentClass="items-center gap-1.5 py-2" testID="conn-rail">
-      <Each of={conns.list()} key={(c) => c.id}>
-        {(c) => {
-          const active = () => conns.activeId() === c().id;
-          return (
-            <CtxMenu trigger={
-              <Button
-                onPress={() => selectConn(c().id)}
-                selected={active()}
-                testID={`rail-${c().id}`}
-                accessibilityLabel={c().name}
-                tooltip={tip(() => `${c().name} · ${envLabel(c().env).toLowerCase()}`)}
-                class="relative size-8 shrink-0 items-center justify-center rounded-(--radius-lg)"
-                classList={{ "bg-primary": active(), "border border-hairline hover:bg-raised": !active() }}
-              >
-                <Icon name={DB_ICON[c().kind]} size={16} color={active() ? "primary-foreground" : "muted-foreground"} />
-                <View
-                  class="absolute -bottom-px -right-px size-[9px] rounded-full border-2 border-rail"
-                  style={{ backgroundColor: color(envToken(c().env)) }}
-                />
-              </Button>
-            }>
-              <ConnMenuItems conn={c()} />
-            </CtxMenu>
-          );
-        }}
-      </Each>
+    <View class="w-12 shrink-0 items-center bg-rail" testID="conn-rail">
+      <Scroll class="min-h-0 shrink self-stretch" contentClass="items-center gap-1.5 pt-2">
+        <Each of={conns.list()} key={(c) => c.id}>
+          {(c) => {
+            const active = () => conns.activeId() === c().id;
+            return (
+              <CtxMenu trigger={
+                // 未选中:中性底 + 前景色标志;当前连接:整块主色、白色标志,左边缘一条品牌渐变竖条。
+                // 未选中才挂 hover(nsh 里 hover 优先级高于无前缀的底色,否则会盖掉主色)
+                <View class="relative w-12 shrink-0 items-center">
+                  <If when={active()}>
+                    <View class="absolute left-0 top-1/2 -mt-2.5 h-5 w-[3px] rounded-r-full bg-linear-to-b from-primary to-ai" />
+                  </If>
+                  <Button
+                    onPress={() => selectConn(c().id)}
+                    selected={active()}
+                    testID={`rail-${c().id}`}
+                    accessibilityLabel={c().name}
+                    tooltip={tip(() => `${c().name} · ${envLabel(c().env).toLowerCase()}`)}
+                    class="relative size-[34px] items-center justify-center rounded-[9px]"
+                    classList={{ "bg-primary": active(), "bg-raised hover:bg-list-hover": !active() }}
+                  >
+                    <Icon name={DB_ICON[c().kind]} size={18} color={active() ? "primary-foreground" : "foreground"} />
+                    <View
+                      class="pointer-events-none absolute -bottom-[3px] -right-[3px] size-[10px] rounded-full border-2 border-rail"
+                      style={{ backgroundColor: color(envToken(c().env)) }}
+                    />
+                  </Button>
+                </View>
+              }>
+                <ConnMenuItems conn={c()} />
+              </CtxMenu>
+            );
+          }}
+        </Each>
+      </Scroll>
       <If when={conns.list().length > 0}>
-        <View class="my-1 h-px w-5 shrink-0 bg-hairline" />
+        <View class="my-2.5 h-px w-5 shrink-0 bg-hairline" />
       </If>
-      <IconButton
-        icon="plus"
-        size={16}
-        tooltip={t("sidebar.new_connection")}
-        label={t("sidebar.new_connection")}
-        onPress={() => openConnectionForm()}
-        class="p-2"
-      />
-    </Scroll>
+      <View class="shrink-0 pb-2">
+        <IconButton
+          icon="plus"
+          size={16}
+          tooltip={t("sidebar.new_connection")}
+          label={t("sidebar.new_connection")}
+          onPress={() => openConnectionForm()}
+          class="p-2"
+        />
+      </View>
+    </View>
   );
 }
 
@@ -208,9 +223,12 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
       <View class="h-11 shrink-0 flex-row items-center gap-2 pl-3 pr-2">
         <MiddleEllipsis text={conn().name} class={`${FS.sm} font-bold text-foreground`} />
         <EnvBadge env={conn().env} />
+        {/* 操作按钮:小号(24px)、间距 2px,整组不压缩;以前 27px + 8px 间距,Redis 有 5 个按钮时把连接名挤成「c…」 */}
+        <View class="shrink-0 flex-row items-center gap-0.5">
         <If when={supportsSql(conn().kind)}>
-          <IconButton icon="network" tooltip={t("workspace.relationship_diagram")} onPress={openErdForActive} />
+          <IconButton small icon="network" tooltip={t("workspace.relationship_diagram")} onPress={openErdForActive} />
           <IconButton
+            small
             icon="stethoscope"
             tooltip={t("workspace.diagnostics")}
             onPress={() => openDiagnostics(conn().id)}
@@ -218,22 +236,26 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
         </If>
         <If when={conn().kind === "redis"}>
           <IconButton
+            small
             icon="plus"
             label={t("rkey.new_key")}
             tooltip={t("rkey.new_key")}
             onPress={() => newKeyOpen.set(true)}
           />
           <IconButton
+            small
             icon="activity"
             tooltip={t("workspace.redis_insight")}
             onPress={() => openRedisInsight(conn().id)}
           />
           <IconButton
+            small
             icon="radio"
             tooltip={t("workspace.redis_live")}
             onPress={() => openRedisLive(conn().id)}
           />
           <IconButton
+            small
             icon="code-xml"
             tooltip={t("workspace.redis_lua")}
             onPress={() => openRedisLua(conn().id)}
@@ -252,10 +274,11 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
         </If>
         <DropMenu
           testID="conn-actions"
-          trigger={<IconButton icon="ellipsis" size={13} tooltip={t("sidebar.conn_actions")} class="p-1" />}
+          trigger={<IconButton small icon="ellipsis" tooltip={t("sidebar.conn_actions")} />}
         >
           <ConnMenuItems conn={conn()} />
         </DropMenu>
+        </View>
       </View>
 
       {/* 库切换(SQLite 没有库的概念) */}
@@ -282,23 +305,13 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
 
       {/* 搜索 */}
       <View class="shrink-0 px-2 pb-2">
-        <View class="relative justify-center">
-          <TextField
-            value={props.search}
-            onChange={({ value }) => props.onSearch(value)}
-            placeholder={t("sidebar.search_tables")}
-            testID="table-search"
-            class="h-7 pl-7"
-          />
-          <View class="pointer-events-none absolute left-2.5">
-            <Icon name="search" size={13} color="fg-faint" />
-          </View>
-          <If when={props.search}>
-            <View class="absolute right-1">
-              <IconButton icon="x" size={12} class="p-1" label="clear" onPress={() => props.onSearch("")} />
-            </View>
-          </If>
-        </View>
+        <SearchField
+          value={props.search}
+          onChange={props.onSearch}
+          placeholder={t("sidebar.search_tables")}
+          testID="table-search"
+          clearable
+        />
       </View>
 
       {/* 表列表 */}
@@ -337,18 +350,18 @@ function TablesPane(props: { conn: Connection; search: string; onSearch: (v: str
                   onPress={() => openTable(conn().id, name())}
                   selected={active()}
                   accessibilityLabel={name()}
-                  class="relative h-[30px] flex-row items-center gap-2 rounded pl-3 pr-2.5"
+                  class="relative h-[30px] flex-row items-center gap-2 rounded-(--radius) pl-3 pr-2.5"
                   classList={{ "bg-sidebar-accent": active(), "hover:bg-list-hover": !active() }}
                 >
                   <If when={active()}>
-                    <View class="absolute bottom-[5px] left-0 top-[5px] w-[3px] rounded-r-[3px] bg-primary" />
+                    <View class="absolute bottom-[5px] left-0 top-[5px] w-[3px] rounded-r-[3px] bg-linear-to-b from-primary to-ai" />
                   </If>
                   <View style={{ opacity: active() ? 1 : 0.72 }}>
                     <Icon name={OBJECT_ICON[conn().kind]} size={13} color={active() ? "data" : "primary"} />
                   </View>
                   <MiddleEllipsis
                     text={name()}
-                    class={`${FS.sm} ${active() ? "font-bold text-foreground" : "font-medium text-fg-soft"}`}
+                    class={`${FS.sm} font-medium ${active() ? "text-foreground" : "text-fg-soft"}`}
                   />
                 </Button>
               }>
@@ -396,7 +409,7 @@ function DbList(props: { conn: Connection; loading: boolean; onPicked: () => voi
                       </If>
                       <MiddleEllipsis
                         text={displayDb(props.conn.kind, name())}
-                        class={`${FS.xs} ${MONO} ${current() ? "font-bold text-foreground" : "font-normal text-fg-soft"}`}
+                        class={`${FS.xs} ${MONO} font-medium ${current() ? "text-foreground" : "text-fg-soft"}`}
                       />
                     </Button>
                   }>
