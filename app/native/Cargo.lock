@@ -2844,8 +2844,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-base"
-version = "0.6.0"
-source = "git+https://github.com/longbridge/nsh?rev=554163758e30d2f62f814096a6327937dcb4fe49#554163758e30d2f62f814096a6327937dcb4fe49"
+version = "0.7.2"
+source = "git+https://github.com/longbridge/nsh?rev=0c29b5e3351128f489fe53bfb167160801707191#0c29b5e3351128f489fe53bfb167160801707191"
 dependencies = [
  "chrono",
  "html5ever",
@@ -2868,8 +2868,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-core"
-version = "0.6.0"
-source = "git+https://github.com/longbridge/nsh?rev=554163758e30d2f62f814096a6327937dcb4fe49#554163758e30d2f62f814096a6327937dcb4fe49"
+version = "0.7.2"
+source = "git+https://github.com/longbridge/nsh?rev=0c29b5e3351128f489fe53bfb167160801707191#0c29b5e3351128f489fe53bfb167160801707191"
 dependencies = [
  "cap-std",
  "chrono",
@@ -2880,6 +2880,7 @@ dependencies = [
  "log",
  "nsh-macros",
  "ordered-float",
+ "percent-encoding",
  "rust-i18n",
  "rustc-hash",
  "serde",
@@ -2898,8 +2899,8 @@ dependencies = [
 
 [[package]]
 name = "nsh-macros"
-version = "0.6.0"
-source = "git+https://github.com/longbridge/nsh?rev=554163758e30d2f62f814096a6327937dcb4fe49#554163758e30d2f62f814096a6327937dcb4fe49"
+version = "0.7.2"
+source = "git+https://github.com/longbridge/nsh?rev=0c29b5e3351128f489fe53bfb167160801707191#0c29b5e3351128f489fe53bfb167160801707191"
 dependencies = [
  "imagesize",
  "proc-macro2",
@@ -4876,9 +4877,9 @@ dependencies = [
 
 [[package]]
 name = "taffy"
-version = "0.15.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
+checksum = "cae92eb1b204bfd239b5c463e1bd2c3ce4913d2d3abfb5c64f5cfee9d65e5c68"
 dependencies = [
  "serde",
  "slotmap",

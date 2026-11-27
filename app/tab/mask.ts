@@ -152,13 +152,13 @@ export function revealOpenCell(m: TabModel) {
 }
 
 /** 复制一个格子的展示值。 */
-export async function copyValueDisplayed(m: TabModel, viewIx: number, col: number, write: (text: string) => Promise<void>) {
+export async function copyValueDisplayed(m: TabModel, viewIx: number, col: number, write: (text: string) => Promise<unknown>) {
   await write(displayValue(m, viewIx, col) ?? "NULL");
   toast.success(t("tab.copied"));
 }
 
 /** 复制一行(CSV,带表头)。 */
-export async function copyRowDisplayed(m: TabModel, viewIx: number, write: (text: string) => Promise<void>) {
+export async function copyRowDisplayed(m: TabModel, viewIx: number, write: (text: string) => Promise<unknown>) {
   const result = m.result();
   if (!result || !viewRow(m, viewIx)) return;
   await write(grid.toCsv(result.columns, [displayRow(m, viewIx)]));
@@ -166,7 +166,7 @@ export async function copyRowDisplayed(m: TabModel, viewIx: number, write: (text
 }
 
 /** 复制一行的 INSERT(展示值:遮罩的列是遮罩后的值)。 */
-export async function copyInsertDisplayed(m: TabModel, viewIx: number, write: (text: string) => Promise<void>) {
+export async function copyInsertDisplayed(m: TabModel, viewIx: number, write: (text: string) => Promise<unknown>) {
   const result = m.result();
   if (!result || !viewRow(m, viewIx) || !supportsSql(m.dbKind)) return;
   await write(grid.buildInsertRow(m.table ?? "table", result.columns, displayRow(m, viewIx), m.dbKind));

@@ -9,8 +9,8 @@ description = "Datum 的原生模块:把 datum-core 暴露给 TSX 界面(datum/n
 [workspace]
 
 [dependencies]
-nsh-core = { git = "https://github.com/longbridge/nsh", rev = "554163758e30d2f62f814096a6327937dcb4fe49" }
-nsh-base = { git = "https://github.com/longbridge/nsh", rev = "554163758e30d2f62f814096a6327937dcb4fe49" }
+nsh-core = { git = "https://github.com/longbridge/nsh", rev = "0c29b5e3351128f489fe53bfb167160801707191" }
+nsh-base = { git = "https://github.com/longbridge/nsh", rev = "0c29b5e3351128f489fe53bfb167160801707191" }
 datum-core = { path = "../../crates/core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
