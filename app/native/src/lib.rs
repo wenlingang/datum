@@ -9,7 +9,6 @@ mod conn;
 mod db;
 mod erd;
 mod journal;
-mod keys;
 mod mask;
 mod dialogs;
 mod prefs;
@@ -26,7 +25,6 @@ pub use conn::Store;
 pub use db::Db;
 pub use erd::Erd;
 pub use journal::Journal;
-pub use keys::EditorKeys;
 pub use mask::Mask;
 pub use dialogs::Dialogs;
 pub use prefs::Prefs;
@@ -40,7 +38,6 @@ pub use text::Sql;
 fn native(registry: &mut Registry) {
     runtime::init();
     registry
-        .register::<EditorKeys>()
         .module::<Store>()
         .module::<Db>()
         .module::<Erd>()

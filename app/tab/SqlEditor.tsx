@@ -4,10 +4,10 @@
 // 补全的计算在 datum_core::completion(经 lib/native 的 grid.completions);这里只转成编辑器的补全项。
 
 import { signal, Text, untracked, View } from "nsh";
-import { EditorKeys } from "datum/native";
 import { Button, Editor, type EditorCompletionItem, type EditorCompletionRequest } from "nsh/base";
 import { Menu as NativeMenu } from "nsh/desktop";
 import { t } from "nsh/i18n";
+import { bindWhileFocused } from "../lib/keys";
 import { grid, sql as sqlText } from "../lib/native";
 import { supportsSql } from "../lib/types";
 import { conns } from "../store/conns";
@@ -156,7 +156,6 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
   let chipSeq = 0;
 
   // 编辑器内的快捷键:压过 Editor 自带的 mod+enter(下方插入新行)/ cmd+e 等键位。
-  // 必须用原生组件 EditorKeys 绑:TSX 的 keymap.bind 永远排在 Rust 组件的绑定之前,赢不了 Editor。
   // ⌘Y / ⌘F / ⌘S 平时由外壳全局绑定;Windows / Linux 上 Editor 占用 ctrl+y / ctrl+f 等,聚焦时一并接管。
   const EDITOR_KEYS = ["mod+enter", "mod+shift+enter", "mod+shift+f", "mod+e", "mod+shift+a", "mod+y", "mod+f", "mod+s"];
   const onEditorKey = (keystroke: string) => {
@@ -179,6 +178,7 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
         return void commit(m);
     }
   };
+  bindWhileFocused(() => m.editorFocused(), EDITOR_KEYS, (k) => void onEditorKey(k));
 
   const onSelection = async () => {
     const seq = ++chipSeq;
@@ -206,7 +206,6 @@ export function SqlEditor(props: { m: TabModel; autoFocus?: boolean }) {
 
   return (
     <View class="relative min-h-0 flex-1 bg-editor">
-      <EditorKeys keys={EDITOR_KEYS} active={m.editorFocused()} onKey={({ keystroke }) => void onEditorKey(keystroke)} />
       <Editor
         ref={(r) => {
           m.editor = r;

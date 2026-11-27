@@ -1,10 +1,10 @@
 // 对话框共用的样式控件:外框、字段标签、分段选择、下拉选择、掩码输入、复选框、开关、操作菜单。
 // 都套在 nsh/base 的行为组件上,颜色只用主题 token。
 
-import { EditorKeys } from "datum/native";
 import { batch, Overlay, Scroll, signal, Text, View, type JSX, type ViewRef } from "nsh";
 import { Button, Checkbox, Dialog, Input, Select, Switch, Toggle, ToggleGroup, type InputProps } from "nsh/base";
 import { t } from "nsh/i18n";
+import { bindWhileFocused } from "../lib/keys";
 import { color as tokenColor, Icon, IconButton, SectionLabel, TextField, tip, Btn, type IconName, type ButtonVariant } from "../ui/kit";
 import { DropMenu, MItem, MSep } from "../ui/menu";
 import { FS } from "../ui/text";
@@ -372,9 +372,10 @@ export function SuggestField(props: {
     if (n === 0) return;
     highlight.update((i) => (k === "down" ? (i + 1) % n : (i - 1 + n) % n));
   };
+  // 输入框聚焦时 ↑ / ↓ / Esc 归候选列表(压过 Input 自己的键位)
+  bindWhileFocused(focused, ["down", "up", "escape"], onKey);
   return (
     <View class="relative" ref={anchor} onLayout={({ bounds }) => width.set(bounds.size.width)}>
-      <EditorKeys keys={["down", "up", "escape"]} active={focused()} onKey={({ keystroke }) => onKey(keystroke)} />
       <Input
         testID={props.testID}
         value={props.value}

@@ -13,7 +13,7 @@
 // - 结果在 core 里按上限截断(单个字符串、每层元素、总节点、总字节、嵌套层数);这里展平成行虚拟列表显示。
 
 import { computed, effect, keymap, signal, Text, untracked, View } from "nsh";
-import { EditorKeys } from "datum/native";
+import { bindWhileFocused } from "../lib/keys";
 import { Button, Editor, Popover, ResizablePanel, ResizablePanelGroup, Tree, type TreeItem } from "nsh/base";
 import { t } from "nsh/i18n";
 import { CheckBox, ConfirmFrame } from "../dialogs/controls";
@@ -472,7 +472,8 @@ export function RedisLua(props: { m: LuaModel }) {
     }
   }
 
-  const EDITOR_KEYS = ["mod+enter"];
+  // 编辑器聚焦时 ⌘↵ 运行脚本(压过 Editor 自带的下方插入新行)
+  bindWhileFocused(focused, ["mod+enter"], () => void requestRun());
 
   return (
     <View testID="redis-lua" class="min-h-0 flex-1 bg-background">
@@ -481,7 +482,6 @@ export function RedisLua(props: { m: LuaModel }) {
           <View class="flex-1">
             <View class="min-h-0 flex-1 flex-row">
               <View class="relative min-w-0 flex-1 bg-editor">
-                <EditorKeys keys={EDITOR_KEYS} active={focused()} onKey={() => void requestRun()} />
                 <Editor
                   ref={text.ref}
                   testID="rlua-editor"
