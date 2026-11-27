@@ -27,24 +27,16 @@ import {
 import { columnMask, copyInsertDisplayed, copyRowDisplayed, copyValueDisplayed, displayValue, isMaskedCell, openCellView, revealCell, toggleColumnMask } from "./mask";
 import { privacy } from "../store/privacy";
 
-/** 自适应列宽的边界与采样。 */
-const AUTO_MIN = 64;
-const AUTO_MAX = 420;
+/**
+ * 列宽下限;上限取 COL_MAX 与结果区宽度中大的那个。maxWidth 同时限制 autoFit、伸展与拖动:
+ * 太小则文本列少时铺不满结果区,太大则很长的值会适配得非常宽,所以随结果区走,最宽一屏。
+ */
+const COL_MIN = 64;
+const COL_MAX = 600;
+/** 适配列宽时在最宽文本外加的余量:格子 / 表头左右 px-3,再留遮罩图标与表头类型行的空 */
+const FIT_PAD = 32;
+/** 推断数字列时采样的行数。 */
 const SAMPLE_ROWS = 120;
-const CELL_PAD = 32;
-const SORT_ICON_SPACE = 20;
-const DEFAULT_W = 170;
-
-/** 按字符估算文本宽度:CJK 等宽字符按两格计。 */
-function textWidth(text: string, pxPerChar: number): number {
-  let w = 0;
-  let n = 0;
-  for (const ch of text) {
-    if (n++ >= 80) break;
-    w += (ch.codePointAt(0) ?? 0) < 128 ? 1 : 1.9;
-  }
-  return w * pxPerChar;
-}
 
 type Align = "left" | "right" | "center";
 
@@ -77,32 +69,38 @@ function columnAlign(m: TabModel, col: number): Align {
   return ty ? (grid.colAlign(ty) as Align) : (inferredAligns(m)[col] ?? "left");
 }
 
+/**
+ * 列 key:`结果编号:列下标`。每个结果一个编号,新结果的列重新 autoFit(同一结果排序 / 筛选不动列宽)。
+ * 行也按这些 key 给成对象(见 ResultGrid 的 rows):新列先于新行到达表格时,旧行里没有新 key,
+ * 列就等新行来了再适配,不会按上一个结果同位置的值适配。
+ */
+const resultIds = new WeakMap<object, number>();
+let nextResultId = 0;
+function columnKeyPrefix(result: object): string {
+  let id = resultIds.get(result);
+  if (id === undefined) resultIds.set(result, (id = nextResultId++));
+  return `${id}:`;
+}
+
+/**
+ * 列宽交给 DataTable:`autoFit` 按最宽文本适配一次,`grow` 让文本列分掉结果区剩余的宽度
+ * (没有文本列就全部分);内容比结果区宽时横向滚动。
+ */
 function columnLayout(m: TabModel): DataTableColumn[] {
   const result = m.result();
   if (!result) return [];
-  const types = columnTypes(m);
-  const view = viewIndices(m);
-  const autos = result.columns.map((col, ci) => {
-    let w = Math.max(textWidth(col, 7.6) + SORT_ICON_SPACE, types[col] ? textWidth(types[col], 6.6) : 0);
-    for (const ri of view.slice(0, SAMPLE_ROWS)) {
-      const v = result.rows[ri]?.[ci];
-      w = Math.max(w, textWidth(v ?? "NULL", 7.4));
-    }
-    return Math.min(AUTO_MAX, Math.max(AUTO_MIN, w + CELL_PAD));
-  });
+  const prefix = columnKeyPrefix(result);
   const aligns = result.columns.map((_, i) => columnAlign(m, i));
-  const widths = grid.columnWidths(
-    autos,
-    m.gridWidth(),
-    DEFAULT_W,
-    aligns.map((a) => a === "left"),
-  );
+  const anyText = aligns.includes("left");
+  const maxWidth = Math.max(COL_MAX, Math.floor(m.gridWidth()));
   return result.columns.map((name, i) => ({
-    key: String(i),
+    key: `${prefix}${i}`,
     title: name,
-    width: widths[i],
-    minWidth: 48,
-    maxWidth: 2400,
+    minWidth: COL_MIN,
+    maxWidth,
+    fitPadding: FIT_PAD,
+    autoFit: true,
+    grow: !anyText || aligns[i] === "left" ? 1 : 0,
     align: aligns[i] === "right" ? "end" : aligns[i] === "center" ? "center" : "start",
     movable: false,
   }));
@@ -263,22 +261,24 @@ function showRowMenu(m: TabModel, row: number, col: number, at: { x: number; y: 
 export function ResultGrid(props: { m: TabModel }) {
   const m = props.m;
   let table: DataTableRef | undefined;
-  let refit: ReturnType<typeof setTimeout> | undefined;
   // 单元格 / 行详情弹窗打开时表格交出键盘:DataTable 获得焦点后按快捷键绑定 Esc、方向键、⌘C,
   // 弹窗盖在上面时仍然生效(Esc 先被拿去清空选中,弹窗关不掉;方向键在背后移动选中)
   effect(() => {
     if (m.cell() !== null || m.rowDetail() !== null) untracked(() => table?.blur());
   });
-  const rows = () => {
-    const result = m.result();
-    return result ? viewIndices(m).map((i) => result.rows[i]) : [];
-  };
-  // 结果区宽度变化后(防抖 120ms)按新宽度重排列宽,让列铺满结果区
+  // 结果区宽度(防抖 120ms):只用来定列宽上限,分配宽度由 DataTable 的 grow 做
+  let relayout: ReturnType<typeof setTimeout> | undefined;
   const onLayout = (w: number) => {
     if (Math.abs(w - m.gridWidth()) <= 1) return;
-    if (refit) clearTimeout(refit);
+    if (relayout) clearTimeout(relayout);
     if (m.gridWidth() === 0) m.gridWidth.set(w);
-    else refit = setTimeout(() => m.gridWidth.set(w), 120);
+    else relayout = setTimeout(() => m.gridWidth.set(w), 120);
+  };
+  const rows = () => {
+    const result = m.result();
+    if (!result) return [];
+    const prefix = columnKeyPrefix(result);
+    return viewIndices(m).map((i) => Object.fromEntries((result.rows[i] ?? []).map((v, ci) => [`${prefix}${ci}`, v])));
   };
   return (
     <View class="relative min-h-0 flex-1" onLayout={(e) => onLayout(e.bounds.size.width)}>

@@ -460,8 +460,6 @@ export const grid = {
   classifyCell: (value: GridCell, dataType: string | null) =>
     Grid.classifyCell(value, dataType) as TabTypes.CellStyle,
   colAlign: (dataType: string | null) => Grid.colAlign(dataType) as TabTypes.ColAlign,
-  columnWidths: (autos: number[], containerW: number, defaultW: number, flexible: boolean[]) =>
-    Grid.columnWidths(autos, containerW, defaultW, flexible),
   sortOrder: (rows: GridCell[][], colIx: number, descending: boolean) => Grid.sortOrder(rows, colIx, descending),
   filterIndices: (rows: GridCell[][], columns: string[], filters: TabTypes.FilterRow[], conj: TabTypes.Conj) =>
     Grid.filterIndices(rows, columns, filters, conj),

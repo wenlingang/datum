@@ -212,7 +212,7 @@ export interface TabModel {
   readonly multi: Signal<StmtResult[] | null>;
   readonly multiIndex: Signal<number>;
 
-  /** 结果区实测宽度(列宽铺满用) */
+  /** 结果区实测宽度(列宽上限用) */
   readonly gridWidth: Signal<number>;
   /** 点过「显示原值」的遮罩单元格(`结果行下标:列下标`);`of` 不是当前结果时全部作废 */
   readonly revealed: Signal<{ of: QueryResult | null; keys: string[] }>;

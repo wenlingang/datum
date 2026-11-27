@@ -572,51 +572,6 @@ pub fn classify_cell(value: Option<&str>, data_type: Option<&str>) -> CellStyle 
     }
 }
 
-/// 计算每列最终宽度,使结果表自适应结果区宽度。
-///
-/// - 内容比容器窄:多余宽度按比例分给可伸缩列(文本列),铺满容器;
-/// - 内容比容器宽:保持内容宽度(横向滚动);
-/// - 单列结果(如 EXPLAIN):取容器宽的一半(不小于 `default_w`)。
-pub fn column_widths(
-    auto_widths: &[f32],
-    container_w: f32,
-    default_w: f32,
-    flexible: &[bool],
-) -> Vec<f32> {
-    let n = auto_widths.len();
-    if n == 1 {
-        return vec![if container_w > 0.0 {
-            default_w.max((container_w * 0.5).floor())
-        } else {
-            auto_widths[0]
-        }];
-    }
-    let total: f32 = auto_widths.iter().sum();
-    let surplus = container_w - total;
-    if container_w <= 0.0 || surplus <= 0.0 {
-        return auto_widths.to_vec();
-    }
-    let mut targets: Vec<usize> = (0..n)
-        .filter(|i| flexible.get(*i).copied().unwrap_or(true))
-        .collect();
-    if targets.is_empty() {
-        targets = (0..n).collect();
-    }
-    let target_total: f32 = targets.iter().map(|i| auto_widths[*i]).sum();
-    let mut out = auto_widths.to_vec();
-    let mut used = 0.0;
-    for (k, i) in targets.iter().enumerate() {
-        let add = if k == targets.len() - 1 {
-            surplus - used
-        } else {
-            (surplus * (auto_widths[*i] / target_total)).round()
-        };
-        out[*i] += add;
-        used += add;
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,19 +799,6 @@ mod tests {
             }
         );
         assert_eq!(col_align(Some("BIGINT")), Align::Right);
-    }
-
-    #[test]
-    fn widths_stretch_flexible_columns() {
-        assert_eq!(
-            column_widths(&[100.0, 100.0], 400.0, 170.0, &[true, false]),
-            vec![300.0, 100.0]
-        );
-        assert_eq!(
-            column_widths(&[300.0, 300.0], 400.0, 170.0, &[true, true]),
-            vec![300.0, 300.0]
-        );
-        assert_eq!(column_widths(&[80.0], 1000.0, 170.0, &[true]), vec![500.0]);
     }
 
     #[test]

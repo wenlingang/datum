@@ -123,15 +123,6 @@ impl Grid {
         .into()
     }
 
-    /// 列宽铺满结果区:内容窄时多余宽度分给可伸缩列,内容宽时保持(横向滚动)。
-    pub fn column_widths(auto_widths: Vec<f64>, container_w: f64, default_w: f64, flexible: Vec<bool>) -> Vec<f64> {
-        let autos: Vec<f32> = auto_widths.iter().map(|w| *w as f32).collect();
-        grid::column_widths(&autos, container_w as f32, default_w as f32, &flexible)
-            .into_iter()
-            .map(f64::from)
-            .collect()
-    }
-
     /// 按某列排序后的行下标(数值感知,NULL 恒在最后)。
     pub fn sort_order(rows: JsonValue, col_ix: u32, descending: bool) -> Result<Vec<u32>, String> {
         let rows = rows_of(rows)?;

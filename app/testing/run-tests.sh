@@ -85,6 +85,7 @@ if want tab; then
   printf '[%s]\n' "$(conn dev-sqlite roastery "$D/roastery.db")" > "$D/connections.json"
   run tab "$D" tab/tab.test.tsx
   run tab-keys "$D" tab/keys.test.tsx
+  run tab-grid-width "$D" tab/grid-width.test.tsx
   run tab-unit "$D" tab/placeholders.test.ts
   run tab-unit-privacy "$D" store/privacy.test.ts
   # 敏感数据遮罩:同一份库加一张客户表,连接的遮罩打开(本地连接默认不遮罩)
